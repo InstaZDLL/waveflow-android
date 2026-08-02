@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: fr-FR
+tone_instructions: >-
+  Sois direct et concis. Priorise les bugs réels, les régressions
+  utilisateur, les problèmes de sécurité, les erreurs de logique et les
+  oublis de tests/validation. Évite les remarques purement cosmétiques.
+early_access: true
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+    ignore_title_keywords:
+      - "chore: bump"
+      - "chore(main): release"
+      - "release-please"
+      - "dependabot"
+      - "[bot]"
+  path_filters:
+    - "!**/build/**"
+    - "!**/.gradle/**"
+    - "!**/gradle/wrapper/**"
+    - "!**/*.webp"
+    - "!secrets/**"
+    - "!local.properties"
+  path_instructions:
+    - path: "app/src/main/java/app/waveflow/model/**"
+      instructions: >-
+        Modèle métier pur, sans dépendance à une source de données. Refuse
+        toute référence à `MediaStore`, `Cursor`, Media3 ou au réseau : ce
+        paquet doit rester réutilisable quand la sync serveur arrivera.
+    - path: "app/src/main/java/app/waveflow/data/**"
+      instructions: >-
+        Couche données. `MusicRepository` doit rester une abstraction
+        storage-agnostique ; les détails MediaStore vivent dans
+        `MediaStoreMusicRepository`. Vérifie que toute requête `ContentResolver`
+        est hors du thread principal, que les `Cursor` sont fermés (`use`), que
+        les `ContentObserver` sont désenregistrés dans `awaitClose`, et que les
+        colonnes projetées existent bien pour minSdk 26.
+    - path: "app/src/main/java/app/waveflow/playback/**"
+      instructions: >-
+        Intégration Media3 / ExoPlayer. Le `MediaController` ne doit être
+        manipulé que sur le thread principal. Vérifie la libération des
+        ressources (`releaseFuture`, `removeListener`, jobs de polling
+        annulés), l'absence de fuite du `Context` d'Activity, la cohérence
+        entre `PlaybackState` et l'état réel du lecteur, et le respect du cycle
+        de vie du `MediaSessionService` (une liaison vivante empêche le service
+        de s'arrêter). Signale tout accès direct à ExoPlayer depuis l'UI.
+    - path: "app/src/main/java/app/waveflow/ui/**"
+      instructions: >-
+        UI Jetpack Compose + Material 3. Vérifie les recompositions inutiles
+        (lambdas et objets recréés, état lu trop haut), les `remember`/`key`
+        manquants ou mal scopés, les effets (`LaunchedEffect`,
+        `DisposableEffect`) mal clés, l'accessibilité (`contentDescription`,
+        taille de cible tactile >= 48dp, contraste), la gestion des insets
+        edge-to-edge, et le respect du thème (couleurs prises dans
+        `MaterialTheme.colorScheme`, pas de valeurs codées en dur). Les
+        composables de rendu doivent rester pilotés par un état immuable, sans
+        dépendance directe au ViewModel.
+    - path: "app/src/main/java/app/waveflow/ui/**/*ViewModel.kt"
+      instructions: >-
+        Les ViewModels sont des orchestrateurs : pas de requête MediaStore ni
+        d'appel Media3 direct. Vérifie que les coroutines sont lancées dans
+        `viewModelScope`, que les flux exposés sont des `StateFlow` avec une
+        valeur initiale, que les erreurs sont capturées (`catch`) plutôt que de
+        faire crasher la collecte, et que les ressources détenues sont libérées
+        dans `onCleared`.
+    - path: "app/src/main/AndroidManifest.xml"
+      instructions: >-
+        Vérifie la cohérence des permissions avec minSdk 26 / targetSdk 36 :
+        `READ_MEDIA_AUDIO` (API 33+) et `READ_EXTERNAL_STORAGE` borné par
+        `maxSdkVersion`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` avec
+        `foregroundServiceType="mediaPlayback"`. Signale toute permission
+        déclarée mais jamais demandée à l'exécution, et tout composant exporté
+        sans raison (le `MediaSessionService` doit l'être, pas le reste).
+    - path: "**/*.gradle.kts"
+      instructions: >-
+        Vérifie que les dépendances passent par le version catalog
+        (`libs.versions.toml`) plutôt que par des coordonnées en dur, que les
+        versions restent alignées avec la BOM Compose, et que rien ne casse la
+        compatibilité minSdk 26.
+    - path: "gradle/libs.versions.toml"
+      instructions: >-
+        Version catalog. Vérifie la cohérence des versions entre artefacts
+        d'une même famille (Media3, AndroidX Lifecycle, Compose) et signale les
+        montées de version majeures qui demandent une migration.
+    - path: ".github/workflows/**"
+      instructions: >-
+        Workflows GitHub Actions. Vérifie les risques d'injection via branches
+        ou PR non fiables, la portée des secrets (notamment les clés de
+        signature Android), les permissions minimales, et les changements qui
+        pourraient publier des artefacts incorrects.
+
+  tools:
+    detekt:
+      enabled: true
+    opengrep:
+      enabled: true
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+    semgrep:
+      enabled: false
+
+chat:
+  auto_reply: true
