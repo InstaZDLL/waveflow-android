@@ -24,16 +24,24 @@ local-first music player. Kotlin + Jetpack Compose + Media3.
 ```
 app/src/main/java/app/waveflow/
 ├─ WaveFlowApp.kt          Application + manual DI container
-├─ MainActivity.kt         Permission gate → LibraryScreen
+├─ MainActivity.kt         Scaffold → permission gate → LibraryScreen
+├─ model/
+│  └─ Song.kt              Domain model, source-agnostic
 ├─ data/
-│  ├─ Song.kt              Domain model
-│  └─ MusicRepository.kt   MediaStore query (local library)
+│  ├─ MusicRepository.kt            Library abstraction (Flow<List<Song>>)
+│  └─ MediaStoreMusicRepository.kt  MediaStore query + ContentObserver
 ├─ playback/
-│  └─ PlaybackService.kt   Media3 MediaSessionService (ExoPlayer)
+│  ├─ PlaybackService.kt          Media3 MediaSessionService (ExoPlayer)
+│  ├─ PlaybackController.kt       Playback facade + PlaybackState
+│  ├─ Media3PlaybackController.kt MediaController connection → StateFlow
+│  └─ MediaItemMapper.kt          Song ↔ MediaItem
 └─ ui/
    ├─ theme/               Material 3 emerald theme
+   ├─ permission/
+   │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
    └─ library/
-      ├─ LibraryViewModel.kt   MediaController connection + state
+      ├─ LibraryUiState.kt     Screen state
+      ├─ LibraryViewModel.kt   Orchestrates repository + playback
       └─ LibraryScreen.kt      Song list + now-playing bar
 ```
 
