@@ -3,6 +3,18 @@ package app.waveflow.playback
 import app.waveflow.model.Song
 import kotlinx.coroutines.flow.StateFlow
 
+/** Mode de répétition, indépendant des constantes Media3. */
+enum class RepeatMode {
+    /** La file se termine après le dernier morceau. */
+    Off,
+
+    /** La file reboucle au début. */
+    All,
+
+    /** Le morceau courant se répète. */
+    One,
+}
+
 /**
  * État de lecture observable, projeté depuis le lecteur Media3.
  *
@@ -12,6 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
  * @property isPlaying lecture réellement en cours (pas seulement demandée).
  * @property positionMs position de lecture en millisecondes.
  * @property durationMs durée du morceau courant, 0 si inconnue.
+ * @property shuffleEnabled lecture aléatoire active.
+ * @property repeatMode mode de répétition courant.
  */
 data class PlaybackState(
     val isConnected: Boolean = false,
@@ -19,6 +33,8 @@ data class PlaybackState(
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
+    val shuffleEnabled: Boolean = false,
+    val repeatMode: RepeatMode = RepeatMode.Off,
 )
 
 /**
@@ -45,6 +61,11 @@ interface PlaybackController {
     fun skipPrevious()
 
     fun seekTo(positionMs: Long)
+
+    fun toggleShuffle()
+
+    /** Fait tourner le mode de répétition : Off -> All -> One -> Off. */
+    fun cycleRepeatMode()
 
     /** Libère le contrôleur ; le service, lui, continue de jouer. */
     fun release()

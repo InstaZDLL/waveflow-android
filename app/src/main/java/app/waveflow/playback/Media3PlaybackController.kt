@@ -97,6 +97,20 @@ class Media3PlaybackController(
         controller?.seekTo(positionMs.coerceAtLeast(0L))
     }
 
+    override fun toggleShuffle() {
+        val ctrl = controller ?: return
+        ctrl.shuffleModeEnabled = !ctrl.shuffleModeEnabled
+    }
+
+    override fun cycleRepeatMode() {
+        val ctrl = controller ?: return
+        ctrl.repeatMode = when (ctrl.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+    }
+
     override fun release() {
         stopPositionUpdates()
         controller?.removeListener(playerListener)
@@ -113,6 +127,12 @@ class Media3PlaybackController(
             isPlaying = player.isPlaying,
             positionMs = player.currentPosition.coerceAtLeast(0L),
             durationMs = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0L) ?: 0L,
+            shuffleEnabled = player.shuffleModeEnabled,
+            repeatMode = when (player.repeatMode) {
+                Player.REPEAT_MODE_ALL -> RepeatMode.All
+                Player.REPEAT_MODE_ONE -> RepeatMode.One
+                else -> RepeatMode.Off
+            },
         )
 
         if (player.isPlaying) startPositionUpdates() else stopPositionUpdates()
