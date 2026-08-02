@@ -1,0 +1,51 @@
+package app.waveflow.playback
+
+import app.waveflow.model.Song
+import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * État de lecture observable, projeté depuis le lecteur Media3.
+ *
+ * @property isConnected `true` une fois la liaison au service établie ; tant
+ *   qu'il est `false`, les commandes sont ignorées.
+ * @property currentSongId identifiant du morceau courant, `null` si la file est vide.
+ * @property isPlaying lecture réellement en cours (pas seulement demandée).
+ * @property positionMs position de lecture en millisecondes.
+ * @property durationMs durée du morceau courant, 0 si inconnue.
+ */
+data class PlaybackState(
+    val isConnected: Boolean = false,
+    val currentSongId: Long? = null,
+    val isPlaying: Boolean = false,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+)
+
+/**
+ * Façade de la lecture audio.
+ *
+ * Concentre tout ce qui touche à Media3 — connexion au service, possession du
+ * `MediaController`, traduction des callbacks en [StateFlow] — pour que les
+ * ViewModels restent de simples orchestrateurs.
+ */
+interface PlaybackController {
+
+    val state: StateFlow<PlaybackState>
+
+    /** Établit la liaison avec le service de lecture. Idempotent. */
+    fun connect()
+
+    /** Charge [songs] comme file d'attente et démarre à [startIndex]. */
+    fun play(songs: List<Song>, startIndex: Int)
+
+    fun playPause()
+
+    fun skipNext()
+
+    fun skipPrevious()
+
+    fun seekTo(positionMs: Long)
+
+    /** Libère le contrôleur ; le service, lui, continue de jouer. */
+    fun release()
+}

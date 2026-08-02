@@ -2,29 +2,30 @@ package app.waveflow.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,31 +33,57 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import app.waveflow.model.Song
 import coil.compose.AsyncImage
-import app.waveflow.data.Song
 
 @Composable
 fun LibraryScreen(
+    viewModel: LibraryViewModel,
     modifier: Modifier = Modifier,
-    viewModel: LibraryViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    LibraryContent(
+        state = state,
+        onSongClick = viewModel::playSong,
+        onTogglePlayPause = viewModel::togglePlayPause,
+        onRetry = viewModel::retry,
+        modifier = modifier,
+    )
+}
+
+/** Vue pure : ne dépend que de [LibraryUiState], donc prévisualisable et testable. */
+@Composable
+private fun LibraryContent(
+    state: LibraryUiState,
+    onSongClick: (Song) -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
+            state.errorMessage != null -> {
+                CenteredMessage(
+                    message = state.errorMessage,
+                    modifier = Modifier.align(Alignment.Center),
+                ) {
+                    TextButton(onClick = onRetry) { Text("Réessayer") }
+                }
+            }
+
             state.isLoading -> {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
 
-            state.songs.isEmpty() -> {
-                Text(
-                    text = "Aucun morceau trouvé sur cet appareil.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
+            state.isEmpty -> {
+                CenteredMessage(
+                    message = "Aucun morceau trouvé sur cet appareil.",
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
 
@@ -66,22 +93,43 @@ fun LibraryScreen(
                         SongRow(
                             song = song,
                             isCurrent = song.id == state.nowPlayingId,
-                            onClick = { viewModel.playSong(song) },
+                            onClick = { onSongClick(song) },
                         )
                     }
                 }
             }
         }
 
-        val current = state.songs.firstOrNull { it.id == state.nowPlayingId }
+        val current = state.nowPlaying
         if (current != null) {
             NowPlayingBar(
                 song = current,
                 isPlaying = state.isPlaying,
-                onToggle = viewModel::togglePlayPause,
+                onToggle = onTogglePlayPause,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
+    }
+}
+
+@Composable
+private fun CenteredMessage(
+    message: String,
+    modifier: Modifier = Modifier,
+    action: @Composable (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        action?.invoke()
     }
 }
 
@@ -164,7 +212,7 @@ private fun NowPlayingBar(
 }
 
 @Composable
-private fun Artwork(song: Song, size: androidx.compose.ui.unit.Dp) {
+private fun Artwork(song: Song, size: Dp) {
     val shape = RoundedCornerShape(6.dp)
     Box(
         modifier = Modifier

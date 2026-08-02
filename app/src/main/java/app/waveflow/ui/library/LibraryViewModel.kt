@@ -1,113 +1,128 @@
 package app.waveflow.ui.library
 
-import android.app.Application
-import android.content.ComponentName
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Player
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
-import app.waveflow.data.Song
-import app.waveflow.playback.PlaybackService
-import com.google.common.util.concurrent.ListenableFuture
+import app.waveflow.data.MusicRepository
+import app.waveflow.model.Song
+import app.waveflow.playback.PlaybackController
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** État observable de l'écran bibliothèque. */
-data class LibraryUiState(
-    val isLoading: Boolean = true,
-    val songs: List<Song> = emptyList(),
-    val nowPlayingId: Long? = null,
-    val isPlaying: Boolean = false,
-)
-
 /**
- * ViewModel de la bibliothèque : charge les morceaux via [MusicRepository] et
- * pilote la lecture à travers un [MediaController] connecté au
- * [PlaybackService]. L'UI observe [uiState] et n'appelle que [playSong] /
- * [togglePlayPause].
+ * Orchestrateur de l'écran bibliothèque.
+ *
+ * Il ne connaît ni le MediaStore ni Media3 : il assemble le flux de morceaux
+ * du [MusicRepository] et l'état du [PlaybackController] en un unique
+ * [LibraryUiState], et relaie les intentions de l'utilisateur.
  */
-class LibraryViewModel(app: Application) : AndroidViewModel(app) {
+class LibraryViewModel(
+    private val musicRepository: MusicRepository,
+    private val playbackController: PlaybackController,
+) : ViewModel() {
 
-    private val repository = (app as WaveFlowApp).container.musicRepository
+    /** Partie de l'état qui appartient à la bibliothèque (le reste vient de la lecture). */
+    private data class LibraryData(
+        val isLoading: Boolean = true,
+        val songs: List<Song> = emptyList(),
+        val errorMessage: String? = null,
+    )
 
-    private val _uiState = MutableStateFlow(LibraryUiState())
-    val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
+    private val library = MutableStateFlow(LibraryData())
 
-    private var controllerFuture: ListenableFuture<MediaController>? = null
-    private var controller: MediaController? = null
+    val uiState: StateFlow<LibraryUiState> =
+        combine(library, playbackController.state) { data, playback ->
+            LibraryUiState(
+                isLoading = data.isLoading,
+                songs = data.songs,
+                errorMessage = data.errorMessage,
+                nowPlayingId = playback.currentSongId,
+                isPlaying = playback.isPlaying,
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            initialValue = LibraryUiState(),
+        )
 
-    private val playerListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _uiState.value = _uiState.value.copy(isPlaying = isPlaying)
-        }
+    private var libraryJob: Job? = null
 
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            _uiState.value = _uiState.value.copy(nowPlayingId = mediaItem?.mediaId?.toLongOrNull())
-        }
+    /**
+     * Appelé une fois la permission audio accordée : c'est seulement à ce
+     * moment que le MediaStore est lisible et que la lecture a un sens.
+     */
+    fun onAudioAccessGranted() {
+        playbackController.connect()
+        if (libraryJob == null) observeLibrary()
     }
 
-    /** Connecte l'UI au service de lecture. Appelé quand la permission est accordée. */
-    fun connect() {
-        if (controllerFuture != null) return
-        val context = getApplication<Application>()
-        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
-        controllerFuture = future
-        future.addListener({
-            controller = future.get().also { it.addListener(playerListener) }
-        }, ContextCompat.getMainExecutor(context))
-    }
+    /** Relance le chargement après une erreur. */
+    fun retry() = observeLibrary()
 
-    fun loadSongs() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            val songs = repository.getAllSongs()
-            _uiState.value = _uiState.value.copy(isLoading = false, songs = songs)
+    private fun observeLibrary() {
+        libraryJob?.cancel()
+        libraryJob = viewModelScope.launch {
+            musicRepository.observeSongs()
+                .onStart { library.update { it.copy(isLoading = true, errorMessage = null) } }
+                .catch { error ->
+                    library.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = error.message ?: "Impossible de lire la bibliothèque.",
+                        )
+                    }
+                }
+                .collect { songs ->
+                    library.update {
+                        it.copy(isLoading = false, songs = songs, errorMessage = null)
+                    }
+                }
         }
     }
 
     /** Charge toute la bibliothèque comme file d'attente et démarre à [song]. */
     fun playSong(song: Song) {
-        val ctrl = controller ?: return
-        val songs = _uiState.value.songs
-        val startIndex = songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-
-        ctrl.setMediaItems(songs.map { it.toMediaItem() }, startIndex, 0L)
-        ctrl.prepare()
-        ctrl.play()
+        val songs = library.value.songs
+        val startIndex = songs.indexOfFirst { it.id == song.id }
+        if (startIndex < 0) return
+        playbackController.play(songs, startIndex)
     }
 
-    fun togglePlayPause() {
-        val ctrl = controller ?: return
-        if (ctrl.isPlaying) ctrl.pause() else ctrl.play()
-    }
+    fun togglePlayPause() = playbackController.playPause()
+
+    fun skipNext() = playbackController.skipNext()
+
+    fun skipPrevious() = playbackController.skipPrevious()
 
     override fun onCleared() {
-        controller?.removeListener(playerListener)
-        controllerFuture?.let { MediaController.releaseFuture(it) }
-        controller = null
-        controllerFuture = null
+        // Le contrôleur est détenu par ce ViewModel : on le libère avec lui.
+        // Le service, lui, survit et continue la lecture en arrière-plan.
+        playbackController.release()
         super.onCleared()
     }
-}
 
-private fun Song.toMediaItem(): MediaItem =
-    MediaItem.Builder()
-        .setMediaId(id.toString())
-        .setUri(uri)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(title)
-                .setArtist(artist)
-                .setAlbumTitle(album)
-                .setArtworkUri(artworkUri)
-                .build(),
-        )
-        .build()
+    companion object {
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as WaveFlowApp
+                LibraryViewModel(
+                    musicRepository = app.container.musicRepository,
+                    playbackController = app.container.createPlaybackController(),
+                )
+            }
+        }
+    }
+}

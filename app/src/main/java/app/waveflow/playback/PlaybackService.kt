@@ -13,7 +13,7 @@ import androidx.media3.session.MediaSessionService
  * Un [MediaSessionService] héberge un [ExoPlayer] + une [MediaSession] : Android
  * en tire automatiquement la notification média, les contrôles de l'écran de
  * verrouillage et la lecture en arrière-plan. L'UI se connecte via un
- * `MediaController` (voir `LibraryViewModel`) — elle ne parle jamais
+ * `MediaController` (voir [PlaybackController]) — elle ne parle jamais
  * directement à l'ExoPlayer.
  */
 class PlaybackService : MediaSessionService() {

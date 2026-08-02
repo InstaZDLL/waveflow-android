@@ -9,8 +9,9 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- Notification média + service de lecture en arrière-plan -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Service de lecture en arrière-plan.
+         POST_NOTIFICATIONS n'est pas nécessaire : les notifications liées à une
+         MediaSession sont exemptées de la permission runtime d'Android 13. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 

@@ -1,11 +1,12 @@
-package app.waveflow.data
+package app.waveflow.model
 
 import android.net.Uri
 
 /**
- * Un morceau audio local, tel que scanné depuis le MediaStore du téléphone.
+ * Un morceau audio, indépendant de sa provenance (MediaStore aujourd'hui,
+ * serveur WaveFlow demain).
  *
- * @property id identifiant MediaStore (stable pour la session).
+ * @property id identifiant stable de la source (MediaStore pour le local).
  * @property uri URI de contenu jouable, passé tel quel à ExoPlayer.
  * @property title titre affiché (retombe sur le nom de fichier si le tag manque).
  * @property artist artiste, `null` si le tag est absent.
