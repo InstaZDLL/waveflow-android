@@ -75,6 +75,10 @@ class Media3PlaybackController(
         val ctrl = controller ?: return
         if (songs.isEmpty()) return
 
+        // Symétrique de [playShuffled] : démarrer explicitement sur un morceau
+        // veut dire « dans cet ordre ». Sans ça, un aléatoire laissé actif par
+        // une lecture précédente rendrait le bouton Lecture sans effet.
+        ctrl.shuffleModeEnabled = false
         ctrl.setMediaItems(songs.map { it.toMediaItem() }, startIndex.coerceIn(songs.indices), 0L)
         ctrl.prepare()
         ctrl.play()
