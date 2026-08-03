@@ -80,6 +80,18 @@ class Media3PlaybackController(
         ctrl.play()
     }
 
+    override fun playShuffled(songs: List<Song>) {
+        val ctrl = controller ?: return
+        if (songs.isEmpty()) return
+
+        // Le mode aléatoire doit être posé avant la file : Media3 construit
+        // son ordre de lecture au moment où les items arrivent.
+        ctrl.shuffleModeEnabled = true
+        ctrl.setMediaItems(songs.map { it.toMediaItem() }, songs.indices.random(), 0L)
+        ctrl.prepare()
+        ctrl.play()
+    }
+
     override fun playPause() {
         val ctrl = controller ?: return
         if (ctrl.isPlaying) ctrl.pause() else ctrl.play()
