@@ -36,13 +36,20 @@ app/src/main/java/app/waveflow/
 │  ├─ Media3PlaybackController.kt MediaController connection → StateFlow
 │  └─ MediaItemMapper.kt          Song ↔ MediaItem
 └─ ui/
-   ├─ theme/               Material 3 emerald theme
+   ├─ theme/                Material 3 emerald theme
+   ├─ components/Artwork.kt Album art with placeholder
+   ├─ DurationFormat.kt     m:ss / h:mm:ss
    ├─ permission/
    │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
+   ├─ player/
+   │  ├─ PlayerUiState.kt      Player state
+   │  ├─ ArtworkAccent.kt      Dominant colour from cover (Palette)
+   │  ├─ MiniPlayer.kt         Compact bar above the library
+   │  └─ NowPlayingScreen.kt   Full-screen player
    └─ library/
       ├─ LibraryUiState.kt     Screen state
       ├─ LibraryViewModel.kt   Orchestrates repository + playback
-      └─ LibraryScreen.kt      Song list + now-playing bar
+      └─ LibraryScreen.kt      Song list
 ```
 
 ## Build
@@ -62,6 +69,7 @@ or from the command line:
 ## Roadmap
 
 - [x] Local file playback (MediaStore + Media3)
+- [x] Full-screen player (seek, shuffle, repeat, artwork-tinted background)
 - [ ] Album / artist / playlist browsing
 - [ ] Room index + search
 - [ ] WaveFlow server sync (playlists, liked, ratings)

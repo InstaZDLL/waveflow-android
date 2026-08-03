@@ -9,6 +9,7 @@ import app.waveflow.WaveFlowApp
 import app.waveflow.data.MusicRepository
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
+import app.waveflow.ui.player.PlayerUiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,11 +22,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Orchestrateur de l'écran bibliothèque.
+ * Orchestrateur de la bibliothèque et du lecteur.
  *
  * Il ne connaît ni le MediaStore ni Media3 : il assemble le flux de morceaux
- * du [MusicRepository] et l'état du [PlaybackController] en un unique
- * [LibraryUiState], et relaie les intentions de l'utilisateur.
+ * du [MusicRepository] et l'état du [PlaybackController] en deux états d'écran
+ * — [uiState] pour la liste, [playerState] pour le lecteur — et relaie les
+ * intentions de l'utilisateur.
  */
 class LibraryViewModel(
     private val musicRepository: MusicRepository,
@@ -48,12 +50,27 @@ class LibraryViewModel(
                 songs = data.songs,
                 errorMessage = data.errorMessage,
                 nowPlayingId = playback.currentSongId,
-                isPlaying = playback.isPlaying,
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
             initialValue = LibraryUiState(),
+        )
+
+    val playerState: StateFlow<PlayerUiState> =
+        combine(library, playbackController.state) { data, playback ->
+            PlayerUiState(
+                song = playback.currentSongId?.let { id -> data.songs.firstOrNull { it.id == id } },
+                isPlaying = playback.isPlaying,
+                positionMs = playback.positionMs,
+                durationMs = playback.durationMs,
+                shuffleEnabled = playback.shuffleEnabled,
+                repeatMode = playback.repeatMode,
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            initialValue = PlayerUiState(),
         )
 
     private var libraryJob: Job? = null
@@ -104,6 +121,12 @@ class LibraryViewModel(
     fun skipNext() = playbackController.skipNext()
 
     fun skipPrevious() = playbackController.skipPrevious()
+
+    fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
+
+    fun toggleShuffle() = playbackController.toggleShuffle()
+
+    fun cycleRepeatMode() = playbackController.cycleRepeatMode()
 
     override fun onCleared() {
         // Le contrôleur est détenu par ce ViewModel : on le libère avec lui.

@@ -55,6 +55,7 @@ dependencies {
 
     // Pochettes
     implementation(libs.coil.compose)
+    implementation(libs.androidx.palette)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

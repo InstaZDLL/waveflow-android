@@ -1,10 +1,10 @@
 package app.waveflow.ui.library
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,56 +14,40 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Song
-import coil.compose.AsyncImage
+import app.waveflow.ui.components.Artwork
+import app.waveflow.ui.formatDuration
 
+/**
+ * Liste de la bibliothèque locale.
+ *
+ * Vue pure : ne dépend que de [LibraryUiState], donc prévisualisable et
+ * testable sans ViewModel. Le lecteur (mini-player et plein écran) est posé
+ * par-dessus par l'appelant.
+ *
+ * @param contentPadding marge de la liste — sert notamment à dégager la
+ *   hauteur du mini-player pour que le dernier morceau reste atteignable.
+ */
 @Composable
 fun LibraryScreen(
-    viewModel: LibraryViewModel,
-    modifier: Modifier = Modifier,
-) {
-    val state by viewModel.uiState.collectAsState()
-
-    LibraryContent(
-        state = state,
-        onSongClick = viewModel::playSong,
-        onTogglePlayPause = viewModel::togglePlayPause,
-        onRetry = viewModel::retry,
-        modifier = modifier,
-    )
-}
-
-/** Vue pure : ne dépend que de [LibraryUiState], donc prévisualisable et testable. */
-@Composable
-private fun LibraryContent(
     state: LibraryUiState,
     onSongClick: (Song) -> Unit,
-    onTogglePlayPause: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
@@ -88,7 +72,10 @@ private fun LibraryContent(
             }
 
             else -> {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    contentPadding = contentPadding,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     items(state.songs, key = { it.id }) { song ->
                         SongRow(
                             song = song,
@@ -98,16 +85,6 @@ private fun LibraryContent(
                     }
                 }
             }
-        }
-
-        val current = state.nowPlaying
-        if (current != null) {
-            NowPlayingBar(
-                song = current,
-                isPlaying = state.isPlaying,
-                onToggle = onTogglePlayPause,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
         }
     }
 }
@@ -139,6 +116,12 @@ private fun SongRow(
     isCurrent: Boolean,
     onClick: () -> Unit,
 ) {
+    val titleColor = if (isCurrent) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -146,13 +129,17 @@ private fun SongRow(
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Artwork(song = song, size = 48.dp)
+        Artwork(
+            artworkUri = song.artworkUri,
+            modifier = Modifier.size(48.dp),
+        )
         Spacer(Modifier.width(12.dp))
+
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -164,75 +151,22 @@ private fun SongRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
 
-@Composable
-private fun NowPlayingBar(
-    song: Song,
-    isPlaying: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        tonalElevation = 3.dp,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            Artwork(song = song, size = 44.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = song.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = song.displayArtist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            IconButton(onClick = onToggle) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Lecture",
-                )
-            }
+        Spacer(Modifier.width(12.dp))
+
+        if (isCurrent) {
+            Icon(
+                imageVector = Icons.Filled.GraphicEq,
+                contentDescription = "Morceau en cours",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+        } else if (song.durationMs > 0L) {
+            Text(
+                text = formatDuration(song.durationMs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-    }
-}
-
-@Composable
-private fun Artwork(song: Song, size: Dp) {
-    val shape = RoundedCornerShape(6.dp)
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center,
-    ) {
-        // Placeholder dessous : visible tant que la pochette ne résout pas.
-        Icon(
-            imageVector = Icons.Filled.MusicNote,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(size / 2),
-        )
-        AsyncImage(
-            model = song.artworkUri,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
     }
 }
