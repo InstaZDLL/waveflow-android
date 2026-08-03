@@ -35,10 +35,19 @@ fun rememberArtworkAccent(artworkUri: Uri?): Color {
     val context = LocalContext.current
     val fallback = MaterialTheme.colorScheme.surfaceVariant
 
-    var target by remember { mutableStateOf(fallback) }
+    // Une couleur déjà extraite sert de valeur initiale : en passant du
+    // mini-player au plein écran, le fond est bon dès la première frame au
+    // lieu de repartir du gris du thème.
+    var target by remember { mutableStateOf(artworkUri?.let { accentCache[it] } ?: fallback) }
 
     LaunchedEffect(artworkUri, fallback) {
-        target = artworkUri?.let { extractAccent(context, it) } ?: fallback
+        if (artworkUri == null) {
+            target = fallback
+            return@LaunchedEffect
+        }
+        target = accentCache[artworkUri]
+            ?: extractAccent(context, artworkUri)?.also { accentCache[artworkUri] = it }
+            ?: fallback
     }
 
     val accent by animateColorAsState(
@@ -86,6 +95,20 @@ private suspend fun extractAccent(context: Context, artworkUri: Uri): Color? {
 
     return Color(swatch.rgb)
 }
+
+/**
+ * Couleurs déjà extraites, partagées entre le mini-player et le plein écran.
+ *
+ * Lu pendant la composition et écrit depuis [LaunchedEffect], tous deux sur le
+ * thread principal : aucune synchronisation nécessaire. Borné en taille (ordre
+ * d'accès) pour ne pas retenir les URI d'une bibliothèque entière.
+ */
+private val accentCache = object : LinkedHashMap<Uri, Color>(ACCENT_CACHE_SIZE, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Uri, Color>): Boolean =
+        size > ACCENT_CACHE_SIZE
+}
+
+private const val ACCENT_CACHE_SIZE = 32
 
 /** Taille d'échantillonnage : inutile de décoder la pochette en pleine résolution. */
 private const val SAMPLE_SIZE = 128

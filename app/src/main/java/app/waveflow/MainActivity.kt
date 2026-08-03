@@ -94,13 +94,17 @@ private fun WaveFlowRoot() {
                         ),
                     )
 
-                    MiniPlayer(
-                        state = playerState,
-                        onExpand = { playerExpanded = true },
-                        onTogglePlayPause = viewModel::togglePlayPause,
-                        onSkipNext = viewModel::skipNext,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
+                    // Inutile de le composer sous le lecteur plein écran, qui
+                    // le recouvre entièrement.
+                    if (!playerExpanded) {
+                        MiniPlayer(
+                            state = playerState,
+                            onExpand = { playerExpanded = true },
+                            onTogglePlayPause = viewModel::togglePlayPause,
+                            onSkipNext = viewModel::skipNext,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
+                    }
                 }
             }
         }

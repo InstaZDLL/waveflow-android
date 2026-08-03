@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,7 +72,15 @@ fun NowPlayingScreen(
     onCycleRepeat: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val song = state.song ?: return
+    // La file peut se vider pendant l'animation de fermeture : on continue
+    // d'afficher le dernier morceau connu le temps que l'écran redescende,
+    // plutôt que de le faire disparaître d'un coup.
+    var lastKnownSong by remember { mutableStateOf(state.song) }
+    LaunchedEffect(state.song) {
+        state.song?.let { lastKnownSong = it }
+    }
+
+    val song = state.song ?: lastKnownSong ?: return
     val accent = rememberArtworkAccent(song.artworkUri)
 
     Box(
