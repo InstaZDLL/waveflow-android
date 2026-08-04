@@ -2,6 +2,7 @@ package app.waveflow.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -55,7 +56,12 @@ class Media3PlaybackController(
         if (controllerFuture != null) return
 
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
+        val future = MediaController.Builder(context, token)
+            // Sans ça, Media3 déduit le Looper du thread appelant. Il est
+            // toujours principal aujourd'hui, mais autant le fixer plutôt que
+            // d'en dépendre.
+            .setApplicationLooper(Looper.getMainLooper())
+            .buildAsync()
         controllerFuture = future
 
         future.addListener(
