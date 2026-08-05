@@ -7,7 +7,11 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.MusicRepository
+import app.waveflow.model.Album
+import app.waveflow.model.Artist
 import app.waveflow.model.Song
+import app.waveflow.model.toAlbums
+import app.waveflow.model.toArtists
 import app.waveflow.playback.PlaybackController
 import app.waveflow.ui.player.PlayerUiState
 import kotlinx.coroutines.Job
@@ -38,6 +42,8 @@ class LibraryViewModel(
     private data class LibraryData(
         val isLoading: Boolean = true,
         val songs: List<Song> = emptyList(),
+        val albums: List<Album> = emptyList(),
+        val artists: List<Artist> = emptyList(),
         val errorMessage: String? = null,
     )
 
@@ -48,6 +54,8 @@ class LibraryViewModel(
             LibraryUiState(
                 isLoading = data.isLoading,
                 songs = data.songs,
+                albums = data.albums,
+                artists = data.artists,
                 errorMessage = data.errorMessage,
                 nowPlayingId = playback.currentSongId,
             )
@@ -101,20 +109,31 @@ class LibraryViewModel(
                     }
                 }
                 .collect { songs ->
+                    // Regroupements calculés ici, une fois par chargement.
                     library.update {
-                        it.copy(isLoading = false, songs = songs, errorMessage = null)
+                        it.copy(
+                            isLoading = false,
+                            songs = songs,
+                            albums = songs.toAlbums(),
+                            artists = songs.toArtists(),
+                            errorMessage = null,
+                        )
                     }
                 }
         }
     }
 
-    /** Charge toute la bibliothèque comme file d'attente et démarre à [song]. */
-    fun playSong(song: Song) {
-        val songs = library.value.songs
-        val startIndex = songs.indexOfFirst { it.id == song.id }
+    /**
+     * Démarre [song] avec [queue] comme file d'attente : la bibliothèque
+     * entière depuis l'onglet Titres, l'album ou l'artiste depuis leur écran.
+     */
+    fun playFrom(queue: List<Song>, song: Song) {
+        val startIndex = queue.indexOfFirst { it.id == song.id }
         if (startIndex < 0) return
-        playbackController.play(songs, startIndex)
+        playbackController.play(queue, startIndex)
     }
+
+    fun playShuffled(queue: List<Song>) = playbackController.playShuffled(queue)
 
     fun togglePlayPause() = playbackController.playPause()
 

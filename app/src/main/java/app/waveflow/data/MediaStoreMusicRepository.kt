@@ -51,6 +51,7 @@ class MediaStoreMusicRepository(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ARTIST_ID,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
@@ -67,6 +68,7 @@ class MediaStoreMusicRepository(
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val artistIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST_ID)
             val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
@@ -84,7 +86,9 @@ class MediaStoreMusicRepository(
                     uri = ContentUris.withAppendedId(COLLECTION, id),
                     title = title,
                     artist = cursor.getString(artistCol),
+                    artistId = cursor.getLong(artistIdCol),
                     album = cursor.getString(albumCol),
+                    albumId = albumId,
                     durationMs = cursor.getLong(durationCol),
                     artworkUri = ContentUris.withAppendedId(ALBUM_ART_BASE, albumId),
                 )

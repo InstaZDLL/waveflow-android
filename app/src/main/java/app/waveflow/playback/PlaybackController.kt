@@ -54,6 +54,12 @@ interface PlaybackController {
     /** Charge [songs] comme file d'attente et démarre à [startIndex]. */
     fun play(songs: List<Song>, startIndex: Int)
 
+    /**
+     * Charge [songs] en activant la lecture aléatoire et démarre sur un
+     * morceau au hasard.
+     */
+    fun playShuffled(songs: List<Song>)
+
     fun playPause()
 
     fun skipNext()

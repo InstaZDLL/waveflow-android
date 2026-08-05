@@ -2,6 +2,7 @@ package app.waveflow.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -55,7 +56,12 @@ class Media3PlaybackController(
         if (controllerFuture != null) return
 
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
+        val future = MediaController.Builder(context, token)
+            // Sans ça, Media3 déduit le Looper du thread appelant. Il est
+            // toujours principal aujourd'hui, mais autant le fixer plutôt que
+            // d'en dépendre.
+            .setApplicationLooper(Looper.getMainLooper())
+            .buildAsync()
         controllerFuture = future
 
         future.addListener(
@@ -75,7 +81,23 @@ class Media3PlaybackController(
         val ctrl = controller ?: return
         if (songs.isEmpty()) return
 
+        // Symétrique de [playShuffled] : démarrer explicitement sur un morceau
+        // veut dire « dans cet ordre ». Sans ça, un aléatoire laissé actif par
+        // une lecture précédente rendrait le bouton Lecture sans effet.
+        ctrl.shuffleModeEnabled = false
         ctrl.setMediaItems(songs.map { it.toMediaItem() }, startIndex.coerceIn(songs.indices), 0L)
+        ctrl.prepare()
+        ctrl.play()
+    }
+
+    override fun playShuffled(songs: List<Song>) {
+        val ctrl = controller ?: return
+        if (songs.isEmpty()) return
+
+        // Le mode aléatoire doit être posé avant la file : Media3 construit
+        // son ordre de lecture au moment où les items arrivent.
+        ctrl.shuffleModeEnabled = true
+        ctrl.setMediaItems(songs.map { it.toMediaItem() }, songs.indices.random(), 0L)
         ctrl.prepare()
         ctrl.play()
     }

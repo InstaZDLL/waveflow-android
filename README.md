@@ -26,7 +26,9 @@ app/src/main/java/app/waveflow/
 ├─ WaveFlowApp.kt          Application + manual DI container
 ├─ MainActivity.kt         Scaffold → permission gate → LibraryScreen
 ├─ model/
-│  └─ Song.kt              Domain model, source-agnostic
+│  ├─ Song.kt              Domain model, source-agnostic
+│  ├─ Album.kt / Artist.kt Derived from the song list
+│  └─ Grouping.kt          List<Song> → albums / artists
 ├─ data/
 │  ├─ MusicRepository.kt            Library abstraction (Flow<List<Song>>)
 │  └─ MediaStoreMusicRepository.kt  MediaStore query + ContentObserver
@@ -37,8 +39,16 @@ app/src/main/java/app/waveflow/
 │  └─ MediaItemMapper.kt          Song ↔ MediaItem
 └─ ui/
    ├─ theme/                Material 3 emerald theme
-   ├─ components/Artwork.kt Album art with placeholder
    ├─ DurationFormat.kt     m:ss / h:mm:ss
+   ├─ components/           Artwork, SongRow, LibraryStateContainer
+   ├─ navigation/
+   │  └─ WaveFlowNavigation.kt    Routes + bottom bar
+   ├─ browse/
+   │  ├─ AlbumsScreen.kt          Adaptive cover grid
+   │  ├─ AlbumDetailScreen.kt     Header + tracks
+   │  ├─ ArtistsScreen.kt         Artist list
+   │  ├─ ArtistDetailScreen.kt    Header + tracks
+   │  └─ DetailHeader.kt          Shared header (play / shuffle)
    ├─ permission/
    │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
    ├─ player/
@@ -47,7 +57,7 @@ app/src/main/java/app/waveflow/
    │  ├─ MiniPlayer.kt         Compact bar above the library
    │  └─ NowPlayingScreen.kt   Full-screen player
    └─ library/
-      ├─ LibraryUiState.kt     Screen state
+      ├─ LibraryUiState.kt     Shared state for all browse screens
       ├─ LibraryViewModel.kt   Orchestrates repository + playback
       └─ LibraryScreen.kt      Song list
 ```
@@ -70,7 +80,8 @@ or from the command line:
 
 - [x] Local file playback (MediaStore + Media3)
 - [x] Full-screen player (seek, shuffle, repeat, artwork-tinted background)
-- [ ] Album / artist / playlist browsing
+- [x] Album / artist browsing (Navigation Compose + bottom bar)
+- [ ] Playlist browsing
 - [ ] Room index + search
 - [ ] WaveFlow server sync (playlists, liked, ratings)
 - [ ] Streaming from the WaveFlow server (HMAC signed URLs)
