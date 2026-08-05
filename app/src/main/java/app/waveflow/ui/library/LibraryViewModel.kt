@@ -102,6 +102,15 @@ class LibraryViewModel(
                             .mapNotNull { songsById[it.songId] }
                     },
             )
+        }.catch { error ->
+            // Sans ça, une base illisible ferait échouer le flux en silence et
+            // l'onglet resterait bloqué sur son indicateur de chargement.
+            emit(
+                PlaylistsUiState(
+                    isLoading = false,
+                    errorMessage = error.message ?: "Impossible de lire les playlists.",
+                ),
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -182,10 +191,7 @@ class LibraryViewModel(
     /** Crée une playlist et y place [song] dans la foulée. */
     fun createPlaylistWith(name: String, song: Song) {
         val trimmed = name.trim().ifBlank { return }
-        viewModelScope.launch {
-            val playlistId = playlistRepository.create(trimmed)
-            playlistRepository.addSong(playlistId, song.id)
-        }
+        viewModelScope.launch { playlistRepository.createWithSong(trimmed, song.id) }
     }
 
     fun renamePlaylist(playlistId: Long, name: String) {

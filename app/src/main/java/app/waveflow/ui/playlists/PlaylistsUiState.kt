@@ -14,6 +14,7 @@ data class PlaylistsUiState(
     val isLoading: Boolean = true,
     val playlists: List<Playlist> = emptyList(),
     val songsByPlaylist: Map<Long, List<Song>> = emptyMap(),
+    val errorMessage: String? = null,
 ) {
     val isEmpty: Boolean
         get() = !isLoading && playlists.isEmpty()

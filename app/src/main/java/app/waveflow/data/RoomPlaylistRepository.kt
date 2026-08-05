@@ -46,6 +46,14 @@ class RoomPlaylistRepository(
         )
     }
 
+    override suspend fun createWithSong(name: String, songId: Long): Long = withContext(ioDispatcher) {
+        val timestamp = now()
+        dao.createWithSong(
+            playlist = PlaylistEntity(name = name, createdAt = timestamp, updatedAt = timestamp),
+            songId = songId,
+        )
+    }
+
     override suspend fun rename(playlistId: Long, name: String) = withContext(ioDispatcher) {
         dao.renamePlaylist(playlistId, name, now())
     }

@@ -49,7 +49,12 @@ fun PlaylistsScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (state.isLoading) {
+        if (state.errorMessage != null) {
+            CenteredMessage(
+                message = state.errorMessage,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        } else if (state.isLoading) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         } else {
             LazyColumn(

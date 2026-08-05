@@ -21,6 +21,12 @@ interface PlaylistRepository {
     /** @return l'identifiant de la playlist créée. */
     suspend fun create(name: String): Long
 
+    /**
+     * Crée une playlist contenant déjà [songId], de façon atomique : une
+     * interruption ne peut pas laisser une playlist vide.
+     */
+    suspend fun createWithSong(name: String, songId: Long): Long
+
     suspend fun rename(playlistId: Long, name: String)
 
     suspend fun delete(playlistId: Long)

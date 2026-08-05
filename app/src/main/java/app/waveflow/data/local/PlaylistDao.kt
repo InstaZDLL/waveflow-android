@@ -36,22 +36,43 @@ interface PlaylistDao {
     @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_songs WHERE playlistId = :playlistId")
     suspend fun nextPosition(playlistId: Long): Int
 
+    /** @return l'identifiant de ligne inséré, ou -1 si le conflit a été ignoré. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertEntry(entry: PlaylistSongEntity)
+    suspend fun insertEntry(entry: PlaylistSongEntity): Long
 
+    /** @return le nombre de lignes supprimées, 0 si le morceau n'y était pas. */
     @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId AND songId = :songId")
-    suspend fun deleteEntry(playlistId: Long, songId: Long)
+    suspend fun deleteEntry(playlistId: Long, songId: Long): Int
 
-    /** Ajout en fin de liste : lecture de la position et insertion dans la même transaction. */
+    /**
+     * Ajout en fin de liste : lecture de la position et insertion dans la même
+     * transaction.
+     *
+     * `updatedAt` n'est touché que si quelque chose a réellement changé — c'est
+     * un horodatage destiné à la résolution de conflits, un ajout en doublon ne
+     * doit pas faire croire à une modification.
+     */
     @Transaction
     suspend fun addSong(playlistId: Long, songId: Long, updatedAt: Long) {
-        insertEntry(PlaylistSongEntity(playlistId, songId, nextPosition(playlistId)))
-        touchPlaylist(playlistId, updatedAt)
+        val inserted = insertEntry(PlaylistSongEntity(playlistId, songId, nextPosition(playlistId)))
+        if (inserted != -1L) touchPlaylist(playlistId, updatedAt)
     }
 
     @Transaction
     suspend fun removeSong(playlistId: Long, songId: Long, updatedAt: Long) {
-        deleteEntry(playlistId, songId)
-        touchPlaylist(playlistId, updatedAt)
+        if (deleteEntry(playlistId, songId) > 0) touchPlaylist(playlistId, updatedAt)
+    }
+
+    /**
+     * Création d'une playlist déjà pourvue de son premier morceau.
+     *
+     * En une transaction : une annulation entre les deux ne peut pas laisser
+     * une playlist vide derrière elle.
+     */
+    @Transaction
+    suspend fun createWithSong(playlist: PlaylistEntity, songId: Long): Long {
+        val playlistId = insertPlaylist(playlist)
+        insertEntry(PlaylistSongEntity(playlistId, songId, position = 0))
+        return playlistId
     }
 }
