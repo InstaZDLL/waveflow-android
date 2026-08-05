@@ -28,6 +28,7 @@ fun LibraryScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
+    onSongLongClick: (Song) -> Unit = {},
 ) {
     LibraryStateContainer(
         isLoading = state.isLoading,
@@ -46,6 +47,7 @@ fun LibraryScreen(
                     song = song,
                     isCurrent = song.id == state.nowPlayingId,
                     onClick = { onSongClick(song) },
+                    onLongClick = { onSongLongClick(song) },
                 )
             }
         }

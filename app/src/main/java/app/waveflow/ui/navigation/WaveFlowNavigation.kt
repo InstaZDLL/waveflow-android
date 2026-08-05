@@ -1,6 +1,7 @@
 package app.waveflow.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
@@ -16,16 +17,21 @@ object Routes {
     const val SONGS = "songs"
     const val ALBUMS = "albums"
     const val ARTISTS = "artists"
+    const val PLAYLISTS = "playlists"
 
     const val ARG_ALBUM_ID = "albumId"
     const val ARG_ARTIST_ID = "artistId"
+    const val ARG_PLAYLIST_ID = "playlistId"
 
     const val ALBUM_DETAIL = "$ALBUMS/{$ARG_ALBUM_ID}"
     const val ARTIST_DETAIL = "$ARTISTS/{$ARG_ARTIST_ID}"
+    const val PLAYLIST_DETAIL = "$PLAYLISTS/{$ARG_PLAYLIST_ID}"
 
     fun albumDetail(albumId: Long): String = "$ALBUMS/$albumId"
 
     fun artistDetail(artistId: Long): String = "$ARTISTS/$artistId"
+
+    fun playlistDetail(playlistId: Long): String = "$PLAYLISTS/$playlistId"
 }
 
 /** Les trois sections atteignables depuis la barre du bas. */
@@ -37,6 +43,7 @@ enum class TopLevelDestination(
     Songs(Routes.SONGS, "Titres", Icons.Filled.MusicNote),
     Albums(Routes.ALBUMS, "Albums", Icons.Filled.Album),
     Artists(Routes.ARTISTS, "Artistes", Icons.Filled.Person),
+    Playlists(Routes.PLAYLISTS, "Playlists", Icons.AutoMirrored.Filled.QueueMusic),
     ;
 
     /**

@@ -22,9 +22,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Artist
+import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.LibraryStateContainer
 import app.waveflow.ui.library.LibraryUiState
+import app.waveflow.ui.trackCountLabel
 
 /** Onglet Artistes. */
 @Composable

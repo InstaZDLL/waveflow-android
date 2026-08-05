@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +54,10 @@ import app.waveflow.ui.navigation.WaveFlowBottomBar
 import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.player.MiniPlayer
 import app.waveflow.ui.player.NowPlayingScreen
+import app.waveflow.ui.playlists.AddToPlaylistSheet
+import app.waveflow.ui.playlists.PlaylistDetailScreen
+import app.waveflow.ui.playlists.PlaylistMenu
+import app.waveflow.ui.playlists.PlaylistsScreen
 import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -79,6 +84,10 @@ private fun WaveFlowRoot() {
     val viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory)
     val libraryState by viewModel.uiState.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
+    val playlistsState by viewModel.playlistsState.collectAsStateWithLifecycle()
+
+    // Morceau dont l'appui long a ouvert la feuille « Ajouter à une playlist ».
+    var songToAdd by remember { mutableStateOf<Song?>(null) }
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -95,7 +104,12 @@ private fun WaveFlowRoot() {
     BackHandler(enabled = playerExpanded) { playerExpanded = false }
 
     val listBottomPadding = if (hasTrack) MiniPlayerSpace else 0.dp
-    val isDetailRoute = currentRoute == Routes.ALBUM_DETAIL || currentRoute == Routes.ARTIST_DETAIL
+    val isDetailRoute = currentRoute in DETAIL_ROUTES
+    val openPlaylist = backStackEntry
+        ?.takeIf { currentRoute == Routes.PLAYLIST_DETAIL }
+        ?.arguments
+        ?.getLong(Routes.ARG_PLAYLIST_ID)
+        ?.let { playlistsState.playlist(it) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -109,8 +123,21 @@ private fun WaveFlowRoot() {
                                 albumId = backStackEntry?.arguments?.getLong(Routes.ARG_ALBUM_ID),
                                 artistId = backStackEntry?.arguments?.getLong(Routes.ARG_ARTIST_ID),
                                 state = libraryState,
+                                playlistName = openPlaylist?.name,
                             ),
                         )
+                    },
+                    actions = {
+                        openPlaylist?.let { playlist ->
+                            PlaylistMenu(
+                                playlist = playlist,
+                                onRename = { viewModel.renamePlaylist(playlist.id, it) },
+                                onDelete = {
+                                    viewModel.deletePlaylist(playlist.id)
+                                    navController.popBackStack()
+                                },
+                            )
+                        }
                     },
                     navigationIcon = {
                         if (isDetailRoute) {
@@ -152,6 +179,7 @@ private fun WaveFlowRoot() {
                                 onSongClick = { song -> viewModel.playFrom(libraryState.songs, song) },
                                 onRetry = viewModel::retry,
                                 bottomPadding = listBottomPadding,
+                                onSongLongClick = { songToAdd = it },
                             )
                         }
 
@@ -188,6 +216,7 @@ private fun WaveFlowRoot() {
                                 onPlay = { viewModel.playFirst(songs) },
                                 onShuffle = { viewModel.playShuffled(songs) },
                                 bottomPadding = listBottomPadding,
+                                onSongLongClick = { songToAdd = it },
                             )
                         }
 
@@ -203,6 +232,35 @@ private fun WaveFlowRoot() {
                                 songs = songs,
                                 nowPlayingId = libraryState.nowPlayingId,
                                 onSongClick = { song -> viewModel.playFrom(songs, song) },
+                                onPlay = { viewModel.playFirst(songs) },
+                                onShuffle = { viewModel.playShuffled(songs) },
+                                bottomPadding = listBottomPadding,
+                                onSongLongClick = { songToAdd = it },
+                            )
+                        }
+
+                        composable(Routes.PLAYLISTS) {
+                            PlaylistsScreen(
+                                state = playlistsState,
+                                onPlaylistClick = { navController.navigate(Routes.playlistDetail(it.id)) },
+                                onCreatePlaylist = viewModel::createPlaylist,
+                                bottomPadding = listBottomPadding,
+                            )
+                        }
+
+                        composable(
+                            route = Routes.PLAYLIST_DETAIL,
+                            arguments = listOf(navArgument(Routes.ARG_PLAYLIST_ID) { type = NavType.LongType }),
+                        ) { entry ->
+                            val playlistId = entry.arguments?.getLong(Routes.ARG_PLAYLIST_ID) ?: return@composable
+                            val songs = playlistsState.songs(playlistId)
+
+                            PlaylistDetailScreen(
+                                playlist = playlistsState.playlist(playlistId),
+                                songs = songs,
+                                nowPlayingId = libraryState.nowPlayingId,
+                                onSongClick = { song -> viewModel.playFrom(songs, song) },
+                                onRemoveSong = { viewModel.removeSongFromPlaylist(playlistId, it) },
                                 onPlay = { viewModel.playFirst(songs) },
                                 onShuffle = { viewModel.playShuffled(songs) },
                                 bottomPadding = listBottomPadding,
@@ -245,7 +303,25 @@ private fun WaveFlowRoot() {
             )
         }
     }
+
+    songToAdd?.let { song ->
+        AddToPlaylistSheet(
+            song = song,
+            playlists = playlistsState.playlists,
+            songCountOf = { playlistsState.songs(it.id).size },
+            onAddTo = { viewModel.addSongToPlaylist(it.id, song) },
+            onCreateAndAdd = { name -> viewModel.createPlaylistWith(name, song) },
+            onDismiss = { songToAdd = null },
+        )
+    }
 }
+
+/** Routes affichant une flèche de retour plutôt que le titre de section. */
+private val DETAIL_ROUTES = setOf(
+    Routes.ALBUM_DETAIL,
+    Routes.ARTIST_DETAIL,
+    Routes.PLAYLIST_DETAIL,
+)
 
 /**
  * Bascule d'onglet : une seule entrée par section dans la pile, et l'état de
@@ -264,11 +340,14 @@ private fun currentScreenTitle(
     albumId: Long?,
     artistId: Long?,
     state: LibraryUiState,
+    playlistName: String?,
 ): String = when (currentRoute) {
     Routes.ALBUMS -> "Albums"
     Routes.ARTISTS -> "Artistes"
+    Routes.PLAYLISTS -> "Playlists"
     Routes.ALBUM_DETAIL -> albumId?.let { state.album(it)?.title } ?: "Album"
     Routes.ARTIST_DETAIL -> artistId?.let { state.artist(it)?.name } ?: "Artiste"
+    Routes.PLAYLIST_DETAIL -> playlistName ?: "Playlist"
     else -> "WaveFlow"
 }
 

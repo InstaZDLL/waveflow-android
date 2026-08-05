@@ -15,6 +15,8 @@ local-first music player. Kotlin + Jetpack Compose + Media3.
   a `MediaSessionService` — background playback + lock-screen / notification
   controls out of the box
 - **Library source:** `MediaStore` (device audio, read-only for now)
+- **Local store:** Room — playlists only; tracks are never duplicated out of
+  `MediaStore` (schemas versioned under `app/schemas/`)
 - **Images:** Coil
 - **DI:** manual container for now (`AppContainer`); Hilt later
 - **Min SDK:** 26 (Android 8.0) · **Target/Compile SDK:** 36
@@ -28,10 +30,14 @@ app/src/main/java/app/waveflow/
 ├─ model/
 │  ├─ Song.kt              Domain model, source-agnostic
 │  ├─ Album.kt / Artist.kt Derived from the song list
+│  ├─ Playlist.kt          Local playlist + entries
 │  └─ Grouping.kt          List<Song> → albums / artists
 ├─ data/
 │  ├─ MusicRepository.kt            Library abstraction (Flow<List<Song>>)
-│  └─ MediaStoreMusicRepository.kt  MediaStore query + ContentObserver
+│  ├─ MediaStoreMusicRepository.kt  MediaStore query + ContentObserver
+│  ├─ PlaylistRepository.kt         Local playlist abstraction
+│  ├─ RoomPlaylistRepository.kt     Room-backed implementation
+│  └─ local/                        Room entities, DAO, database
 ├─ playback/
 │  ├─ PlaybackService.kt          Media3 MediaSessionService (ExoPlayer)
 │  ├─ PlaybackController.kt       Playback facade + PlaybackState
@@ -49,6 +55,11 @@ app/src/main/java/app/waveflow/
    │  ├─ ArtistsScreen.kt         Artist list
    │  ├─ ArtistDetailScreen.kt    Header + tracks
    │  └─ DetailHeader.kt          Shared header (play / shuffle)
+   ├─ playlists/
+   │  ├─ PlaylistsScreen.kt       Playlist list + creation
+   │  ├─ PlaylistDetailScreen.kt  Header + tracks
+   │  ├─ AddToPlaylistSheet.kt    Long-press a song → add
+   │  └─ PlaylistMenu.kt          Rename / delete
    ├─ permission/
    │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
    ├─ player/
@@ -81,8 +92,9 @@ or from the command line:
 - [x] Local file playback (MediaStore + Media3)
 - [x] Full-screen player (seek, shuffle, repeat, artwork-tinted background)
 - [x] Album / artist browsing (Navigation Compose + bottom bar)
-- [ ] Playlist browsing
-- [ ] Room index + search
+- [x] Local playlists (Room): create, rename, delete, add / remove tracks
+- [ ] Drag-to-reorder inside a playlist
+- [ ] Search
 - [ ] WaveFlow server sync (playlists, liked, ratings)
 - [ ] Streaming from the WaveFlow server (HMAC signed URLs)
 - [ ] Android Auto (Media3 `MediaLibraryService`)

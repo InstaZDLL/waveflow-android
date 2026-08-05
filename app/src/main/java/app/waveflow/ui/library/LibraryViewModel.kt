@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.MusicRepository
+import app.waveflow.data.PlaylistRepository
 import app.waveflow.model.Album
 import app.waveflow.model.Artist
 import app.waveflow.model.Song
@@ -14,6 +15,7 @@ import app.waveflow.model.toAlbums
 import app.waveflow.model.toArtists
 import app.waveflow.playback.PlaybackController
 import app.waveflow.ui.player.PlayerUiState
+import app.waveflow.ui.playlists.PlaylistsUiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +37,7 @@ import kotlinx.coroutines.launch
  */
 class LibraryViewModel(
     private val musicRepository: MusicRepository,
+    private val playlistRepository: PlaylistRepository,
     private val playbackController: PlaybackController,
 ) : ViewModel() {
 
@@ -79,6 +82,30 @@ class LibraryViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
             initialValue = PlayerUiState(),
+        )
+
+    val playlistsState: StateFlow<PlaylistsUiState> =
+        combine(
+            library,
+            playlistRepository.observePlaylists(),
+            playlistRepository.observeEntries(),
+        ) { data, playlists, entries ->
+            val songsById = data.songs.associateBy { it.id }
+            PlaylistsUiState(
+                isLoading = data.isLoading,
+                playlists = playlists,
+                songsByPlaylist = entries
+                    .groupBy { it.playlistId }
+                    .mapValues { (_, entriesOfPlaylist) ->
+                        entriesOfPlaylist
+                            .sortedBy { it.position }
+                            .mapNotNull { songsById[it.songId] }
+                    },
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            initialValue = PlaylistsUiState(),
         )
 
     private var libraryJob: Job? = null
@@ -147,6 +174,37 @@ class LibraryViewModel(
 
     fun cycleRepeatMode() = playbackController.cycleRepeatMode()
 
+    fun createPlaylist(name: String) {
+        val trimmed = name.trim().ifBlank { return }
+        viewModelScope.launch { playlistRepository.create(trimmed) }
+    }
+
+    /** Crée une playlist et y place [song] dans la foulée. */
+    fun createPlaylistWith(name: String, song: Song) {
+        val trimmed = name.trim().ifBlank { return }
+        viewModelScope.launch {
+            val playlistId = playlistRepository.create(trimmed)
+            playlistRepository.addSong(playlistId, song.id)
+        }
+    }
+
+    fun renamePlaylist(playlistId: Long, name: String) {
+        val trimmed = name.trim().ifBlank { return }
+        viewModelScope.launch { playlistRepository.rename(playlistId, trimmed) }
+    }
+
+    fun deletePlaylist(playlistId: Long) {
+        viewModelScope.launch { playlistRepository.delete(playlistId) }
+    }
+
+    fun addSongToPlaylist(playlistId: Long, song: Song) {
+        viewModelScope.launch { playlistRepository.addSong(playlistId, song.id) }
+    }
+
+    fun removeSongFromPlaylist(playlistId: Long, song: Song) {
+        viewModelScope.launch { playlistRepository.removeSong(playlistId, song.id) }
+    }
+
     override fun onCleared() {
         // Le contrôleur est détenu par ce ViewModel : on le libère avec lui.
         // Le service, lui, survit et continue la lecture en arrière-plan.
@@ -162,6 +220,7 @@ class LibraryViewModel(
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as WaveFlowApp
                 LibraryViewModel(
                     musicRepository = app.container.musicRepository,
+                    playlistRepository = app.container.playlistRepository,
                     playbackController = app.container.createPlaybackController(),
                 )
             }

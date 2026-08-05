@@ -1,6 +1,13 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+}
+
+ksp {
+    // Schémas versionnés dans le dépôt : indispensable pour écrire et relire
+    // les migrations quand le schéma bougera.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 android {
@@ -58,6 +65,10 @@ dependencies {
     // Pochettes
     implementation(libs.coil.compose)
     implementation(libs.androidx.palette)
+
+    // Room — playlists locales
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
