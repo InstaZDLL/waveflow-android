@@ -22,25 +22,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Artist
+import app.waveflow.model.Library
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.LibraryStateContainer
-import app.waveflow.ui.library.LibraryUiState
 import app.waveflow.ui.trackCountLabel
 
 /** Onglet Artistes. */
 @Composable
 fun ArtistsScreen(
-    state: LibraryUiState,
+    library: Library,
     onArtistClick: (Artist) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
 ) {
     LibraryStateContainer(
-        isLoading = state.isLoading,
-        errorMessage = state.errorMessage,
-        isEmpty = state.isEmpty,
+        isLoading = library.isLoading,
+        errorMessage = library.errorMessage,
+        isEmpty = library.isEmpty,
         emptyMessage = "Aucun artiste trouvé sur cet appareil.",
         onRetry = onRetry,
         modifier = modifier,
@@ -49,7 +49,7 @@ fun ArtistsScreen(
             contentPadding = PaddingValues(bottom = bottomPadding),
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(state.artists, key = { it.id }) { artist ->
+            items(library.artists, key = { it.id }) { artist ->
                 ArtistRow(artist = artist, onClick = { onArtistClick(artist) })
             }
         }

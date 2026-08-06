@@ -1,0 +1,68 @@
+package app.waveflow.data
+
+import app.waveflow.model.Library
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/**
+ * La bibliothèque chargée, partagée par toute l'application.
+ *
+ * Porté au niveau application plutôt que par un ViewModel : plusieurs écrans
+ * en dépendent (titres, albums, artistes, playlists, et la recherche à venir),
+ * et chacun d'eux instanciant son propre flux relancerait une requête
+ * MediaStore complète. Ici, la lecture n'a lieu qu'une fois et survit à la
+ * recréation des ViewModels.
+ *
+ * [scope] vit aussi longtemps que le processus : l'observation du MediaStore
+ * n'est pas censée s'arrêter tant que l'application tourne.
+ */
+class LibraryStore(
+    private val musicRepository: MusicRepository,
+    private val scope: CoroutineScope,
+) {
+
+    private val _library = MutableStateFlow(Library())
+    val library: StateFlow<Library> = _library.asStateFlow()
+
+    private var job: Job? = null
+
+    /**
+     * Démarre l'observation de la bibliothèque, une seule fois.
+     *
+     * Appelé quand la permission audio est accordée : avant, le MediaStore
+     * n'est pas lisible.
+     */
+    fun load() {
+        if (job != null) return
+        observe()
+    }
+
+    /** Relance après une erreur. */
+    fun retry() = observe()
+
+    private fun observe() {
+        job?.cancel()
+        job = scope.launch {
+            musicRepository.observeSongs()
+                .onStart { _library.update { it.copy(isLoading = true, errorMessage = null) } }
+                .catch { error ->
+                    _library.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = error.message ?: "Impossible de lire la bibliothèque.",
+                        )
+                    }
+                }
+                .collect { songs ->
+                    _library.value = Library(isLoading = false, songs = songs)
+                }
+        }
+    }
+}

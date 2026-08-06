@@ -1,6 +1,7 @@
 package app.waveflow
 
 import android.app.Application
+import app.waveflow.data.LibraryStore
 import app.waveflow.data.MediaStoreMusicRepository
 import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
@@ -8,6 +9,9 @@ import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Point d'entrée de l'application.
@@ -29,7 +33,15 @@ class WaveFlowApp : Application() {
 /** Conteneur d'objets partagés à l'échelle de l'application. */
 class AppContainer(app: Application) {
 
-    val musicRepository: MusicRepository = MediaStoreMusicRepository(app.contentResolver)
+    private val musicRepository: MusicRepository = MediaStoreMusicRepository(app.contentResolver)
+
+    /**
+     * Portée de vie du processus : la bibliothèque n'a pas de raison de cesser
+     * d'être observée tant que l'application tourne.
+     */
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    val libraryStore = LibraryStore(musicRepository, applicationScope)
 
     // Room n'ouvre réellement le fichier qu'à la première requête, donc rien
     // de coûteux ne se passe ici.

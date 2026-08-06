@@ -30,9 +30,11 @@ app/src/main/java/app/waveflow/
 ├─ model/
 │  ├─ Song.kt              Domain model, source-agnostic
 │  ├─ Album.kt / Artist.kt Derived from the song list
+│  ├─ Library.kt           Loaded library; albums / artists / index derived lazily
 │  ├─ Playlist.kt          Local playlist + entries
 │  └─ Grouping.kt          List<Song> → albums / artists
 ├─ data/
+│  ├─ LibraryStore.kt               Application-scoped library, loaded once
 │  ├─ MusicRepository.kt            Library abstraction (Flow<List<Song>>)
 │  ├─ MediaStoreMusicRepository.kt  MediaStore query + ContentObserver
 │  ├─ PlaylistRepository.kt         Local playlist abstraction
@@ -56,6 +58,7 @@ app/src/main/java/app/waveflow/
    │  ├─ ArtistDetailScreen.kt    Header + tracks
    │  └─ DetailHeader.kt          Shared header (play / shuffle)
    ├─ playlists/
+   │  ├─ PlaylistsViewModel.kt    Playlist state + writes
    │  ├─ PlaylistsScreen.kt       Playlist list + creation
    │  ├─ PlaylistDetailScreen.kt  Header + tracks
    │  ├─ AddToPlaylistSheet.kt    Long-press a song → add
@@ -63,15 +66,20 @@ app/src/main/java/app/waveflow/
    ├─ permission/
    │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
    ├─ player/
+   │  ├─ PlayerViewModel.kt    Owns the MediaController; playback commands
    │  ├─ PlayerUiState.kt      Player state
    │  ├─ ArtworkAccent.kt      Dominant colour from cover (Palette)
    │  ├─ MiniPlayer.kt         Compact bar above the library
    │  └─ NowPlayingScreen.kt   Full-screen player
    └─ library/
-      ├─ LibraryUiState.kt     Shared state for all browse screens
-      ├─ LibraryViewModel.kt   Orchestrates repository + playback
+      ├─ LibraryViewModel.kt   Thin access point to LibraryStore
       └─ LibraryScreen.kt      Song list
 ```
+
+One `LibraryStore` at the application level holds the loaded library; three
+ViewModels read from it — `LibraryViewModel` (browsing), `PlayerViewModel`
+(playback), `PlaylistsViewModel` (playlists). Adding a screen means adding a
+ViewModel, never a second `MediaStore` query.
 
 ## Build
 
@@ -99,7 +107,9 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | Suite | Covers |
 |---|---|
 | `PlaylistDaoTest` | duplicate adds, `updatedAt` bumping, positions, `createWithSong` atomicity, cascade delete |
-| `LibraryViewModelTest` | playlist flow failures, playlist resolution order, contextual play queue |
+| `LibraryStoreTest` | loading, read failures, single subscription, retry |
+| `PlayerViewModelTest` | contextual play queue, current-song resolution, controller release |
+| `PlaylistsViewModelTest` | flow failures, write failures, resolution order, atomic creation |
 | `GroupingTest` | album / artist derivation, sorting, missing tags |
 | `DurationFormatTest` | `m:ss` / `h:mm:ss` formatting |
 

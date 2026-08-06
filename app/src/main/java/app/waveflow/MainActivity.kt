@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,13 +43,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.waveflow.model.Library
 import app.waveflow.model.Song
 import app.waveflow.ui.browse.AlbumDetailScreen
 import app.waveflow.ui.browse.AlbumsScreen
 import app.waveflow.ui.browse.ArtistDetailScreen
 import app.waveflow.ui.browse.ArtistsScreen
 import app.waveflow.ui.library.LibraryScreen
-import app.waveflow.ui.library.LibraryUiState
 import app.waveflow.ui.library.LibraryViewModel
 import app.waveflow.ui.navigation.Routes
 import app.waveflow.ui.navigation.TopLevelDestination
@@ -56,10 +57,12 @@ import app.waveflow.ui.navigation.WaveFlowBottomBar
 import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.player.MiniPlayer
 import app.waveflow.ui.player.NowPlayingScreen
+import app.waveflow.ui.player.PlayerViewModel
 import app.waveflow.ui.playlists.AddToPlaylistSheet
 import app.waveflow.ui.playlists.PlaylistDetailScreen
 import app.waveflow.ui.playlists.PlaylistMenu
 import app.waveflow.ui.playlists.PlaylistsScreen
+import app.waveflow.ui.playlists.PlaylistsViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -80,30 +83,40 @@ private val MiniPlayerSpace = 76.dp
 
 private const val PLAYER_TRANSITION_MS = 300
 
+/** Routes affichant une flèche de retour plutôt que le titre de section. */
+private val DETAIL_ROUTES = setOf(
+    Routes.ALBUM_DETAIL,
+    Routes.ARTIST_DETAIL,
+    Routes.PLAYLIST_DETAIL,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WaveFlowRoot() {
-    val viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory)
-    val libraryState by viewModel.uiState.collectAsStateWithLifecycle()
-    val playerState by viewModel.playerState.collectAsStateWithLifecycle()
-    val playlistsState by viewModel.playlistsState.collectAsStateWithLifecycle()
+    val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory)
+    val playerViewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory)
+    val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.Factory)
 
-    // Morceau dont l'appui long a ouvert la feuille « Ajouter à une playlist ».
-    var songToAdd by remember { mutableStateOf<Song?>(null) }
-
-    // Les écritures de playlist qui échouent se signalent une fois, sans
-    // remplacer le contenu de l'écran.
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(Unit) {
-        viewModel.playlistErrors.collect { snackbarHostState.showSnackbar(it) }
-    }
+    val library by libraryViewModel.library.collectAsStateWithLifecycle()
+    val playerState by playerViewModel.state.collectAsStateWithLifecycle()
+    val playlistsState by playlistsViewModel.state.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
+    var songToAdd by remember { mutableStateOf<Song?>(null) }
+
+    val nowPlayingId = playerState.song?.id
     val hasTrack = playerState.song != null
+
+    // Les écritures de playlist qui échouent se signalent une fois, sans
+    // remplacer le contenu de l'écran.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        playlistsViewModel.errors.collect { snackbarHostState.showSnackbar(it) }
+    }
 
     // Si la file se vide, il n'y a plus rien à afficher en plein écran.
     LaunchedEffect(hasTrack) {
@@ -132,22 +145,10 @@ private fun WaveFlowRoot() {
                                 currentRoute = currentRoute,
                                 albumId = backStackEntry?.arguments?.getLong(Routes.ARG_ALBUM_ID),
                                 artistId = backStackEntry?.arguments?.getLong(Routes.ARG_ARTIST_ID),
-                                state = libraryState,
+                                library = library,
                                 playlistName = openPlaylist?.name,
                             ),
                         )
-                    },
-                    actions = {
-                        openPlaylist?.let { playlist ->
-                            PlaylistMenu(
-                                playlist = playlist,
-                                onRename = { viewModel.renamePlaylist(playlist.id, it) },
-                                onDelete = {
-                                    viewModel.deletePlaylist(playlist.id)
-                                    navController.popBackStack()
-                                },
-                            )
-                        }
                     },
                     navigationIcon = {
                         if (isDetailRoute) {
@@ -157,6 +158,18 @@ private fun WaveFlowRoot() {
                                     contentDescription = "Retour",
                                 )
                             }
+                        }
+                    },
+                    actions = {
+                        openPlaylist?.let { playlist ->
+                            PlaylistMenu(
+                                playlist = playlist,
+                                onRename = { playlistsViewModel.rename(playlist.id, it) },
+                                onDelete = {
+                                    playlistsViewModel.delete(playlist.id)
+                                    navController.popBackStack()
+                                },
+                            )
                         }
                     },
                 )
@@ -171,7 +184,10 @@ private fun WaveFlowRoot() {
             AudioPermissionGate(modifier = Modifier.padding(innerPadding)) {
                 // Ne démarre le scan et la connexion au service qu'une fois la
                 // permission acquise.
-                LaunchedEffect(Unit) { viewModel.onAudioAccessGranted() }
+                LaunchedEffect(Unit) {
+                    libraryViewModel.onAudioAccessGranted()
+                    playerViewModel.connect()
+                }
 
                 Box(
                     modifier = Modifier
@@ -185,9 +201,10 @@ private fun WaveFlowRoot() {
                     ) {
                         composable(Routes.SONGS) {
                             LibraryScreen(
-                                state = libraryState,
-                                onSongClick = { song -> viewModel.playFrom(libraryState.songs, song) },
-                                onRetry = viewModel::retry,
+                                library = library,
+                                nowPlayingId = nowPlayingId,
+                                onSongClick = { playerViewModel.playFrom(library.songs, it) },
+                                onRetry = libraryViewModel::retry,
                                 bottomPadding = listBottomPadding,
                                 onSongLongClick = { songToAdd = it },
                             )
@@ -195,18 +212,18 @@ private fun WaveFlowRoot() {
 
                         composable(Routes.ALBUMS) {
                             AlbumsScreen(
-                                state = libraryState,
+                                library = library,
                                 onAlbumClick = { navController.navigate(Routes.albumDetail(it.id)) },
-                                onRetry = viewModel::retry,
+                                onRetry = libraryViewModel::retry,
                                 bottomPadding = listBottomPadding,
                             )
                         }
 
                         composable(Routes.ARTISTS) {
                             ArtistsScreen(
-                                state = libraryState,
+                                library = library,
                                 onArtistClick = { navController.navigate(Routes.artistDetail(it.id)) },
-                                onRetry = viewModel::retry,
+                                onRetry = libraryViewModel::retry,
                                 bottomPadding = listBottomPadding,
                             )
                         }
@@ -216,15 +233,15 @@ private fun WaveFlowRoot() {
                             arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
                         ) { entry ->
                             val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: return@composable
-                            val songs = libraryState.songsOfAlbum(albumId)
+                            val songs = library.songsOfAlbum(albumId)
 
                             AlbumDetailScreen(
-                                album = libraryState.album(albumId),
+                                album = library.album(albumId),
                                 songs = songs,
-                                nowPlayingId = libraryState.nowPlayingId,
-                                onSongClick = { song -> viewModel.playFrom(songs, song) },
-                                onPlay = { viewModel.playFirst(songs) },
-                                onShuffle = { viewModel.playShuffled(songs) },
+                                nowPlayingId = nowPlayingId,
+                                onSongClick = { playerViewModel.playFrom(songs, it) },
+                                onPlay = { playerViewModel.playFirst(songs) },
+                                onShuffle = { playerViewModel.playShuffled(songs) },
                                 bottomPadding = listBottomPadding,
                                 onSongLongClick = { songToAdd = it },
                             )
@@ -235,15 +252,15 @@ private fun WaveFlowRoot() {
                             arguments = listOf(navArgument(Routes.ARG_ARTIST_ID) { type = NavType.LongType }),
                         ) { entry ->
                             val artistId = entry.arguments?.getLong(Routes.ARG_ARTIST_ID) ?: return@composable
-                            val songs = libraryState.songsOfArtist(artistId)
+                            val songs = library.songsOfArtist(artistId)
 
                             ArtistDetailScreen(
-                                artist = libraryState.artist(artistId),
+                                artist = library.artist(artistId),
                                 songs = songs,
-                                nowPlayingId = libraryState.nowPlayingId,
-                                onSongClick = { song -> viewModel.playFrom(songs, song) },
-                                onPlay = { viewModel.playFirst(songs) },
-                                onShuffle = { viewModel.playShuffled(songs) },
+                                nowPlayingId = nowPlayingId,
+                                onSongClick = { playerViewModel.playFrom(songs, it) },
+                                onPlay = { playerViewModel.playFirst(songs) },
+                                onShuffle = { playerViewModel.playShuffled(songs) },
                                 bottomPadding = listBottomPadding,
                                 onSongLongClick = { songToAdd = it },
                             )
@@ -253,7 +270,7 @@ private fun WaveFlowRoot() {
                             PlaylistsScreen(
                                 state = playlistsState,
                                 onPlaylistClick = { navController.navigate(Routes.playlistDetail(it.id)) },
-                                onCreatePlaylist = viewModel::createPlaylist,
+                                onCreatePlaylist = playlistsViewModel::create,
                                 bottomPadding = listBottomPadding,
                             )
                         }
@@ -268,11 +285,11 @@ private fun WaveFlowRoot() {
                             PlaylistDetailScreen(
                                 playlist = playlistsState.playlist(playlistId),
                                 songs = songs,
-                                nowPlayingId = libraryState.nowPlayingId,
-                                onSongClick = { song -> viewModel.playFrom(songs, song) },
-                                onRemoveSong = { viewModel.removeSongFromPlaylist(playlistId, it) },
-                                onPlay = { viewModel.playFirst(songs) },
-                                onShuffle = { viewModel.playShuffled(songs) },
+                                nowPlayingId = nowPlayingId,
+                                onSongClick = { playerViewModel.playFrom(songs, it) },
+                                onRemoveSong = { playlistsViewModel.removeSong(playlistId, it) },
+                                onPlay = { playerViewModel.playFirst(songs) },
+                                onShuffle = { playerViewModel.playShuffled(songs) },
                                 bottomPadding = listBottomPadding,
                             )
                         }
@@ -284,8 +301,8 @@ private fun WaveFlowRoot() {
                         MiniPlayer(
                             state = playerState,
                             onExpand = { playerExpanded = true },
-                            onTogglePlayPause = viewModel::togglePlayPause,
-                            onSkipNext = viewModel::skipNext,
+                            onTogglePlayPause = playerViewModel::togglePlayPause,
+                            onSkipNext = playerViewModel::skipNext,
                             modifier = Modifier.align(Alignment.BottomCenter),
                         )
                     }
@@ -304,12 +321,12 @@ private fun WaveFlowRoot() {
             NowPlayingScreen(
                 state = playerState,
                 onCollapse = { playerExpanded = false },
-                onTogglePlayPause = viewModel::togglePlayPause,
-                onSkipNext = viewModel::skipNext,
-                onSkipPrevious = viewModel::skipPrevious,
-                onSeek = viewModel::seekTo,
-                onToggleShuffle = viewModel::toggleShuffle,
-                onCycleRepeat = viewModel::cycleRepeatMode,
+                onTogglePlayPause = playerViewModel::togglePlayPause,
+                onSkipNext = playerViewModel::skipNext,
+                onSkipPrevious = playerViewModel::skipPrevious,
+                onSeek = playerViewModel::seekTo,
+                onToggleShuffle = playerViewModel::toggleShuffle,
+                onCycleRepeat = playerViewModel::cycleRepeatMode,
             )
         }
     }
@@ -319,19 +336,12 @@ private fun WaveFlowRoot() {
             song = song,
             playlists = playlistsState.playlists,
             songCountOf = { playlistsState.songs(it.id).size },
-            onAddTo = { viewModel.addSongToPlaylist(it.id, song) },
-            onCreateAndAdd = { name -> viewModel.createPlaylistWith(name, song) },
+            onAddTo = { playlistsViewModel.addSong(it.id, song) },
+            onCreateAndAdd = { name -> playlistsViewModel.createWith(name, song) },
             onDismiss = { songToAdd = null },
         )
     }
 }
-
-/** Routes affichant une flèche de retour plutôt que le titre de section. */
-private val DETAIL_ROUTES = setOf(
-    Routes.ALBUM_DETAIL,
-    Routes.ARTIST_DETAIL,
-    Routes.PLAYLIST_DETAIL,
-)
 
 /**
  * Bascule d'onglet : une seule entrée par section dans la pile, et l'état de
@@ -349,19 +359,14 @@ private fun currentScreenTitle(
     currentRoute: String?,
     albumId: Long?,
     artistId: Long?,
-    state: LibraryUiState,
+    library: Library,
     playlistName: String?,
 ): String = when (currentRoute) {
     Routes.ALBUMS -> "Albums"
     Routes.ARTISTS -> "Artistes"
     Routes.PLAYLISTS -> "Playlists"
-    Routes.ALBUM_DETAIL -> albumId?.let { state.album(it)?.title } ?: "Album"
-    Routes.ARTIST_DETAIL -> artistId?.let { state.artist(it)?.name } ?: "Artiste"
+    Routes.ALBUM_DETAIL -> albumId?.let { library.album(it)?.title } ?: "Album"
+    Routes.ARTIST_DETAIL -> artistId?.let { library.artist(it)?.name } ?: "Artiste"
     Routes.PLAYLIST_DETAIL -> playlistName ?: "Playlist"
     else -> "WaveFlow"
-}
-
-/** Évite d'exposer un `first()` nullable à chaque écran de détail. */
-private fun LibraryViewModel.playFirst(songs: List<Song>) {
-    songs.firstOrNull()?.let { playFrom(songs, it) }
 }
