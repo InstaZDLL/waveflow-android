@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -102,6 +103,30 @@ class PlaylistDaoTest {
         assertEquals(playlistId, entry.playlistId)
         assertEquals(7L, entry.songId)
         assertEquals(0, entry.position)
+    }
+
+    @Test
+    fun `createWithSong ne laisse aucune playlist si l'ajout du morceau echoue`() = runTest {
+        // Rien dans le schéma ne peut faire échouer la seconde écriture : on la
+        // fait donc échouer nous-mêmes, pour observer le retour arrière.
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER refuse_entrees BEFORE INSERT ON playlist_songs " +
+                "BEGIN SELECT RAISE(ABORT, 'insertion refusée'); END",
+        )
+
+        val result = runCatching {
+            dao.createWithSong(
+                playlist = PlaylistEntity(name = "Nouvelle", createdAt = 1_000L, updatedAt = 1_000L),
+                songId = 7L,
+            )
+        }
+
+        assertTrue("l'échec doit remonter à l'appelant", result.isFailure)
+        assertEquals(
+            "la playlist ne doit pas survivre à l'échec de son premier morceau",
+            emptyList<PlaylistEntity>(),
+            dao.observePlaylists().first(),
+        )
     }
 
     @Test
