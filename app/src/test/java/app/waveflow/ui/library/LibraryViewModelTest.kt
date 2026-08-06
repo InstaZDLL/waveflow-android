@@ -114,6 +114,37 @@ class LibraryViewModelTest {
         job.cancel()
     }
 
+    /**
+     * Sans le try/catch, l'exception remonterait de `viewModelScope.launch`
+     * jusqu'au scheduler du test, qui ferait échouer celui-ci — exactement ce
+     * qui ferait crasher l'application en production.
+     */
+    @Test
+    fun `une ecriture de playlist qui echoue devient un message et non un crash`() = runTest {
+        val repository = FakePlaylistRepository(
+            writeFailure = IllegalStateException("disque plein"),
+        )
+        val viewModel = viewModel(playlistRepository = repository)
+
+        val errors = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.playlistErrors.collect { errors += it }
+        }
+
+        viewModel.createPlaylist("Ma playlist")
+        viewModel.removeSongFromPlaylist(playlistId = 1L, song = song(id = 1L))
+
+        assertEquals(
+            listOf(
+                "Impossible de créer la playlist.",
+                "Impossible de retirer le morceau de la playlist.",
+            ),
+            errors,
+        )
+
+        job.cancel()
+    }
+
     @Test
     fun `jouer un morceau met la file demandee et non toute la bibliotheque`() = runTest {
         val songs = listOf(song(id = 1L), song(id = 2L), song(id = 3L))

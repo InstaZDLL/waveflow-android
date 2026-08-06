@@ -50,6 +50,8 @@ class FakeMusicRepository(
 class FakePlaylistRepository(
     private val playlists: Flow<List<Playlist>> = flowOf(emptyList()),
     private val entries: Flow<List<PlaylistEntry>> = flowOf(emptyList()),
+    /** Si non nul, toute écriture échoue avec cette exception. */
+    private val writeFailure: Throwable? = null,
 ) : PlaylistRepository {
 
     val createCalls = mutableListOf<String>()
@@ -61,25 +63,33 @@ class FakePlaylistRepository(
 
     override fun observeEntries(): Flow<List<PlaylistEntry>> = entries
 
+    private fun failIfConfigured() {
+        writeFailure?.let { throw it }
+    }
+
     override suspend fun create(name: String): Long {
+        failIfConfigured()
         createCalls += name
         return createCalls.size.toLong()
     }
 
     override suspend fun createWithSong(name: String, songId: Long): Long {
+        failIfConfigured()
         createWithSongCalls += name to songId
         return createWithSongCalls.size.toLong()
     }
 
-    override suspend fun rename(playlistId: Long, name: String) = Unit
+    override suspend fun rename(playlistId: Long, name: String) = failIfConfigured()
 
-    override suspend fun delete(playlistId: Long) = Unit
+    override suspend fun delete(playlistId: Long) = failIfConfigured()
 
     override suspend fun addSong(playlistId: Long, songId: Long) {
+        failIfConfigured()
         addSongCalls += playlistId to songId
     }
 
     override suspend fun removeSong(playlistId: Long, songId: Long) {
+        failIfConfigured()
         removeSongCalls += playlistId to songId
     }
 }
