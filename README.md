@@ -87,6 +87,24 @@ or from the command line:
 > (e.g. 25) are not yet supported by the Android Gradle Plugin — build via
 > Studio or point `org.gradle.java.home` at a JDK 21.
 
+## Tests
+
+```bash
+./gradlew testDebugUnitTest      # everything below, no emulator needed
+```
+
+All tests run on the JVM. Robolectric provides a real `android.net.Uri` and an
+in-memory SQLite for Room, so the DAO is exercised without a device.
+
+| Suite | Covers |
+|---|---|
+| `PlaylistDaoTest` | duplicate adds, `updatedAt` bumping, positions, `createWithSong` atomicity, cascade delete |
+| `LibraryViewModelTest` | playlist flow failures, playlist resolution order, contextual play queue |
+| `GroupingTest` | album / artist derivation, sorting, missing tags |
+| `DurationFormatTest` | `m:ss` / `h:mm:ss` formatting |
+
+Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
+
 ## Roadmap
 
 - [x] Local file playback (MediaStore + Media3)

@@ -18,6 +18,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -89,6 +91,13 @@ private fun WaveFlowRoot() {
     // Morceau dont l'appui long a ouvert la feuille « Ajouter à une playlist ».
     var songToAdd by remember { mutableStateOf<Song?>(null) }
 
+    // Les écritures de playlist qui échouent se signalent une fois, sans
+    // remplacer le contenu de l'écran.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        viewModel.playlistErrors.collect { snackbarHostState.showSnackbar(it) }
+    }
+
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -114,6 +123,7 @@ private fun WaveFlowRoot() {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
