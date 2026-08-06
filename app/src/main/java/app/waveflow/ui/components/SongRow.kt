@@ -1,6 +1,7 @@
 package app.waveflow.ui.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,7 +30,10 @@ import app.waveflow.ui.formatDuration
  *
  * @param showArtwork masquable sur un écran d'album, où répéter la même
  *   pochette à chaque ligne n'apporte rien.
+ * @param onLongClick action secondaire de la ligne : ajouter à une playlist
+ *   depuis la bibliothèque, en retirer depuis une playlist.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(
     song: Song,
@@ -37,6 +41,7 @@ fun SongRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showArtwork: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val titleColor = if (isCurrent) {
         MaterialTheme.colorScheme.primary
@@ -48,7 +53,7 @@ fun SongRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         if (showArtwork) {

@@ -3,6 +3,9 @@ package app.waveflow
 import android.app.Application
 import app.waveflow.data.MediaStoreMusicRepository
 import app.waveflow.data.MusicRepository
+import app.waveflow.data.PlaylistRepository
+import app.waveflow.data.RoomPlaylistRepository
+import app.waveflow.data.local.WaveFlowDatabase
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
 
@@ -27,6 +30,12 @@ class WaveFlowApp : Application() {
 class AppContainer(app: Application) {
 
     val musicRepository: MusicRepository = MediaStoreMusicRepository(app.contentResolver)
+
+    // Room n'ouvre réellement le fichier qu'à la première requête, donc rien
+    // de coûteux ne se passe ici.
+    private val database = WaveFlowDatabase.build(app)
+
+    val playlistRepository: PlaylistRepository = RoomPlaylistRepository(database.playlistDao())
 
     private val appContext = app.applicationContext
 

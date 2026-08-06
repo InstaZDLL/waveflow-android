@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.formatDuration
+import app.waveflow.ui.trackCountLabel
 
 /**
  * En-tête commun aux écrans album et artiste : visuel, titre, méta, et les
@@ -46,6 +47,7 @@ fun DetailHeader(
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
     artworkShape: Shape = RoundedCornerShape(12.dp),
+    playEnabled: Boolean = true,
 ) {
     Column(
         modifier = modifier
@@ -89,7 +91,7 @@ fun DetailHeader(
         Spacer(Modifier.height(16.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onPlay) {
+            Button(onClick = onPlay, enabled = playEnabled) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = null,
@@ -98,7 +100,7 @@ fun DetailHeader(
                 Spacer(Modifier.width(8.dp))
                 Text("Lecture")
             }
-            OutlinedButton(onClick = onShuffle) {
+            OutlinedButton(onClick = onShuffle, enabled = playEnabled) {
                 Icon(
                     imageVector = Icons.Filled.Shuffle,
                     contentDescription = null,
@@ -111,8 +113,3 @@ fun DetailHeader(
     }
 }
 
-internal fun trackCountLabel(count: Int): String =
-    if (count <= 1) "$count titre" else "$count titres"
-
-internal fun albumCountLabel(count: Int): String =
-    if (count <= 1) "$count album" else "$count albums"

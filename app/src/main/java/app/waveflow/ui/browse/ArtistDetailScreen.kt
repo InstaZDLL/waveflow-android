@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Artist
 import app.waveflow.model.Song
+import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.SongRow
 
@@ -27,6 +28,7 @@ fun ArtistDetailScreen(
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
+    onSongLongClick: (Song) -> Unit = {},
 ) {
     if (artist == null) {
         Box(modifier = modifier.fillMaxSize()) {
@@ -60,6 +62,7 @@ fun ArtistDetailScreen(
                 song = song,
                 isCurrent = song.id == nowPlayingId,
                 onClick = { onSongClick(song) },
+                onLongClick = { onSongLongClick(song) },
             )
         }
     }

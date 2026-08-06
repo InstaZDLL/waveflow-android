@@ -32,6 +32,7 @@ fun AlbumDetailScreen(
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
+    onSongLongClick: (Song) -> Unit = {},
 ) {
     if (album == null) {
         Box(modifier = modifier.fillMaxSize()) {
@@ -66,6 +67,7 @@ fun AlbumDetailScreen(
                 onClick = { onSongClick(song) },
                 // La pochette est déjà en grand juste au-dessus.
                 showArtwork = false,
+                onLongClick = { onSongLongClick(song) },
             )
         }
     }

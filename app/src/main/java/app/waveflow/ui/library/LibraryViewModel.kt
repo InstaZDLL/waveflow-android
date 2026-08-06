@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.MusicRepository
+import app.waveflow.data.PlaylistRepository
 import app.waveflow.model.Album
 import app.waveflow.model.Artist
 import app.waveflow.model.Song
@@ -14,10 +15,15 @@ import app.waveflow.model.toAlbums
 import app.waveflow.model.toArtists
 import app.waveflow.playback.PlaybackController
 import app.waveflow.ui.player.PlayerUiState
+import app.waveflow.ui.playlists.PlaylistsUiState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onStart
@@ -35,6 +41,7 @@ import kotlinx.coroutines.launch
  */
 class LibraryViewModel(
     private val musicRepository: MusicRepository,
+    private val playlistRepository: PlaylistRepository,
     private val playbackController: PlaybackController,
 ) : ViewModel() {
 
@@ -80,6 +87,48 @@ class LibraryViewModel(
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
             initialValue = PlayerUiState(),
         )
+
+    val playlistsState: StateFlow<PlaylistsUiState> =
+        combine(
+            library,
+            playlistRepository.observePlaylists(),
+            playlistRepository.observeEntries(),
+        ) { data, playlists, entries ->
+            val songsById = data.songs.associateBy { it.id }
+            PlaylistsUiState(
+                isLoading = data.isLoading,
+                playlists = playlists,
+                songsByPlaylist = entries
+                    .groupBy { it.playlistId }
+                    .mapValues { (_, entriesOfPlaylist) ->
+                        entriesOfPlaylist
+                            .sortedBy { it.position }
+                            .mapNotNull { songsById[it.songId] }
+                    },
+            )
+        }.catch { error ->
+            // Sans ça, une base illisible ferait échouer le flux en silence et
+            // l'onglet resterait bloqué sur son indicateur de chargement.
+            emit(
+                PlaylistsUiState(
+                    isLoading = false,
+                    errorMessage = error.message ?: "Impossible de lire les playlists.",
+                ),
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            initialValue = PlaylistsUiState(),
+        )
+
+    /**
+     * Échecs d'écriture, à afficher une fois puis à oublier.
+     *
+     * Un événement plutôt qu'un état : une suppression ratée ne doit pas
+     * remplacer durablement la liste par un message d'erreur.
+     */
+    private val _playlistErrors = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val playlistErrors: SharedFlow<String> = _playlistErrors.asSharedFlow()
 
     private var libraryJob: Job? = null
 
@@ -147,6 +196,67 @@ class LibraryViewModel(
 
     fun cycleRepeatMode() = playbackController.cycleRepeatMode()
 
+    /**
+     * Exécute une écriture de playlist en confinant son échec.
+     *
+     * Une exception qui remonterait de `viewModelScope.launch` n'est rattrapée
+     * par personne et fait tomber l'application : les erreurs Room doivent
+     * devenir un message, pas un crash.
+     */
+    private fun playlistWrite(failureMessage: String, write: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                write()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                // Le message SQLite ne dit rien à l'utilisateur : on remonte
+                // l'action qui a échoué.
+                _playlistErrors.emit(failureMessage)
+            }
+        }
+    }
+
+    fun createPlaylist(name: String) {
+        val trimmed = name.trim().ifBlank { return }
+        playlistWrite("Impossible de créer la playlist.") {
+            playlistRepository.create(trimmed)
+        }
+    }
+
+    /** Crée une playlist et y place [song] dans la foulée. */
+    fun createPlaylistWith(name: String, song: Song) {
+        val trimmed = name.trim().ifBlank { return }
+        playlistWrite("Impossible de créer la playlist.") {
+            playlistRepository.createWithSong(trimmed, song.id)
+        }
+    }
+
+    fun renamePlaylist(playlistId: Long, name: String) {
+        val trimmed = name.trim().ifBlank { return }
+        playlistWrite("Impossible de renommer la playlist.") {
+            playlistRepository.rename(playlistId, trimmed)
+        }
+    }
+
+    fun deletePlaylist(playlistId: Long) {
+        playlistWrite("Impossible de supprimer la playlist.") {
+            playlistRepository.delete(playlistId)
+        }
+    }
+
+    fun addSongToPlaylist(playlistId: Long, song: Song) {
+        playlistWrite("Impossible d'ajouter le morceau à la playlist.") {
+            playlistRepository.addSong(playlistId, song.id)
+        }
+    }
+
+    fun removeSongFromPlaylist(playlistId: Long, song: Song) {
+        playlistWrite("Impossible de retirer le morceau de la playlist.") {
+            playlistRepository.removeSong(playlistId, song.id)
+        }
+    }
+
     override fun onCleared() {
         // Le contrôleur est détenu par ce ViewModel : on le libère avec lui.
         // Le service, lui, survit et continue la lecture en arrière-plan.
@@ -162,6 +272,7 @@ class LibraryViewModel(
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as WaveFlowApp
                 LibraryViewModel(
                     musicRepository = app.container.musicRepository,
+                    playlistRepository = app.container.playlistRepository,
                     playbackController = app.container.createPlaybackController(),
                 )
             }
