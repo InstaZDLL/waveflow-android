@@ -52,7 +52,10 @@ class LibraryStore(
      */
     fun load() {
         synchronized(lock) {
-            if (job != null) return
+            // L'état du job fait foi, pas sa présence : entre sa complétion et
+            // la prise du verrou par son gestionnaire de fin, il est non nul
+            // mais n'observe plus rien.
+            if (job?.isActive == true) return
             observe()
         }
     }
@@ -85,10 +88,10 @@ class LibraryStore(
 
         job = started
         started.invokeOnCompletion {
-            // Une observation terminée — erreur comprise — ne doit pas empêcher
-            // un load() ultérieur de repartir. On n'efface que si personne ne
-            // l'a déjà remplacée. Le moniteur est réentrant : une complétion
-            // immédiate, notifiée sur place, ne bloque pas.
+            // Hygiène : `load()` se fie à `isActive`, mais garder la référence
+            // d'une observation terminée n'a pas d'intérêt. On n'efface que si
+            // personne ne l'a déjà remplacée. Le moniteur est réentrant : une
+            // complétion immédiate, notifiée sur place, ne bloque pas.
             synchronized(lock) {
                 if (job === started) job = null
             }
