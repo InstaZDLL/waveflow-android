@@ -54,7 +54,7 @@ class AppContainer(app: Application) {
     /**
      * Nouvelle instance à chaque appel : un [PlaybackController] tient une
      * liaison vivante avec le service, il doit donc être possédé — et libéré —
-     * par le composant qui le demande (voir `LibraryViewModel.onCleared`).
+     * par le composant qui le demande (voir `PlayerViewModel.onCleared`).
      */
     fun createPlaybackController(): PlaybackController = Media3PlaybackController(appContext)
 }

@@ -1,5 +1,6 @@
 package app.waveflow.ui.playlists
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -86,8 +87,11 @@ class PlaylistsViewModel(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
-                // Le message SQLite ne dit rien à l'utilisateur : on remonte
-                // l'action qui a échoué.
+                // La cause reste dans le journal : sans elle, un échec ne
+                // laisserait aucune trace exploitable.
+                Log.w(TAG, failureMessage, error)
+                // Le message SQLite, lui, ne dit rien à l'utilisateur : on ne
+                // lui remonte que l'action qui a échoué.
                 _errors.emit(failureMessage)
             }
         }
@@ -130,6 +134,7 @@ class PlaylistsViewModel(
     }
 
     companion object {
+        private const val TAG = "PlaylistsViewModel"
         private const val STOP_TIMEOUT_MS = 5_000L
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {

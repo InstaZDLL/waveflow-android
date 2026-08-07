@@ -4,6 +4,7 @@ import app.waveflow.testing.FakeMusicRepository
 import app.waveflow.testing.song
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.plus
@@ -72,6 +73,9 @@ class LibraryStoreTest {
                 flow {
                     subscriptions++
                     emit(listOf(song(id = 1L)))
+                    // Comme le vrai dépôt, adossé à un ContentObserver : le
+                    // flux reste ouvert au lieu de se terminer.
+                    awaitCancellation()
                 },
             ),
             testStoreScope(),
@@ -86,6 +90,33 @@ class LibraryStoreTest {
             1,
             subscriptions,
         )
+    }
+
+    @Test
+    fun `load repart apres une observation terminee en erreur`() = runTest {
+        var attempts = 0
+        val store = LibraryStore(
+            FakeMusicRepository(
+                flow {
+                    attempts++
+                    if (attempts == 1) throw SecurityException("permission révoquée")
+                    emit(listOf(song(id = 1L)))
+                },
+            ),
+            testStoreScope(),
+        )
+
+        store.load()
+        advanceUntilIdle()
+
+        // La permission est ré-accordée depuis les paramètres : la porte
+        // rappelle load(), qui ne doit pas se croire encore en cours.
+        store.load()
+        advanceUntilIdle()
+
+        assertEquals(2, attempts)
+        assertEquals(null, store.library.value.errorMessage)
+        assertEquals(1, store.library.value.songs.size)
     }
 
     @Test

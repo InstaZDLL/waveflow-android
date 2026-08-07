@@ -3,6 +3,7 @@ package app.waveflow.data
 import app.waveflow.model.Library
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,10 +32,13 @@ class LibraryStore(
     private val _library = MutableStateFlow(Library())
     val library: StateFlow<Library> = _library.asStateFlow()
 
+    // Écrit depuis l'appelant et depuis la fin de la coroutine, qui ne sont
+    // pas sur le même thread.
+    @Volatile
     private var job: Job? = null
 
     /**
-     * Démarre l'observation de la bibliothèque, une seule fois.
+     * Démarre l'observation de la bibliothèque si elle ne tourne pas déjà.
      *
      * Appelé quand la permission audio est accordée : avant, le MediaStore
      * n'est pas lisible.
@@ -48,8 +52,12 @@ class LibraryStore(
     fun retry() = observe()
 
     private fun observe() {
-        job?.cancel()
-        job = scope.launch {
+        val previous = job
+        val started = scope.launch {
+            // Attendre la fin de la précédente : deux collectes concurrentes
+            // pourraient écrire dans l'état l'une après l'autre et laisser la
+            // plus ancienne avoir le dernier mot.
+            previous?.cancelAndJoin()
             musicRepository.observeSongs()
                 .onStart { _library.update { it.copy(isLoading = true, errorMessage = null) } }
                 .catch { error ->
@@ -63,6 +71,14 @@ class LibraryStore(
                 .collect { songs ->
                     _library.value = Library(isLoading = false, songs = songs)
                 }
+        }
+
+        job = started
+        started.invokeOnCompletion {
+            // Une observation terminée — erreur comprise — ne doit pas empêcher
+            // un load() ultérieur de repartir. On n'efface que si personne ne
+            // l'a déjà remplacée.
+            if (job === started) job = null
         }
     }
 }

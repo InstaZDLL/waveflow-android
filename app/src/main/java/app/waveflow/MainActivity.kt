@@ -233,7 +233,10 @@ private fun WaveFlowRoot() {
                             arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
                         ) { entry ->
                             val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: return@composable
-                            val songs = library.songsOfAlbum(albumId)
+                            // Le suivi de position recompose la racine toutes les
+                            // 500 ms : sans mémorisation, on refiltrerait toute la
+                            // bibliothèque à chaque fois.
+                            val songs = remember(library, albumId) { library.songsOfAlbum(albumId) }
 
                             AlbumDetailScreen(
                                 album = library.album(albumId),
@@ -252,7 +255,7 @@ private fun WaveFlowRoot() {
                             arguments = listOf(navArgument(Routes.ARG_ARTIST_ID) { type = NavType.LongType }),
                         ) { entry ->
                             val artistId = entry.arguments?.getLong(Routes.ARG_ARTIST_ID) ?: return@composable
-                            val songs = library.songsOfArtist(artistId)
+                            val songs = remember(library, artistId) { library.songsOfArtist(artistId) }
 
                             ArtistDetailScreen(
                                 artist = library.artist(artistId),
