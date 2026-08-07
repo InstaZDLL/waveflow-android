@@ -50,9 +50,11 @@ class LibraryStore(
      * Appelé quand la permission audio est accordée : avant, le MediaStore
      * n'est pas lisible.
      */
-    fun load() = synchronized(lock) {
-        if (job != null) return
-        observe()
+    fun load() {
+        synchronized(lock) {
+            if (job != null) return
+            observe()
+        }
     }
 
     /** Relance après une erreur. */
