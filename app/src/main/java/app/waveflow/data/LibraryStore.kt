@@ -32,9 +32,16 @@ class LibraryStore(
     private val _library = MutableStateFlow(Library())
     val library: StateFlow<Library> = _library.asStateFlow()
 
-    // Écrit depuis l'appelant et depuis la fin de la coroutine, qui ne sont
-    // pas sur le même thread.
-    @Volatile
+    /**
+     * Garde [job].
+     *
+     * Les appels viennent aujourd'hui du thread principal, mais la fin d'une
+     * observation est notifiée depuis la coroutine : tester, remplacer et
+     * effacer doivent former un tout, sans quoi deux collectes pourraient
+     * coexister.
+     */
+    private val lock = Any()
+
     private var job: Job? = null
 
     /**
@@ -43,14 +50,15 @@ class LibraryStore(
      * Appelé quand la permission audio est accordée : avant, le MediaStore
      * n'est pas lisible.
      */
-    fun load() {
+    fun load() = synchronized(lock) {
         if (job != null) return
         observe()
     }
 
     /** Relance après une erreur. */
-    fun retry() = observe()
+    fun retry() = synchronized(lock) { observe() }
 
+    /** À n'appeler que sous [lock]. */
     private fun observe() {
         val previous = job
         val started = scope.launch {
@@ -77,8 +85,11 @@ class LibraryStore(
         started.invokeOnCompletion {
             // Une observation terminée — erreur comprise — ne doit pas empêcher
             // un load() ultérieur de repartir. On n'efface que si personne ne
-            // l'a déjà remplacée.
-            if (job === started) job = null
+            // l'a déjà remplacée. Le moniteur est réentrant : une complétion
+            // immédiate, notifiée sur place, ne bloque pas.
+            synchronized(lock) {
+                if (job === started) job = null
+            }
         }
     }
 }
