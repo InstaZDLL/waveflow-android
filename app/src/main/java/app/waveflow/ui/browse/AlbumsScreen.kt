@@ -26,6 +26,15 @@ import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.LibraryStateContainer
 
 /** Onglet Albums : grille de pochettes, adaptative selon la largeur d'écran. */
+/**
+ * Displays the device's albums in an adaptive grid.
+ *
+ * @param library The album library and its current loading, error, and empty state.
+ * @param onAlbumClick Called when an album is selected.
+ * @param onRetry Called to retry loading the albums after an error.
+ * @param modifier Modifier applied to the screen container.
+ * @param bottomPadding Additional bottom padding for the album grid.
+ */
 @Composable
 fun AlbumsScreen(
     library: Library,

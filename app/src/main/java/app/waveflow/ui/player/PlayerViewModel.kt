@@ -43,12 +43,18 @@ class PlayerViewModel(
             initialValue = PlayerUiState(),
         )
 
-    fun connect() = playbackController.connect()
+    /**
+ * Connects to the playback controller.
+ */
+fun connect() = playbackController.connect()
 
     /**
-     * Démarre [song] avec [queue] comme file d'attente : la bibliothèque
-     * entière depuis l'onglet Titres, l'album, l'artiste ou la playlist depuis
-     * leur écran.
+     * Démarre la lecture de [song] dans [queue].
+     *
+     * Si [song] n'est pas présente dans la file, aucune lecture ne démarre.
+     *
+     * @param queue La file d'attente à utiliser.
+     * @param song Le morceau à lire.
      */
     fun playFrom(queue: List<Song>, song: Song) {
         val startIndex = queue.indexOfFirst { it.id == song.id }
@@ -56,25 +62,53 @@ class PlayerViewModel(
         playbackController.play(queue, startIndex)
     }
 
-    /** Démarre [queue] par son premier morceau. Sans effet si elle est vide. */
+    /** Starts playback with the first song in [queue]. Has no effect when the queue is empty. */
     fun playFirst(queue: List<Song>) {
         queue.firstOrNull()?.let { playFrom(queue, it) }
     }
 
-    fun playShuffled(queue: List<Song>) = playbackController.playShuffled(queue)
+    /**
+ * Starts playback with the songs in shuffled order.
+ *
+ * @param queue The songs available for playback.
+ */
+fun playShuffled(queue: List<Song>) = playbackController.playShuffled(queue)
 
-    fun togglePlayPause() = playbackController.playPause()
+    /**
+ * Toggles playback between playing and paused states.
+ */
+fun togglePlayPause() = playbackController.playPause()
 
-    fun skipNext() = playbackController.skipNext()
+    /**
+ * Advances playback to the next item in the queue.
+ */
+fun skipNext() = playbackController.skipNext()
 
-    fun skipPrevious() = playbackController.skipPrevious()
+    /**
+ * Skips to the previous song in the playback queue.
+ */
+fun skipPrevious() = playbackController.skipPrevious()
 
-    fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
+    /**
+ * Seeks playback to the specified position.
+ *
+ * @param positionMs The target playback position in milliseconds.
+ */
+fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
 
-    fun toggleShuffle() = playbackController.toggleShuffle()
+    /**
+ * Toggles shuffle playback.
+ */
+fun toggleShuffle() = playbackController.toggleShuffle()
 
-    fun cycleRepeatMode() = playbackController.cycleRepeatMode()
+    /**
+ * Advances to the next repeat mode.
+ */
+fun cycleRepeatMode() = playbackController.cycleRepeatMode()
 
+    /**
+     * Releases playback resources when the view model is cleared while allowing background playback to continue.
+     */
     override fun onCleared() {
         // Le service, lui, survit et continue la lecture en arrière-plan.
         playbackController.release()

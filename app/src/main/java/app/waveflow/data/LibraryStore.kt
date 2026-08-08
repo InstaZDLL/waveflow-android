@@ -45,10 +45,7 @@ class LibraryStore(
     private var job: Job? = null
 
     /**
-     * Démarre l'observation de la bibliothèque si elle ne tourne pas déjà.
-     *
-     * Appelé quand la permission audio est accordée : avant, le MediaStore
-     * n'est pas lisible.
+     * Starts observing the library when no active observation is running.
      */
     fun load() {
         synchronized(lock) {
@@ -60,10 +57,16 @@ class LibraryStore(
         }
     }
 
-    /** Relance après une erreur. */
+    /**
+ * Starts a new library observation.
+ */
     fun retry() = synchronized(lock) { observe() }
 
-    /** À n'appeler que sous [lock]. */
+    /**
+     * Starts observing songs and replaces any previous observation.
+     *
+     * This function must be called while holding [lock].
+     */
     private fun observe() {
         val previous = job
         val started = scope.launch {

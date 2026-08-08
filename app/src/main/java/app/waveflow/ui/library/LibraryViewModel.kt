@@ -20,10 +20,15 @@ class LibraryViewModel(private val libraryStore: LibraryStore) : ViewModel() {
 
     val library: StateFlow<Library> = libraryStore.library
 
-    /** Le MediaStore n'est lisible qu'une fois la permission audio accordée. */
+    /**
+ * Loads the library after audio access has been granted.
+ */
     fun onAudioAccessGranted() = libraryStore.load()
 
-    fun retry() = libraryStore.retry()
+    /**
+ * Retries loading the library data.
+ */
+fun retry() = libraryStore.retry()
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
