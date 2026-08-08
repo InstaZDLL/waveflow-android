@@ -23,6 +23,13 @@ import app.waveflow.ui.components.SongRow
  * @param bottomPadding dégage la hauteur du mini-player pour que le dernier
  *   morceau reste atteignable.
  */
+/**
+ * Displays the device's song library with loading, error, empty, and song-list states.
+ *
+ * @param library The library state and songs to display.
+ * @param nowPlayingId The ID of the song currently playing, or `null` if none is playing.
+ * @param bottomPadding Additional space below the song list.
+ */
 @Composable
 fun LibraryScreen(
     library: Library,

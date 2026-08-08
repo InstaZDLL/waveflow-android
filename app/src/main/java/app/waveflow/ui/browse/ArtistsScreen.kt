@@ -29,6 +29,15 @@ import app.waveflow.ui.components.LibraryStateContainer
 import app.waveflow.ui.trackCountLabel
 
 /** Onglet Artistes. */
+/**
+ * Displays the artist library with loading, error, and empty states.
+ *
+ * @param library The artist library and its current loading state.
+ * @param onArtistClick Called when an artist is selected.
+ * @param onRetry Called to retry loading the library.
+ * @param modifier Modifier applied to the screen container.
+ * @param bottomPadding Additional bottom padding for the artist list.
+ */
 @Composable
 fun ArtistsScreen(
     library: Library,

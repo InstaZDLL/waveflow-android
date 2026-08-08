@@ -129,13 +129,23 @@ class FakePlaybackController : PlaybackController {
 
     override fun toggleShuffle() = Unit
 
-    override fun cycleRepeatMode() = Unit
+    /**
+ * Leaves the repeat mode unchanged.
+ */
+override fun cycleRepeatMode() = Unit
 
+    /**
+     * Marks the playback controller as released.
+     */
     override fun release() {
         released = true
     }
 
-    /** Simule une notification du lecteur. */
+    /**
+     * Simulates a playback state notification.
+     *
+     * @param state The playback state to emit.
+     */
     fun emit(state: PlaybackState) {
         _state.value = state
     }

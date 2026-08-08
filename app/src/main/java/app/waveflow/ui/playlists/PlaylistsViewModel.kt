@@ -74,11 +74,13 @@ class PlaylistsViewModel(
     val errors: SharedFlow<String> = _errors.asSharedFlow()
 
     /**
-     * Exécute une écriture en confinant son échec.
+     * Exécute une opération d’écriture et transforme ses échecs en événements d’erreur.
      *
-     * Une exception qui remonterait de `viewModelScope.launch` n'est rattrapée
-     * par personne et fait tomber l'application : les erreurs Room doivent
-     * devenir un message, pas un crash.
+     * Les annulations sont propagées, tandis que les autres exceptions sont journalisées
+     * et signalées avec le message fourni.
+     *
+     * @param failureMessage Message à émettre en cas d’échec.
+     * @param block Opération d’écriture à exécuter.
      */
     private fun write(failureMessage: String, block: suspend () -> Unit) {
         viewModelScope.launch {
@@ -97,12 +99,26 @@ class PlaylistsViewModel(
         }
     }
 
+    /**
+     * Creates a playlist with the provided name.
+     *
+     * Blank or whitespace-only names are ignored.
+     *
+     * @param name The name of the playlist to create.
+     */
     fun create(name: String) {
         val trimmed = name.trim().ifBlank { return }
         write("Impossible de créer la playlist.") { playlistRepository.create(trimmed) }
     }
 
-    /** Crée une playlist et y place [song] dans la foulée. */
+    /**
+     * Creates a playlist and adds the specified song to it.
+     *
+     * Blank names are ignored.
+     *
+     * @param name The playlist name.
+     * @param song The song to add to the playlist.
+     */
     fun createWith(name: String, song: Song) {
         val trimmed = name.trim().ifBlank { return }
         write("Impossible de créer la playlist.") {
@@ -110,6 +126,12 @@ class PlaylistsViewModel(
         }
     }
 
+    /**
+     * Renames a playlist using the provided name after removing surrounding whitespace.
+     *
+     * @param playlistId The identifier of the playlist to rename.
+     * @param name The new playlist name.
+     */
     fun rename(playlistId: Long, name: String) {
         val trimmed = name.trim().ifBlank { return }
         write("Impossible de renommer la playlist.") {
@@ -117,16 +139,33 @@ class PlaylistsViewModel(
         }
     }
 
+    /**
+     * Deletes a playlist.
+     *
+     * @param playlistId The identifier of the playlist to delete.
+     */
     fun delete(playlistId: Long) {
         write("Impossible de supprimer la playlist.") { playlistRepository.delete(playlistId) }
     }
 
+    /**
+     * Adds a song to a playlist.
+     *
+     * @param playlistId The identifier of the playlist.
+     * @param song The song to add.
+     */
     fun addSong(playlistId: Long, song: Song) {
         write("Impossible d'ajouter le morceau à la playlist.") {
             playlistRepository.addSong(playlistId, song.id)
         }
     }
 
+    /**
+     * Removes a song from a playlist.
+     *
+     * @param playlistId The identifier of the playlist.
+     * @param song The song to remove.
+     */
     fun removeSong(playlistId: Long, song: Song) {
         write("Impossible de retirer le morceau de la playlist.") {
             playlistRepository.removeSong(playlistId, song.id)

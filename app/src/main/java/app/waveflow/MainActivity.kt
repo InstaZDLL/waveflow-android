@@ -358,6 +358,15 @@ private fun NavHostController.switchTab(destination: TopLevelDestination) {
     }
 }
 
+/**
+ * Determines the top-bar title for the current navigation route.
+ *
+ * @param currentRoute The active navigation route.
+ * @param albumId The album identifier for the album detail route.
+ * @param artistId The artist identifier for the artist detail route.
+ * @param playlistName The playlist name for the playlist detail route.
+ * @return The route-specific title, or a fallback title when the corresponding entity is unavailable.
+ */
 private fun currentScreenTitle(
     currentRoute: String?,
     albumId: Long?,

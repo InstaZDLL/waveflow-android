@@ -24,12 +24,35 @@ data class Library(
     val isEmpty: Boolean
         get() = !isLoading && errorMessage == null && songs.isEmpty()
 
-    fun album(albumId: Long): Album? = albums.firstOrNull { it.id == albumId }
+    /**
+ * Finds an album by its identifier.
+ *
+ * @param albumId The identifier of the album to find.
+ * @return The matching album, or `null` if no album has the specified identifier.
+ */
+fun album(albumId: Long): Album? = albums.firstOrNull { it.id == albumId }
 
-    fun artist(artistId: Long): Artist? = artists.firstOrNull { it.id == artistId }
+    /**
+ * Finds an artist by its identifier.
+ *
+ * @param artistId The identifier of the artist to find.
+ * @return The matching artist, or `null` if no artist has the specified identifier.
+ */
+fun artist(artistId: Long): Artist? = artists.firstOrNull { it.id == artistId }
 
-    /** Morceaux d'un album, dans l'ordre de la bibliothèque. */
+    /**
+ * Finds the songs belonging to an album in library order.
+ *
+ * @param albumId The album identifier.
+ * @return The songs associated with the album.
+ */
     fun songsOfAlbum(albumId: Long): List<Song> = songs.filter { it.albumId == albumId }
 
-    fun songsOfArtist(artistId: Long): List<Song> = songs.filter { it.artistId == artistId }
+    /**
+ * Finds the songs associated with an artist.
+ *
+ * @param artistId The identifier of the artist.
+ * @return The matching songs in library order.
+ */
+fun songsOfArtist(artistId: Long): List<Song> = songs.filter { it.artistId == artistId }
 }
