@@ -14,12 +14,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -62,6 +66,9 @@ import app.waveflow.ui.playlists.PlaylistDetailScreen
 import app.waveflow.ui.playlists.PlaylistMenu
 import app.waveflow.ui.playlists.PlaylistsScreen
 import app.waveflow.ui.playlists.PlaylistsViewModel
+import app.waveflow.ui.search.SearchField
+import app.waveflow.ui.search.SearchScreen
+import app.waveflow.ui.search.SearchViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -95,17 +102,28 @@ private fun WaveFlowRoot() {
     val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory)
     val playerViewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory)
     val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.Factory)
+    val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
 
     val library by libraryViewModel.library.collectAsStateWithLifecycle()
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
     val playlistsState by playlistsViewModel.state.collectAsStateWithLifecycle()
+    val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
+    val searchResults by searchViewModel.results.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchActive by rememberSaveable { mutableStateOf(false) }
     var songToAdd by remember { mutableStateOf<Song?>(null) }
+
+    // Quitter la recherche n'a pas à laisser la requête derrière : la rouvrir
+    // doit repartir d'un champ vide.
+    fun closeSearch() {
+        searchActive = false
+        searchViewModel.clear()
+    }
 
     val nowPlayingId = playerState.song?.id
     val hasTrack = playerState.song != null
@@ -121,6 +139,10 @@ private fun WaveFlowRoot() {
     LaunchedEffect(hasTrack) {
         if (!hasTrack) playerExpanded = false
     }
+
+    // Le lecteur plein écran recouvre la recherche : tant qu'il est ouvert,
+    // c'est lui que le retour referme.
+    BackHandler(enabled = searchActive && !playerExpanded) { closeSearch() }
 
     BackHandler(enabled = playerExpanded) { playerExpanded = false }
 
@@ -139,19 +161,33 @@ private fun WaveFlowRoot() {
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            currentScreenTitle(
-                                currentRoute = currentRoute,
-                                albumId = backStackEntry?.arguments?.getLong(Routes.ARG_ALBUM_ID),
-                                artistId = backStackEntry?.arguments?.getLong(Routes.ARG_ARTIST_ID),
-                                library = library,
-                                playlistName = openPlaylist?.name,
-                            ),
-                        )
+                        if (searchActive) {
+                            SearchField(
+                                query = searchQuery,
+                                onQueryChange = searchViewModel::onQueryChange,
+                            )
+                        } else {
+                            Text(
+                                currentScreenTitle(
+                                    currentRoute = currentRoute,
+                                    albumId = backStackEntry?.arguments?.getLong(Routes.ARG_ALBUM_ID),
+                                    artistId = backStackEntry?.arguments?.getLong(Routes.ARG_ARTIST_ID),
+                                    library = library,
+                                    playlistName = openPlaylist?.name,
+                                ),
+                            )
+                        }
                     },
                     navigationIcon = {
-                        if (isDetailRoute) {
-                            IconButton(onClick = { navController.popBackStack() }) {
+                        when {
+                            searchActive -> IconButton(onClick = { closeSearch() }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Fermer la recherche",
+                                )
+                            }
+
+                            isDetailRoute -> IconButton(onClick = { navController.popBackStack() }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Retour",
@@ -160,15 +196,38 @@ private fun WaveFlowRoot() {
                         }
                     },
                     actions = {
-                        openPlaylist?.let { playlist ->
-                            PlaylistMenu(
-                                playlist = playlist,
-                                onRename = { playlistsViewModel.rename(playlist.id, it) },
-                                onDelete = {
-                                    playlistsViewModel.delete(playlist.id)
-                                    navController.popBackStack()
-                                },
-                            )
+                        if (searchActive) {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = searchViewModel::clear) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = "Effacer la recherche",
+                                    )
+                                }
+                            }
+                        } else {
+                            // Rien à chercher tant que la bibliothèque n'a rien
+                            // rendu — permission refusée, scan en cours,
+                            // appareil sans musique.
+                            if (library.songs.isNotEmpty()) {
+                                IconButton(onClick = { searchActive = true }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Search,
+                                        contentDescription = "Rechercher",
+                                    )
+                                }
+                            }
+
+                            openPlaylist?.let { playlist ->
+                                PlaylistMenu(
+                                    playlist = playlist,
+                                    onRename = { playlistsViewModel.rename(playlist.id, it) },
+                                    onDelete = {
+                                        playlistsViewModel.delete(playlist.id)
+                                        navController.popBackStack()
+                                    },
+                                )
+                            }
                         }
                     },
                 )
@@ -293,6 +352,36 @@ private fun WaveFlowRoot() {
                                 onPlay = { playerViewModel.playFirst(songs) },
                                 onShuffle = { playerViewModel.playShuffled(songs) },
                                 bottomPadding = listBottomPadding,
+                            )
+                        }
+                    }
+
+                    // Posée par-dessus le NavHost plutôt qu'à sa place : la
+                    // pile de navigation reste intacte, et fermer la recherche
+                    // rend l'écran exactement tel qu'il était.
+                    if (searchActive) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.background,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            SearchScreen(
+                                query = searchQuery,
+                                results = searchResults,
+                                nowPlayingId = nowPlayingId,
+                                // La file de lecture est la liste affichée :
+                                // enchaîner sur les résultats suivants est le
+                                // comportement attendu.
+                                onSongClick = { playerViewModel.playFrom(searchResults.songs, it) },
+                                onAlbumClick = {
+                                    closeSearch()
+                                    navController.navigate(Routes.albumDetail(it.id))
+                                },
+                                onArtistClick = {
+                                    closeSearch()
+                                    navController.navigate(Routes.artistDetail(it.id))
+                                },
+                                bottomPadding = listBottomPadding,
+                                onSongLongClick = { songToAdd = it },
                             )
                         }
                     }
