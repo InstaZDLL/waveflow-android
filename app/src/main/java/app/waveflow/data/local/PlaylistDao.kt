@@ -63,6 +63,10 @@ interface PlaylistDao {
         if (deleteEntry(playlistId, songId) > 0) touchPlaylist(playlistId, updatedAt)
     }
 
+    /** Contenu d'une playlist dans son ordre stocké. */
+    @Query("SELECT songId FROM playlist_songs WHERE playlistId = :playlistId ORDER BY position ASC")
+    suspend fun songIdsOf(playlistId: Long): List<Long>
+
     /** @return le nombre de lignes mises à jour, 0 si le morceau n'y était pas. */
     @Query("UPDATE playlist_songs SET position = :position WHERE playlistId = :playlistId AND songId = :songId")
     suspend fun updatePosition(playlistId: Long, songId: Long, position: Int): Int
@@ -81,18 +85,27 @@ interface PlaylistDao {
      * que réinséré. Le rang n'avance qu'aux lignes réellement écrites : un
      * identifiant fantôme ne creuse pas de trou au milieu des positions.
      *
-     * `updatedAt` n'est touché que si au moins une ligne a bougé, comme dans
+     * `updatedAt` n'est touché que si l'ordre a réellement changé, comme dans
      * [addSong] et [removeSong] — c'est un horodatage de résolution de
      * conflits, un ordre sans effet ne doit pas faire croire à une
-     * modification.
+     * modification. La comparaison porte sur l'ordre relu après écriture, et
+     * non sur le compte de lignes rendu par [updatePosition] : `UPDATE`
+     * compte les lignes écrites, pas celles dont la valeur a changé, et
+     * réécrire une position à l'identique rapporte donc 1. Relire est aussi
+     * plus sûr que raisonner sur les seules lignes citées — celles que
+     * [orderedSongIds] omet gardent leur position et pèsent sur l'ordre
+     * final.
      */
     @Transaction
     suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>, updatedAt: Long) {
+        val before = songIdsOf(playlistId)
+
         var position = 0
         for (songId in orderedSongIds) {
             if (updatePosition(playlistId, songId, position) > 0) position++
         }
-        if (position > 0) touchPlaylist(playlistId, updatedAt)
+
+        if (songIdsOf(playlistId) != before) touchPlaylist(playlistId, updatedAt)
     }
 
     /**

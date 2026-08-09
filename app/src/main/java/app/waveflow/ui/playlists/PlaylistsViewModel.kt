@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Playlists locales : lecture de leur contenu et écritures.
@@ -72,6 +74,17 @@ class PlaylistsViewModel(
      */
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errors: SharedFlow<String> = _errors.asSharedFlow()
+
+    /** Sérialise les réordonnancements ; voir [reorder]. */
+    private val reorderMutex = Mutex()
+
+    /**
+     * Rang du dernier réordonnancement demandé, par playlist.
+     *
+     * Lu et écrit depuis `viewModelScope`, donc toujours sur le thread
+     * principal : une map ordinaire suffit.
+     */
+    private val reorderGenerations = mutableMapOf<Long, Int>()
 
     /**
      * Exécute une écriture en confinant son échec.
@@ -147,8 +160,22 @@ class PlaylistsViewModel(
      * liste resterait durablement en désaccord avec la base.
      */
     fun reorder(playlistId: Long, songs: List<Song>, onFailure: () -> Unit = {}) {
-        write("Impossible de réordonner la playlist.", onFailure) {
-            playlistRepository.reorder(playlistId, songs.map { it.id })
+        val generation = (reorderGenerations[playlistId] ?: 0) + 1
+        reorderGenerations[playlistId] = generation
+
+        write(
+            failureMessage = "Impossible de réordonner la playlist.",
+            // Un échec périmé ne doit pas défaire un ordre plus récent :
+            // l'écran a déjà affiché le suivant, le restaurer le ramènerait en
+            // arrière sans raison visible.
+            onFailure = { if (reorderGenerations[playlistId] == generation) onFailure() },
+        ) {
+            // Deux glissers rapprochés partent dans deux coroutines : sans ce
+            // verrou, c'est l'ordre d'arrivée en base qui déciderait, pas
+            // l'ordre des gestes.
+            reorderMutex.withLock {
+                playlistRepository.reorder(playlistId, songs.map { it.id })
+            }
         }
     }
 

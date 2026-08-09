@@ -158,6 +158,22 @@ class PlaylistDaoTest {
         assertEquals(listOf(0, 1), entries.map { it.position })
     }
 
+    /**
+     * `UPDATE` compte les lignes écrites, pas celles dont la valeur a changé :
+     * réécrire une position à l'identique renvoie 1. Sans comparaison à
+     * l'ordre stocké, un réordonnancement sans effet daterait la playlist.
+     */
+    @Test
+    fun `reorder a l'ordre identique ne touche pas updatedAt`() = runTest {
+        val playlistId = createPlaylist(at = 1_000L)
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+
+        dao.reorder(playlistId, orderedSongIds = listOf(10L, 20L), updatedAt = 5_000L)
+
+        assertEquals(2_000L, updatedAtOf(playlistId))
+    }
+
     @Test
     fun `reorder n'ecrivant aucune ligne ne touche pas updatedAt`() = runTest {
         val playlistId = createPlaylist(at = 1_000L)

@@ -27,6 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -109,6 +112,26 @@ fun PlaylistDetailScreen(
 
         items(working, key = { it.id }) { song ->
             val isDragged = drag?.songId == song.id
+            val index = working.indexOfFirst { it.id == song.id }
+
+            // Le glissement est hors de portée de TalkBack et du clavier :
+            // les mêmes déplacements sont exposés en actions nommées. Elles
+            // passent par le même chemin d'écriture, restauration comprise.
+            fun moveTo(target: Int): Boolean {
+                if (index < 0 || target !in working.indices) return false
+                val stored = songs
+                val reordered = working.moved(index, target)
+                working = reordered
+                onReorder(reordered) { working = stored }
+                return true
+            }
+
+            val moveActions = buildList {
+                if (index > 0) add(CustomAccessibilityAction("Monter") { moveTo(index - 1) })
+                if (index in 0 until working.lastIndex) {
+                    add(CustomAccessibilityAction("Descendre") { moveTo(index + 1) })
+                }
+            }
 
             SongRow(
                 song = song,
@@ -160,7 +183,10 @@ fun PlaylistDetailScreen(
                     // La ligne saisie passe au-dessus de ses voisines, sans
                     // quoi elle glisserait dessous en les croisant.
                     .zIndex(if (isDragged) 1f else 0f)
-                    .graphicsLayer { translationY = drag?.translationFor(song.id) ?: 0f },
+                    .graphicsLayer { translationY = drag?.translationFor(song.id) ?: 0f }
+                    // Portées par la ligne plutôt que par la poignée : c'est
+                    // la ligne que TalkBack met au foyer.
+                    .semantics { customActions = moveActions },
             )
         }
     }
