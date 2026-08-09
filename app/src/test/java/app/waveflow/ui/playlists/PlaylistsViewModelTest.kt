@@ -102,6 +102,37 @@ class PlaylistsViewModelTest {
         job.cancel()
     }
 
+    @Test
+    fun `reordonner transmet l'ordre affiche en identifiants`() = runTest {
+        val repository = FakePlaylistRepository()
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        viewModel.reorder(playlistId = 7L, songs = listOf(songs[2], songs[0], songs[1]))
+        advanceUntilIdle()
+
+        assertEquals(listOf(7L to listOf(3L, 1L, 2L)), repository.reorderCalls)
+    }
+
+    @Test
+    fun `un reordonnancement qui echoue devient un message`() = runTest {
+        val repository = FakePlaylistRepository(
+            writeFailure = IllegalStateException("disque plein"),
+        )
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        val errors = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { errors += it }
+        }
+
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed())
+        advanceUntilIdle()
+
+        assertEquals(listOf("Impossible de réordonner la playlist."), errors)
+
+        job.cancel()
+    }
+
     /**
      * Sans le try/catch, l'exception remonterait de `viewModelScope.launch`
      * jusqu'au scheduler du test, qui ferait échouer celui-ci — exactement ce

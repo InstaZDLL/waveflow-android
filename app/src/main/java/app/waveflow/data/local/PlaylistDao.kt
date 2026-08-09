@@ -63,6 +63,32 @@ interface PlaylistDao {
         if (deleteEntry(playlistId, songId) > 0) touchPlaylist(playlistId, updatedAt)
     }
 
+    @Query("UPDATE playlist_songs SET position = :position WHERE playlistId = :playlistId AND songId = :songId")
+    suspend fun updatePosition(playlistId: Long, songId: Long, position: Int)
+
+    /**
+     * Réécrit les positions de la playlist dans l'ordre de [orderedSongIds].
+     *
+     * Réécriture complète plutôt qu'intercalation : `removeSong` ne compacte
+     * pas les positions, elles sont donc déjà trouées, et rien ne garantit
+     * qu'un rang libre existe entre deux voisins. Repartir de zéro à chaque
+     * déplacement coûte quelques dizaines d'`UPDATE` sur une playlist
+     * ordinaire, dans une seule transaction.
+     *
+     * Un identifiant absent de la playlist ne met à jour aucune ligne — un
+     * morceau retiré entre le geste et son enregistrement est ignoré plutôt
+     * que réinséré.
+     */
+    @Transaction
+    suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>, updatedAt: Long) {
+        if (orderedSongIds.isEmpty()) return
+
+        orderedSongIds.forEachIndexed { position, songId ->
+            updatePosition(playlistId, songId, position)
+        }
+        touchPlaylist(playlistId, updatedAt)
+    }
+
     /**
      * Création d'une playlist déjà pourvue de son premier morceau.
      *

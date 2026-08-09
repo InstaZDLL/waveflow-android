@@ -58,6 +58,7 @@ class FakePlaylistRepository(
     val createWithSongCalls = mutableListOf<Pair<String, Long>>()
     val addSongCalls = mutableListOf<Pair<Long, Long>>()
     val removeSongCalls = mutableListOf<Pair<Long, Long>>()
+    val reorderCalls = mutableListOf<Pair<Long, List<Long>>>()
 
     override fun observePlaylists(): Flow<List<Playlist>> = playlists
 
@@ -91,6 +92,11 @@ class FakePlaylistRepository(
     override suspend fun removeSong(playlistId: Long, songId: Long) {
         failIfConfigured()
         removeSongCalls += playlistId to songId
+    }
+
+    override suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>) {
+        failIfConfigured()
+        reorderCalls += playlistId to orderedSongIds
     }
 }
 

@@ -133,6 +133,19 @@ class PlaylistsViewModel(
         }
     }
 
+    /**
+     * Enregistre l'ordre obtenu par glisser-déposer.
+     *
+     * L'écran a déjà réordonné sa liste pour suivre le doigt ; en cas d'échec
+     * d'écriture, le flux Room la ramènera à l'ordre stocké et le message
+     * dira pourquoi.
+     */
+    fun reorder(playlistId: Long, songs: List<Song>) {
+        write("Impossible de réordonner la playlist.") {
+            playlistRepository.reorder(playlistId, songs.map { it.id })
+        }
+    }
+
     companion object {
         private const val TAG = "PlaylistsViewModel"
         private const val STOP_TIMEOUT_MS = 5_000L

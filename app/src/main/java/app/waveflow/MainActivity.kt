@@ -349,6 +349,7 @@ private fun WaveFlowRoot() {
                                 nowPlayingId = nowPlayingId,
                                 onSongClick = { playerViewModel.playFrom(songs, it) },
                                 onRemoveSong = { playlistsViewModel.removeSong(playlistId, it) },
+                                onReorder = { playlistsViewModel.reorder(playlistId, it) },
                                 onPlay = { playerViewModel.playFirst(songs) },
                                 onShuffle = { playerViewModel.playShuffled(songs) },
                                 bottomPadding = listBottomPadding,
