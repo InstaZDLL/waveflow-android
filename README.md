@@ -119,6 +119,7 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `PlayerViewModelTest` | contextual play queue, current-song resolution, controller release |
 | `PlaylistsViewModelTest` | flow failures, write failures, resolution order, atomic creation, reorder rollback and staleness |
 | `DragStateTest` | drag arithmetic: target rank, visual offset, bounds, `moved` |
+| `PlaylistDetailScreenTest` | reorder accessibility actions, order restored after a failed write |
 | `SearchTest` | matching by title / album / artist, accent and case folding, prefix ranking |
 | `SearchViewModelTest` | query → results, clearing, following the library |
 | `GroupingTest` | album / artist derivation, sorting, missing tags |
@@ -126,9 +127,10 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
 
-No Compose UI test runs yet, so anything that only exists as composable state —
-the drag gesture itself, its accessibility actions — is covered through the
-plain-Kotlin logic it delegates to, not through the UI.
+Compose tests run on the JVM too: `createComposeRule()` works under Robolectric,
+so a screen can be composed and driven without a device. What still cannot be
+covered that way is the pointer gesture itself — its arithmetic is extracted
+into `DragState` and tested there instead.
 
 ## Roadmap
 
@@ -138,7 +140,7 @@ plain-Kotlin logic it delegates to, not through the UI.
 - [x] Local playlists (Room): create, rename, delete, add / remove tracks
 - [x] Drag-to-reorder inside a playlist
 - [x] Search across songs, albums and artists
-- [ ] Compose UI tests (Robolectric, no device)
+- [x] Compose UI tests (Robolectric, no device)
 - [ ] WaveFlow server as a remote source: browse and stream its catalogue
 - [ ] Server user-data sync (playlists, favorites, ratings) — see below
 - [ ] Android Auto (Media3 `MediaLibraryService`)
