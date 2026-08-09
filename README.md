@@ -3,9 +3,9 @@
 Native Android client for [WaveFlow](https://github.com/InstaZDLL/WaveFlow) — a
 local-first music player. Kotlin + Jetpack Compose + Media3.
 
-> **Status:** early foundation. Plays local files from the device today; sync
-> with the WaveFlow server (playlists, liked, streaming) comes later, once the
-> server side is finalised.
+> **Status:** local-only. Plays, browses, searches and organises the device's
+> own files. Nothing talks to a WaveFlow server yet — see
+> [Server sync](#server-sync) for what that will take.
 
 ## Stack
 
@@ -32,7 +32,8 @@ app/src/main/java/app/waveflow/
 │  ├─ Album.kt / Artist.kt Derived from the song list
 │  ├─ Library.kt           Loaded library; albums / artists / index derived lazily
 │  ├─ Playlist.kt          Local playlist + entries
-│  └─ Grouping.kt          List<Song> → albums / artists
+│  ├─ Grouping.kt          List<Song> → albums / artists
+│  └─ Search.kt            Accent-insensitive filtering over a Library
 ├─ data/
 │  ├─ LibraryStore.kt               Application-scoped library, loaded once
 │  ├─ MusicRepository.kt            Library abstraction (Flow<List<Song>>)
@@ -48,7 +49,8 @@ app/src/main/java/app/waveflow/
 └─ ui/
    ├─ theme/                Material 3 emerald theme
    ├─ DurationFormat.kt     m:ss / h:mm:ss
-   ├─ components/           Artwork, SongRow, LibraryStateContainer
+   ├─ Labels.kt             Unknown artist / album fallbacks
+   ├─ components/           Artwork, MediaRow, SongRow, LibraryStateContainer
    ├─ navigation/
    │  └─ WaveFlowNavigation.kt    Routes + bottom bar
    ├─ browse/
@@ -59,10 +61,16 @@ app/src/main/java/app/waveflow/
    │  └─ DetailHeader.kt          Shared header (play / shuffle)
    ├─ playlists/
    │  ├─ PlaylistsViewModel.kt    Playlist state + writes
+   │  ├─ PlaylistsUiState.kt      Playlists + resolved tracks
    │  ├─ PlaylistsScreen.kt       Playlist list + creation
-   │  ├─ PlaylistDetailScreen.kt  Header + tracks
+   │  ├─ PlaylistDetailScreen.kt  Header + tracks + drag-to-reorder
    │  ├─ AddToPlaylistSheet.kt    Long-press a song → add
+   │  ├─ PlaylistNameDialog.kt    Create / rename prompt
    │  └─ PlaylistMenu.kt          Rename / delete
+   ├─ search/
+   │  ├─ SearchViewModel.kt       Query → filtered library
+   │  ├─ SearchScreen.kt          Songs / albums / artists sections
+   │  └─ SearchField.kt           Query input
    ├─ permission/
    │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
    ├─ player/
@@ -76,10 +84,10 @@ app/src/main/java/app/waveflow/
       └─ LibraryScreen.kt      Song list
 ```
 
-One `LibraryStore` at the application level holds the loaded library; three
+One `LibraryStore` at the application level holds the loaded library; four
 ViewModels read from it — `LibraryViewModel` (browsing), `PlayerViewModel`
-(playback), `PlaylistsViewModel` (playlists). Adding a screen means adding a
-ViewModel, never a second `MediaStore` query.
+(playback), `PlaylistsViewModel` (playlists), `SearchViewModel` (search).
+Adding a screen means adding a ViewModel, never a second `MediaStore` query.
 
 ## Build
 
@@ -106,14 +114,21 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 
 | Suite | Covers |
 |---|---|
-| `PlaylistDaoTest` | duplicate adds, `updatedAt` bumping, positions, `createWithSong` atomicity, cascade delete |
+| `PlaylistDaoTest` | duplicate adds, `updatedAt` bumping, positions, `reorder` normalisation, `createWithSong` atomicity, cascade delete |
 | `LibraryStoreTest` | loading, read failures, single subscription, retry |
 | `PlayerViewModelTest` | contextual play queue, current-song resolution, controller release |
-| `PlaylistsViewModelTest` | flow failures, write failures, resolution order, atomic creation |
+| `PlaylistsViewModelTest` | flow failures, write failures, resolution order, atomic creation, reorder rollback and staleness |
+| `DragStateTest` | drag arithmetic: target rank, visual offset, bounds, `moved` |
+| `SearchTest` | matching by title / album / artist, accent and case folding, prefix ranking |
+| `SearchViewModelTest` | query → results, clearing, following the library |
 | `GroupingTest` | album / artist derivation, sorting, missing tags |
 | `DurationFormatTest` | `m:ss` / `h:mm:ss` formatting |
 
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
+
+No Compose UI test runs yet, so anything that only exists as composable state —
+the drag gesture itself, its accessibility actions — is covered through the
+plain-Kotlin logic it delegates to, not through the UI.
 
 ## Roadmap
 
@@ -121,11 +136,29 @@ Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testin
 - [x] Full-screen player (seek, shuffle, repeat, artwork-tinted background)
 - [x] Album / artist browsing (Navigation Compose + bottom bar)
 - [x] Local playlists (Room): create, rename, delete, add / remove tracks
-- [ ] Drag-to-reorder inside a playlist
-- [ ] Search
-- [ ] WaveFlow server sync (playlists, liked, ratings)
-- [ ] Streaming from the WaveFlow server (HMAC signed URLs)
+- [x] Drag-to-reorder inside a playlist
+- [x] Search across songs, albums and artists
+- [ ] Compose UI tests (Robolectric, no device)
+- [ ] WaveFlow server as a remote source: browse and stream its catalogue
+- [ ] Server user-data sync (playlists, favorites, ratings) — see below
 - [ ] Android Auto (Media3 `MediaLibraryService`)
+
+### Server sync
+
+[WaveFlow Server](https://github.com/InstaZDLL/waveflow-server) ships the sync
+protocol today — `/api/v2/sync/snapshot`, `/changes`, `/ack` and a wake-up
+socket, specified in its `RFC-003`. Bearer tokens for native clients and
+authorized streaming (`/api/v2/tracks/{id}/stream`) are already there too, so
+consuming the server as a *remote source* needs no server-side work.
+
+Syncing the **local** library is a different matter, and it is not blocked on
+this app: the protocol carries server track UUIDs, and RFC-003 states it "never
+guesses a local/server track match" — reconciliation is a later milestone with
+its own RFC. Until that exists, local playlists stay local.
+
+Whenever it does land, `playlist_songs` will need a Room migration: it keys on
+`MediaStore` ids, which do not survive a device re-index, let alone identify a
+track to a server.
 
 ## License
 
