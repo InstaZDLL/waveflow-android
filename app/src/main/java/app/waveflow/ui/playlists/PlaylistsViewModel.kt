@@ -80,13 +80,18 @@ class PlaylistsViewModel(
      * par personne et fait tomber l'application : les erreurs Room doivent
      * devenir un message, pas un crash.
      */
-    private fun write(failureMessage: String, block: suspend () -> Unit) {
+    private fun write(
+        failureMessage: String,
+        onFailure: () -> Unit = {},
+        block: suspend () -> Unit,
+    ) {
         viewModelScope.launch {
             try {
                 block()
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
+                onFailure()
                 // La cause reste dans le journal : sans elle, un échec ne
                 // laisserait aucune trace exploitable.
                 Log.w(TAG, failureMessage, error)
@@ -136,12 +141,13 @@ class PlaylistsViewModel(
     /**
      * Enregistre l'ordre obtenu par glisser-déposer.
      *
-     * L'écran a déjà réordonné sa liste pour suivre le doigt ; en cas d'échec
-     * d'écriture, le flux Room la ramènera à l'ordre stocké et le message
-     * dira pourquoi.
+     * L'écran a déjà réordonné sa liste pour suivre le doigt. En cas d'échec,
+     * rien n'a changé en base : le flux Room n'émettra donc pas, et c'est
+     * [onFailure] qui doit ramener l'écran à l'ordre stocké. Sans lui, la
+     * liste resterait durablement en désaccord avec la base.
      */
-    fun reorder(playlistId: Long, songs: List<Song>) {
-        write("Impossible de réordonner la playlist.") {
+    fun reorder(playlistId: Long, songs: List<Song>, onFailure: () -> Unit = {}) {
+        write("Impossible de réordonner la playlist.", onFailure) {
             playlistRepository.reorder(playlistId, songs.map { it.id })
         }
     }

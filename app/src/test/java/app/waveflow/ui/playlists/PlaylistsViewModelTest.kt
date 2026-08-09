@@ -134,6 +134,36 @@ class PlaylistsViewModelTest {
     }
 
     /**
+     * Une écriture ratée ne fait rien émettre à Room : sans ce rappel, l'écran
+     * garderait l'ordre optimiste et resterait en désaccord avec la base.
+     */
+    @Test
+    fun `un reordonnancement qui echoue previent l'ecran`() = runTest {
+        val repository = FakePlaylistRepository(
+            writeFailure = IllegalStateException("disque plein"),
+        )
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        var restored = false
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed()) { restored = true }
+        advanceUntilIdle()
+
+        assertTrue("l'écran doit être ramené à l'ordre stocké", restored)
+    }
+
+    @Test
+    fun `un reordonnancement reussi ne previent pas l'ecran`() = runTest {
+        val repository = FakePlaylistRepository()
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        var restored = false
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed()) { restored = true }
+        advanceUntilIdle()
+
+        assertTrue("l'ordre optimiste doit être conservé", !restored)
+    }
+
+    /**
      * Sans le try/catch, l'exception remonterait de `viewModelScope.launch`
      * jusqu'au scheduler du test, qui ferait échouer celui-ci — exactement ce
      * qui ferait crasher l'application en production.

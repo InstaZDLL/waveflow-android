@@ -52,7 +52,7 @@ fun PlaylistDetailScreen(
     nowPlayingId: Long?,
     onSongClick: (Song) -> Unit,
     onRemoveSong: (Song) -> Unit,
-    onReorder: (List<Song>) -> Unit,
+    onReorder: (order: List<Song>, onFailure: () -> Unit) -> Unit,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
@@ -137,7 +137,14 @@ fun PlaylistDetailScreen(
                                 },
                                 onDragEnd = {
                                     drag?.let { current ->
-                                        if (current.toIndex != current.fromIndex) onReorder(working)
+                                        if (current.toIndex != current.fromIndex) {
+                                            // Une écriture qui échoue ne fait
+                                            // rien émettre à Room : sans ce
+                                            // retour, l'écran garderait un
+                                            // ordre que la base ignore.
+                                            val stored = songs
+                                            onReorder(working) { working = stored }
+                                        }
                                     }
                                     drag = null
                                 },
@@ -242,19 +249,33 @@ private fun startDrag(songId: Long, songs: List<Song>, listState: LazyListState)
 internal fun <T> List<T>.moved(from: Int, to: Int): List<T> =
     toMutableList().apply { add(to, removeAt(from)) }
 
+/**
+ * Poignée de déplacement.
+ *
+ * L'icône reste discrète, mais la zone sensible fait 48 dp — c'est elle qui
+ * porte le geste, et un doigt ne vise pas 24 dp.
+ */
 @Composable
 private fun DragHandle(modifier: Modifier = Modifier) {
-    Icon(
-        imageVector = Icons.Filled.DragHandle,
-        contentDescription = "Déplacer le morceau",
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier
-            .size(24.dp)
-            .alpha(HANDLE_ALPHA),
-    )
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier.size(HANDLE_TOUCH_TARGET),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.DragHandle,
+            contentDescription = "Déplacer le morceau",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .size(24.dp)
+                .alpha(HANDLE_ALPHA),
+        )
+    }
 }
 
 private const val HEADER_KEY = "header"
 
 /** La poignée doit se voir sans concurrencer le titre du morceau. */
 private const val HANDLE_ALPHA = 0.6f
+
+/** Minimum tactile recommandé, indépendant de la taille de l'icône. */
+private val HANDLE_TOUCH_TARGET = 48.dp

@@ -63,8 +63,9 @@ interface PlaylistDao {
         if (deleteEntry(playlistId, songId) > 0) touchPlaylist(playlistId, updatedAt)
     }
 
+    /** @return le nombre de lignes mises à jour, 0 si le morceau n'y était pas. */
     @Query("UPDATE playlist_songs SET position = :position WHERE playlistId = :playlistId AND songId = :songId")
-    suspend fun updatePosition(playlistId: Long, songId: Long, position: Int)
+    suspend fun updatePosition(playlistId: Long, songId: Long, position: Int): Int
 
     /**
      * Réécrit les positions de la playlist dans l'ordre de [orderedSongIds].
@@ -77,16 +78,21 @@ interface PlaylistDao {
      *
      * Un identifiant absent de la playlist ne met à jour aucune ligne — un
      * morceau retiré entre le geste et son enregistrement est ignoré plutôt
-     * que réinséré.
+     * que réinséré. Le rang n'avance qu'aux lignes réellement écrites : un
+     * identifiant fantôme ne creuse pas de trou au milieu des positions.
+     *
+     * `updatedAt` n'est touché que si au moins une ligne a bougé, comme dans
+     * [addSong] et [removeSong] — c'est un horodatage de résolution de
+     * conflits, un ordre sans effet ne doit pas faire croire à une
+     * modification.
      */
     @Transaction
     suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>, updatedAt: Long) {
-        if (orderedSongIds.isEmpty()) return
-
-        orderedSongIds.forEachIndexed { position, songId ->
-            updatePosition(playlistId, songId, position)
+        var position = 0
+        for (songId in orderedSongIds) {
+            if (updatePosition(playlistId, songId, position) > 0) position++
         }
-        touchPlaylist(playlistId, updatedAt)
+        if (position > 0) touchPlaylist(playlistId, updatedAt)
     }
 
     /**

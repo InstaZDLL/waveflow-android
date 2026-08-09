@@ -153,6 +153,20 @@ class PlaylistDaoTest {
         val entries = dao.observeEntries().first()
         assertEquals(2, entries.size)
         assertEquals(listOf(20L, 10L), entries.map { it.songId })
+        // Le rang n'avance qu'aux lignes écrites : l'identifiant fantôme ne
+        // creuse pas de trou.
+        assertEquals(listOf(0, 1), entries.map { it.position })
+    }
+
+    @Test
+    fun `reorder n'ecrivant aucune ligne ne touche pas updatedAt`() = runTest {
+        val playlistId = createPlaylist(at = 1_000L)
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+
+        // Que des identifiants absents : rien ne bouge, donc rien à dater.
+        dao.reorder(playlistId, orderedSongIds = listOf(98L, 99L), updatedAt = 5_000L)
+
+        assertEquals(2_000L, updatedAtOf(playlistId))
     }
 
     @Test
