@@ -24,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -358,6 +357,11 @@ private fun NavHostController.switchTab(destination: TopLevelDestination) {
     }
 }
 
+/**
+ * Titre de la barre du haut. Les écrans de détail se rabattent sur un libellé
+ * générique tant que l'entité n'est pas résolue : la bibliothèque peut être
+ * encore en cours de scan, ou le fichier avoir disparu depuis.
+ */
 private fun currentScreenTitle(
     currentRoute: String?,
     albumId: Long?,
