@@ -34,7 +34,7 @@ object Routes {
     fun playlistDetail(playlistId: Long): String = "$PLAYLISTS/$playlistId"
 }
 
-/** Les trois sections atteignables depuis la barre du bas. */
+/** Les quatre sections atteignables depuis la barre du bas. */
 enum class TopLevelDestination(
     val route: String,
     val label: String,
