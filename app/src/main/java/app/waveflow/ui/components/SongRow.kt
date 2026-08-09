@@ -32,6 +32,8 @@ import app.waveflow.ui.formatDuration
  *   pochette à chaque ligne n'apporte rien.
  * @param onLongClick action secondaire de la ligne : ajouter à une playlist
  *   depuis la bibliothèque, en retirer depuis une playlist.
+ * @param trailing contenu ajouté en fin de ligne, après la durée — la poignée
+ *   de déplacement dans une playlist.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -42,6 +44,7 @@ fun SongRow(
     modifier: Modifier = Modifier,
     showArtwork: Boolean = true,
     onLongClick: (() -> Unit)? = null,
+    trailing: @Composable (() -> Unit)? = null,
 ) {
     val titleColor = if (isCurrent) {
         MaterialTheme.colorScheme.primary
@@ -96,6 +99,11 @@ fun SongRow(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        trailing?.let {
+            Spacer(Modifier.width(8.dp))
+            it()
         }
     }
 }

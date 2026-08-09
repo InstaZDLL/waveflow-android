@@ -35,4 +35,13 @@ interface PlaylistRepository {
     suspend fun addSong(playlistId: Long, songId: Long)
 
     suspend fun removeSong(playlistId: Long, songId: Long)
+
+    /**
+     * Réordonne la playlist selon [orderedSongIds].
+     *
+     * L'ordre complet plutôt qu'un couple (morceau, destination) : c'est ce
+     * que l'écran connaît après un glisser-déposer, et cela reste vrai même
+     * si la playlist a changé entre-temps.
+     */
+    suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>)
 }

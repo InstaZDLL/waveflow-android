@@ -92,6 +92,136 @@ class PlaylistDaoTest {
     }
 
     @Test
+    fun `reorder reecrit les positions dans l'ordre demande`() = runTest {
+        val playlistId = createPlaylist()
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 30L, updatedAt = 2_000L)
+
+        dao.reorder(playlistId, orderedSongIds = listOf(30L, 10L, 20L), updatedAt = 5_000L)
+
+        // observeEntries trie par position : l'ordre lu est celui demandé.
+        val entries = dao.observeEntries().first()
+        assertEquals(listOf(30L, 10L, 20L), entries.map { it.songId })
+        assertEquals(listOf(0, 1, 2), entries.map { it.position })
+    }
+
+    @Test
+    fun `reorder compacte les positions laissees trouees par un retrait`() = runTest {
+        val playlistId = createPlaylist()
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 30L, updatedAt = 2_000L)
+        // Retire celui du milieu : il reste les positions 0 et 2.
+        dao.removeSong(playlistId, songId = 20L, updatedAt = 3_000L)
+
+        dao.reorder(playlistId, orderedSongIds = listOf(30L, 10L), updatedAt = 5_000L)
+
+        assertEquals(listOf(0, 1), dao.observeEntries().first().map { it.position })
+    }
+
+    @Test
+    fun `reorder met a jour updatedAt`() = runTest {
+        val playlistId = createPlaylist(at = 1_000L)
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+
+        dao.reorder(playlistId, orderedSongIds = listOf(20L, 10L), updatedAt = 5_000L)
+
+        assertEquals(5_000L, updatedAtOf(playlistId))
+    }
+
+    @Test
+    fun `reorder sur une liste vide ne touche pas updatedAt`() = runTest {
+        val playlistId = createPlaylist(at = 1_000L)
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+
+        dao.reorder(playlistId, orderedSongIds = emptyList(), updatedAt = 5_000L)
+
+        assertEquals(2_000L, updatedAtOf(playlistId))
+    }
+
+    @Test
+    fun `reorder ignore un morceau absent de la playlist`() = runTest {
+        val playlistId = createPlaylist()
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+
+        // 99 a pu être retiré entre le geste et son enregistrement.
+        dao.reorder(playlistId, orderedSongIds = listOf(20L, 99L, 10L), updatedAt = 5_000L)
+
+        val entries = dao.observeEntries().first()
+        assertEquals(2, entries.size)
+        assertEquals(listOf(20L, 10L), entries.map { it.songId })
+        // Le rang n'avance qu'aux lignes écrites : l'identifiant fantôme ne
+        // creuse pas de trou.
+        assertEquals(listOf(0, 1), entries.map { it.position })
+    }
+
+    /**
+     * `UPDATE` compte les lignes écrites, pas celles dont la valeur a changé :
+     * réécrire une position à l'identique renvoie 1. Sans comparaison à
+     * l'ordre stocké, un réordonnancement sans effet daterait la playlist.
+     */
+    @Test
+    fun `reorder a l'ordre identique ne touche pas updatedAt`() = runTest {
+        val playlistId = createPlaylist(at = 1_000L)
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+
+        dao.reorder(playlistId, orderedSongIds = listOf(10L, 20L), updatedAt = 5_000L)
+
+        assertEquals(2_000L, updatedAtOf(playlistId))
+    }
+
+    /**
+     * L'écran ne connaît que les morceaux résolus contre la bibliothèque : un
+     * fichier disparu du MediaStore sort de la liste affichée sans sortir de
+     * la playlist. Le glisser renvoie donc un ordre partiel.
+     */
+    @Test
+    fun `reorder omettant un morceau stocke ne cree pas de position en double`() = runTest {
+        val playlistId = createPlaylist()
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 30L, updatedAt = 2_000L)
+
+        // 20 reste en playlist mais n'était pas affiché, donc pas renvoyé.
+        dao.reorder(playlistId, orderedSongIds = listOf(30L, 10L), updatedAt = 5_000L)
+
+        val entries = dao.observeEntries().first()
+        val positions = entries.map { it.position }
+        assertEquals("chaque morceau doit garder une position à lui", positions.distinct(), positions)
+        assertEquals(listOf(0, 1, 2), positions)
+        // L'omis est replacé à la suite, pas perdu ni intercalé au hasard.
+        assertEquals(listOf(30L, 10L, 20L), entries.map { it.songId })
+    }
+
+    @Test
+    fun `reorder ignore un identifiant demande deux fois`() = runTest {
+        val playlistId = createPlaylist()
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+
+        dao.reorder(playlistId, orderedSongIds = listOf(20L, 20L, 10L), updatedAt = 5_000L)
+
+        val entries = dao.observeEntries().first()
+        assertEquals(listOf(20L, 10L), entries.map { it.songId })
+        assertEquals(listOf(0, 1), entries.map { it.position })
+    }
+
+    @Test
+    fun `reorder n'ecrivant aucune ligne ne touche pas updatedAt`() = runTest {
+        val playlistId = createPlaylist(at = 1_000L)
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+
+        // Que des identifiants absents : rien ne bouge, donc rien à dater.
+        dao.reorder(playlistId, orderedSongIds = listOf(98L, 99L), updatedAt = 5_000L)
+
+        assertEquals(2_000L, updatedAtOf(playlistId))
+    }
+
+    @Test
     fun `createWithSong cree la playlist et son premier morceau`() = runTest {
         val playlistId = dao.createWithSong(
             playlist = PlaylistEntity(name = "Nouvelle", createdAt = 1_000L, updatedAt = 1_000L),

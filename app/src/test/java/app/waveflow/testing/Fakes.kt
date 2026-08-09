@@ -8,6 +8,7 @@ import app.waveflow.model.PlaylistEntry
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackState
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,12 +53,21 @@ class FakePlaylistRepository(
     private val entries: Flow<List<PlaylistEntry>> = flowOf(emptyList()),
     /** Si non nul, toute écriture échoue avec cette exception. */
     private val writeFailure: Throwable? = null,
+    /**
+     * Si non nul, `reorder` attend ce signal avant de rendre la main.
+     *
+     * Sans lui, un dispatcher non confiné exécute chaque écriture avant que la
+     * suivante ne parte : deux réordonnancements ne sont jamais en vol
+     * ensemble, et une course ne peut pas être reproduite.
+     */
+    private val reorderGate: CompletableDeferred<Unit>? = null,
 ) : PlaylistRepository {
 
     val createCalls = mutableListOf<String>()
     val createWithSongCalls = mutableListOf<Pair<String, Long>>()
     val addSongCalls = mutableListOf<Pair<Long, Long>>()
     val removeSongCalls = mutableListOf<Pair<Long, Long>>()
+    val reorderCalls = mutableListOf<Pair<Long, List<Long>>>()
 
     override fun observePlaylists(): Flow<List<Playlist>> = playlists
 
@@ -91,6 +101,12 @@ class FakePlaylistRepository(
     override suspend fun removeSong(playlistId: Long, songId: Long) {
         failIfConfigured()
         removeSongCalls += playlistId to songId
+    }
+
+    override suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>) {
+        reorderGate?.await()
+        failIfConfigured()
+        reorderCalls += playlistId to orderedSongIds
     }
 }
 

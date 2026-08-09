@@ -69,4 +69,8 @@ class RoomPlaylistRepository(
     override suspend fun removeSong(playlistId: Long, songId: Long) = withContext(ioDispatcher) {
         dao.removeSong(playlistId, songId, now())
     }
+
+    override suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>) = withContext(ioDispatcher) {
+        dao.reorder(playlistId, orderedSongIds, now())
+    }
 }

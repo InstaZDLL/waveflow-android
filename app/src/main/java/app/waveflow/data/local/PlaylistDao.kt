@@ -63,6 +63,61 @@ interface PlaylistDao {
         if (deleteEntry(playlistId, songId) > 0) touchPlaylist(playlistId, updatedAt)
     }
 
+    /** Contenu d'une playlist dans son ordre stocké. */
+    @Query("SELECT songId FROM playlist_songs WHERE playlistId = :playlistId ORDER BY position ASC")
+    suspend fun songIdsOf(playlistId: Long): List<Long>
+
+    /** @return le nombre de lignes mises à jour, 0 si le morceau n'y était pas. */
+    @Query("UPDATE playlist_songs SET position = :position WHERE playlistId = :playlistId AND songId = :songId")
+    suspend fun updatePosition(playlistId: Long, songId: Long, position: Int): Int
+
+    /**
+     * Réécrit les positions de la playlist dans l'ordre de [orderedSongIds].
+     *
+     * Réécriture complète plutôt qu'intercalation : `removeSong` ne compacte
+     * pas les positions, elles sont donc déjà trouées, et rien ne garantit
+     * qu'un rang libre existe entre deux voisins. Repartir de zéro à chaque
+     * déplacement coûte quelques dizaines d'`UPDATE` sur une playlist
+     * ordinaire, dans une seule transaction.
+     *
+     * [orderedSongIds] est normalisé avant écriture : les identifiants
+     * étrangers à la playlist sont écartés, les doublons aussi, et les
+     * morceaux stockés que l'appelant a omis sont replacés à la suite dans
+     * leur ordre actuel. Chaque ligne reçoit ainsi une position et une seule,
+     * ce qui rend l'ordre déterministe.
+     *
+     * L'omission n'est pas un cas d'école : l'écran ne connaît que les
+     * morceaux résolus contre la bibliothèque, et un fichier disparu du
+     * MediaStore est absent de la liste affichée sans l'être de la playlist.
+     * Sans cette normalisation, il conserverait son ancienne position et
+     * entrerait en collision avec une nouvelle.
+     *
+     * `updatedAt` n'est touché que si l'ordre a réellement changé, comme dans
+     * [addSong] et [removeSong] — c'est un horodatage de résolution de
+     * conflits, un ordre sans effet ne doit pas faire croire à une
+     * modification. La comparaison porte sur l'ordre relu après écriture, et
+     * non sur le compte de lignes rendu par [updatePosition] : `UPDATE`
+     * compte les lignes écrites, pas celles dont la valeur a changé, et
+     * réécrire une position à l'identique rapporte donc 1. Relire est aussi
+     * plus sûr que raisonner sur les seules lignes citées — celles que
+     * [orderedSongIds] omet gardent leur position et pèsent sur l'ordre
+     * final.
+     */
+    @Transaction
+    suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>, updatedAt: Long) {
+        val before = songIdsOf(playlistId)
+        val stored = before.toSet()
+
+        val requested = orderedSongIds.filterTo(LinkedHashSet()) { it in stored }
+        val ordered = requested + before.filterNot { it in requested }
+
+        ordered.forEachIndexed { position, songId ->
+            updatePosition(playlistId, songId, position)
+        }
+
+        if (songIdsOf(playlistId) != before) touchPlaylist(playlistId, updatedAt)
+    }
+
     /**
      * Création d'une playlist déjà pourvue de son premier morceau.
      *

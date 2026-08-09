@@ -8,6 +8,7 @@ import app.waveflow.testing.FakeMusicRepository
 import app.waveflow.testing.FakePlaylistRepository
 import app.waveflow.testing.MainDispatcherRule
 import app.waveflow.testing.song
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
@@ -100,6 +101,113 @@ class PlaylistsViewModelTest {
         assertEquals(listOf(3L, 1L), viewModel.state.value.songs(playlistId = 1L).map { it.id })
 
         job.cancel()
+    }
+
+    @Test
+    fun `reordonner transmet l'ordre affiche en identifiants`() = runTest {
+        val repository = FakePlaylistRepository()
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        viewModel.reorder(playlistId = 7L, songs = listOf(songs[2], songs[0], songs[1]))
+        advanceUntilIdle()
+
+        assertEquals(listOf(7L to listOf(3L, 1L, 2L)), repository.reorderCalls)
+    }
+
+    @Test
+    fun `un reordonnancement qui echoue devient un message`() = runTest {
+        val repository = FakePlaylistRepository(
+            writeFailure = IllegalStateException("disque plein"),
+        )
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        val errors = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { errors += it }
+        }
+
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed())
+        advanceUntilIdle()
+
+        assertEquals(listOf("Impossible de réordonner la playlist."), errors)
+
+        job.cancel()
+    }
+
+    /**
+     * Une écriture ratée ne fait rien émettre à Room : sans ce rappel, l'écran
+     * garderait l'ordre optimiste et resterait en désaccord avec la base.
+     */
+    @Test
+    fun `un reordonnancement qui echoue previent l'ecran`() = runTest {
+        val repository = FakePlaylistRepository(
+            writeFailure = IllegalStateException("disque plein"),
+        )
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        var restored = false
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed()) { restored = true }
+        advanceUntilIdle()
+
+        assertTrue("l'écran doit être ramené à l'ordre stocké", restored)
+    }
+
+    /**
+     * Deux glissers rapprochés : si le plus ancien échoue, restaurer son ordre
+     * ramènerait l'écran en arrière alors qu'un geste plus récent l'a déjà
+     * remplacé. Seul le dernier demandé a le droit de restaurer.
+     */
+    @Test
+    fun `un echec perime ne defait pas un ordre plus recent`() = runTest {
+        // La grille retient les deux écritures le temps que la seconde parte :
+        // sans ça, la première irait jusqu'au bout avant l'autre et il n'y
+        // aurait pas de course à observer.
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakePlaylistRepository(
+            writeFailure = IllegalStateException("disque plein"),
+            reorderGate = gate,
+        )
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        val restored = mutableListOf<String>()
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed()) { restored += "premier" }
+        viewModel.reorder(playlistId = 7L, songs = songs) { restored += "second" }
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf("second"), restored)
+    }
+
+    @Test
+    fun `chaque playlist a son propre rang de reordonnancement`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakePlaylistRepository(
+            writeFailure = IllegalStateException("disque plein"),
+            reorderGate = gate,
+        )
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        val restored = mutableListOf<Long>()
+        // Une playlist ne doit pas périmer le réordonnancement d'une autre :
+        // avec un rang global, seule la seconde restaurerait.
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed()) { restored += 7L }
+        viewModel.reorder(playlistId = 8L, songs = songs.reversed()) { restored += 8L }
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf(7L, 8L), restored)
+    }
+
+    @Test
+    fun `un reordonnancement reussi ne previent pas l'ecran`() = runTest {
+        val repository = FakePlaylistRepository()
+        val viewModel = PlaylistsViewModel(backgroundScope.storeWith(songs), repository)
+
+        var restored = false
+        viewModel.reorder(playlistId = 7L, songs = songs.reversed()) { restored = true }
+        advanceUntilIdle()
+
+        assertTrue("l'ordre optimiste doit être conservé", !restored)
     }
 
     /**
