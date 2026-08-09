@@ -174,6 +174,42 @@ class PlaylistDaoTest {
         assertEquals(2_000L, updatedAtOf(playlistId))
     }
 
+    /**
+     * L'écran ne connaît que les morceaux résolus contre la bibliothèque : un
+     * fichier disparu du MediaStore sort de la liste affichée sans sortir de
+     * la playlist. Le glisser renvoie donc un ordre partiel.
+     */
+    @Test
+    fun `reorder omettant un morceau stocke ne cree pas de position en double`() = runTest {
+        val playlistId = createPlaylist()
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 30L, updatedAt = 2_000L)
+
+        // 20 reste en playlist mais n'était pas affiché, donc pas renvoyé.
+        dao.reorder(playlistId, orderedSongIds = listOf(30L, 10L), updatedAt = 5_000L)
+
+        val entries = dao.observeEntries().first()
+        val positions = entries.map { it.position }
+        assertEquals("chaque morceau doit garder une position à lui", positions.distinct(), positions)
+        assertEquals(listOf(0, 1, 2), positions)
+        // L'omis est replacé à la suite, pas perdu ni intercalé au hasard.
+        assertEquals(listOf(30L, 10L, 20L), entries.map { it.songId })
+    }
+
+    @Test
+    fun `reorder ignore un identifiant demande deux fois`() = runTest {
+        val playlistId = createPlaylist()
+        dao.addSong(playlistId, songId = 10L, updatedAt = 2_000L)
+        dao.addSong(playlistId, songId = 20L, updatedAt = 2_000L)
+
+        dao.reorder(playlistId, orderedSongIds = listOf(20L, 20L, 10L), updatedAt = 5_000L)
+
+        val entries = dao.observeEntries().first()
+        assertEquals(listOf(20L, 10L), entries.map { it.songId })
+        assertEquals(listOf(0, 1), entries.map { it.position })
+    }
+
     @Test
     fun `reorder n'ecrivant aucune ligne ne touche pas updatedAt`() = runTest {
         val playlistId = createPlaylist(at = 1_000L)

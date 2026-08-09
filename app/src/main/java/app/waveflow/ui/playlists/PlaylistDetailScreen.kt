@@ -234,6 +234,13 @@ internal data class DragState(
     val rowHeight: Float,
 ) {
 
+    init {
+        // [startDrag] l'assure déjà, mais le type est `internal` et donc
+        // constructible ailleurs : une hauteur nulle rendrait le rang visé
+        // infini, et une hauteur négative l'inverserait.
+        require(rowHeight > 0f) { "hauteur de ligne invalide : $rowHeight" }
+    }
+
     /** Reporte un delta vertical et en déduit le nouveau rang. */
     fun advance(deltaY: Float, lastIndex: Int): DragState {
         val moved = offset + deltaY

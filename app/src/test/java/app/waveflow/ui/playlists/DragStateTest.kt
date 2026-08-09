@@ -1,6 +1,7 @@
 package app.waveflow.ui.playlists
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -21,6 +22,22 @@ class DragStateTest {
         offset = 0f,
         rowHeight = rowHeight,
     )
+
+    @Test
+    fun `une hauteur de ligne nulle est refusee a la construction`() {
+        // Elle rendrait le rang visé infini plutôt que borné.
+        assertThrows(IllegalArgumentException::class.java) {
+            DragState(songId = 1L, fromIndex = 0, toIndex = 0, offset = 0f, rowHeight = 0f)
+        }
+    }
+
+    @Test
+    fun `une hauteur de ligne negative est refusee a la construction`() {
+        // Elle inverserait le sens du déplacement.
+        assertThrows(IllegalArgumentException::class.java) {
+            DragState(songId = 1L, fromIndex = 0, toIndex = 0, offset = 0f, rowHeight = -10f)
+        }
+    }
 
     @Test
     fun `un deplacement inferieur a la demi-hauteur ne change pas de rang`() {

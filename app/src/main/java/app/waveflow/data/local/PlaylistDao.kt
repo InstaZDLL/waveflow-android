@@ -80,10 +80,17 @@ interface PlaylistDao {
      * déplacement coûte quelques dizaines d'`UPDATE` sur une playlist
      * ordinaire, dans une seule transaction.
      *
-     * Un identifiant absent de la playlist ne met à jour aucune ligne — un
-     * morceau retiré entre le geste et son enregistrement est ignoré plutôt
-     * que réinséré. Le rang n'avance qu'aux lignes réellement écrites : un
-     * identifiant fantôme ne creuse pas de trou au milieu des positions.
+     * [orderedSongIds] est normalisé avant écriture : les identifiants
+     * étrangers à la playlist sont écartés, les doublons aussi, et les
+     * morceaux stockés que l'appelant a omis sont replacés à la suite dans
+     * leur ordre actuel. Chaque ligne reçoit ainsi une position et une seule,
+     * ce qui rend l'ordre déterministe.
+     *
+     * L'omission n'est pas un cas d'école : l'écran ne connaît que les
+     * morceaux résolus contre la bibliothèque, et un fichier disparu du
+     * MediaStore est absent de la liste affichée sans l'être de la playlist.
+     * Sans cette normalisation, il conserverait son ancienne position et
+     * entrerait en collision avec une nouvelle.
      *
      * `updatedAt` n'est touché que si l'ordre a réellement changé, comme dans
      * [addSong] et [removeSong] — c'est un horodatage de résolution de
@@ -99,10 +106,13 @@ interface PlaylistDao {
     @Transaction
     suspend fun reorder(playlistId: Long, orderedSongIds: List<Long>, updatedAt: Long) {
         val before = songIdsOf(playlistId)
+        val stored = before.toSet()
 
-        var position = 0
-        for (songId in orderedSongIds) {
-            if (updatePosition(playlistId, songId, position) > 0) position++
+        val requested = orderedSongIds.filterTo(LinkedHashSet()) { it in stored }
+        val ordered = requested + before.filterNot { it in requested }
+
+        ordered.forEachIndexed { position, songId ->
+            updatePosition(playlistId, songId, position)
         }
 
         if (songIdsOf(playlistId) != before) touchPlaylist(playlistId, updatedAt)
