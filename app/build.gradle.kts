@@ -80,10 +80,15 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
+
+    // Tests Compose sur la JVM : `createComposeRule()` tourne sous Robolectric,
+    // sans émulateur. Les mêmes artefacts servaient en `androidTest`, dont le
+    // source set n'a jamais existé — ils sont ici pour la première fois utiles.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+
+    // L'activité vide qui héberge le contenu sous test vient de ce manifest ;
+    // les tests unitaires fusionnent celui de la variante debug.
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
