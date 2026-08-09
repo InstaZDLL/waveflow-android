@@ -101,6 +101,8 @@ class FakePlaybackController : PlaybackController {
 
     var connectCount = 0
         private set
+    var released = false
+        private set
     val playCalls = mutableListOf<Pair<List<Song>, Int>>()
     val playShuffledCalls = mutableListOf<List<Song>>()
 
@@ -129,7 +131,9 @@ class FakePlaybackController : PlaybackController {
 
     override fun cycleRepeatMode() = Unit
 
-    override fun release() = Unit
+    override fun release() {
+        released = true
+    }
 
     /** Simule une notification du lecteur. */
     fun emit(state: PlaybackState) {

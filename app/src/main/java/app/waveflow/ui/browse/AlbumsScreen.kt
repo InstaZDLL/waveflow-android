@@ -21,23 +21,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Album
+import app.waveflow.model.Library
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.LibraryStateContainer
-import app.waveflow.ui.library.LibraryUiState
 
 /** Onglet Albums : grille de pochettes, adaptative selon la largeur d'écran. */
 @Composable
 fun AlbumsScreen(
-    state: LibraryUiState,
+    library: Library,
     onAlbumClick: (Album) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
 ) {
     LibraryStateContainer(
-        isLoading = state.isLoading,
-        errorMessage = state.errorMessage,
-        isEmpty = state.isEmpty,
+        isLoading = library.isLoading,
+        errorMessage = library.errorMessage,
+        isEmpty = library.isEmpty,
         emptyMessage = "Aucun album trouvé sur cet appareil.",
         onRetry = onRetry,
         modifier = modifier,
@@ -54,7 +54,7 @@ fun AlbumsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(state.albums, key = { it.id }) { album ->
+            items(library.albums, key = { it.id }) { album ->
                 AlbumCell(album = album, onClick = { onAlbumClick(album) })
             }
         }
