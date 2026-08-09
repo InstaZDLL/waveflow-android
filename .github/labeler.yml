@@ -1,0 +1,50 @@
+# Étiquettes basées sur les chemins, pour actions/labeler.
+# Les scopes reflètent le découpage du package app.waveflow.
+
+"scope: model":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/src/main/java/app/waveflow/model/**"
+
+"scope: data":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/src/main/java/app/waveflow/data/**"
+
+"scope: playback":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/src/main/java/app/waveflow/playback/**"
+
+"scope: ui":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/src/main/java/app/waveflow/ui/**"
+          - "app/src/main/res/**"
+
+"scope: project":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.gradle.kts"
+          - "gradle/**"
+          - "gradle.properties"
+          - "settings.gradle.kts"
+          - "app/src/main/AndroidManifest.xml"
+
+"scope: tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/src/test/**"
+          - "app/src/androidTest/**"
+
+"scope: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/dependabot.yml"
+          - ".github/labeler.yml"
+
+"scope: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
