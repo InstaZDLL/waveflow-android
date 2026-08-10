@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
@@ -51,6 +51,12 @@ fun ServerCatalogScreen(
 ) {
     var tab by rememberSaveable { mutableStateOf(CatalogTab.Albums) }
 
+    // Remontés ici : l'onglet masqué quitte la composition, et un état déclaré
+    // à l'intérieur repartirait donc du haut à chaque retour. `rememberSaveable`
+    // les fait aussi survivre à une rotation.
+    val albumsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val artistsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+
     Column(modifier = modifier.fillMaxSize()) {
         PrimaryTabRow(selectedTabIndex = tab.ordinal) {
             CatalogTab.entries.forEach { entry ->
@@ -65,6 +71,7 @@ fun ServerCatalogScreen(
         when (tab) {
             CatalogTab.Albums -> AlbumsTab(
                 state = albums,
+                listState = albumsListState,
                 onAlbumClick = onAlbumClick,
                 onLoadMore = onLoadMoreAlbums,
                 onRetry = onRetryAlbums,
@@ -73,6 +80,7 @@ fun ServerCatalogScreen(
 
             CatalogTab.Artists -> ArtistsTab(
                 state = artists,
+                listState = artistsListState,
                 onArtistClick = onArtistClick,
                 onLoadMore = onLoadMoreArtists,
                 onRetry = onRetryArtists,
@@ -85,12 +93,12 @@ fun ServerCatalogScreen(
 @Composable
 private fun AlbumsTab(
     state: PagedList<RemoteAlbum>,
+    listState: LazyListState,
     onAlbumClick: (RemoteAlbum) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     bottomPadding: Dp,
 ) {
-    val listState = rememberLazyListState()
     LoadMoreOnApproachingEnd(listState, state.items.size, onLoadMore)
 
     PagedListContainer(
@@ -119,12 +127,12 @@ private fun AlbumsTab(
 @Composable
 private fun ArtistsTab(
     state: PagedList<RemoteArtist>,
+    listState: LazyListState,
     onArtistClick: (RemoteArtist) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     bottomPadding: Dp,
 ) {
-    val listState = rememberLazyListState()
     LoadMoreOnApproachingEnd(listState, state.items.size, onLoadMore)
 
     PagedListContainer(

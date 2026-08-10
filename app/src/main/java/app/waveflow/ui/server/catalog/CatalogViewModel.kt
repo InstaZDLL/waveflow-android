@@ -50,7 +50,16 @@ class CatalogViewModel(
     /** Une seule page en vol par liste : deux requêtes doubleraient le contenu. */
     private var albumsJob: Job? = null
     private var artistsJob: Job? = null
-    private var detailJob: Job? = null
+
+    /**
+     * Un job par sorte de détail.
+     *
+     * Un job commun ferait annuler le chargement d'un artiste par l'ouverture
+     * d'un album depuis sa page : l'écran de l'artiste, encore dans la pile,
+     * resterait alors bloqué sur son indicateur au retour.
+     */
+    private var albumDetailJob: Job? = null
+    private var artistDetailJob: Job? = null
 
     init {
         session
@@ -62,14 +71,34 @@ class CatalogViewModel(
 
     /** Charge la page suivante d'albums, si elle a lieu d'être. */
     fun loadMoreAlbums() {
-        val current = _albums.value
-        if (albumsJob?.isActive == true || current.endReached) return
+        albumsJob = loadNextPage(_albums, albumsJob) { catalogRepository.albums(offset = it) }
+    }
 
-        albumsJob = viewModelScope.launch {
-            _albums.value = current.copy(isLoading = true, errorMessage = null)
+    fun loadMoreArtists() {
+        artistsJob = loadNextPage(_artists, artistsJob) { catalogRepository.artists(offset = it) }
+    }
+
+    /**
+     * Ajoute une page à [state], ou ne fait rien s'il n'y a pas lieu.
+     *
+     * @param inFlight la page en cours pour cette liste, le cas échéant. Le
+     *   défilement redemande sans attendre : sans cette garde, la même page
+     *   serait chargée deux fois et affichée en double.
+     * @return le job à retenir — celui qui vient de partir, ou [inFlight].
+     */
+    private fun <T> loadNextPage(
+        state: MutableStateFlow<PagedList<T>>,
+        inFlight: Job?,
+        fetch: suspend (offset: Int) -> List<T>,
+    ): Job? {
+        val current = state.value
+        if (inFlight?.isActive == true || current.endReached) return inFlight
+
+        return viewModelScope.launch {
+            state.value = current.copy(isLoading = true, errorMessage = null)
             try {
-                val page = catalogRepository.albums(offset = current.items.size)
-                _albums.value = PagedList(
+                val page = fetch(current.items.size)
+                state.value = PagedList(
                     items = current.items + page,
                     isLoading = false,
                     // Le serveur ne dit pas combien il en reste : une page plus
@@ -79,28 +108,7 @@ class CatalogViewModel(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
-                _albums.value = current.copy(isLoading = false, errorMessage = error.toMessage())
-            }
-        }
-    }
-
-    fun loadMoreArtists() {
-        val current = _artists.value
-        if (artistsJob?.isActive == true || current.endReached) return
-
-        artistsJob = viewModelScope.launch {
-            _artists.value = current.copy(isLoading = true, errorMessage = null)
-            try {
-                val page = catalogRepository.artists(offset = current.items.size)
-                _artists.value = PagedList(
-                    items = current.items + page,
-                    isLoading = false,
-                    endReached = page.size < CATALOG_PAGE_SIZE,
-                )
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Exception) {
-                _artists.value = current.copy(isLoading = false, errorMessage = error.toMessage())
+                state.value = current.copy(isLoading = false, errorMessage = error.toMessage())
             }
         }
     }
@@ -119,9 +127,9 @@ class CatalogViewModel(
     }
 
     fun openAlbum(albumId: String) {
-        detailJob?.cancel()
+        albumDetailJob?.cancel()
         _albumDetail.value = AlbumDetailState(isLoading = true)
-        detailJob = viewModelScope.launch {
+        albumDetailJob = viewModelScope.launch {
             try {
                 _albumDetail.value = AlbumDetailState(value = catalogRepository.album(albumId))
             } catch (cancellation: CancellationException) {
@@ -133,9 +141,9 @@ class CatalogViewModel(
     }
 
     fun openArtist(artistId: String) {
-        detailJob?.cancel()
+        artistDetailJob?.cancel()
         _artistDetail.value = ArtistDetailState(isLoading = true)
-        detailJob = viewModelScope.launch {
+        artistDetailJob = viewModelScope.launch {
             try {
                 _artistDetail.value = ArtistDetailState(value = catalogRepository.artist(artistId))
             } catch (cancellation: CancellationException) {
@@ -154,7 +162,8 @@ class CatalogViewModel(
     private fun clear() {
         albumsJob?.cancel()
         artistsJob?.cancel()
-        detailJob?.cancel()
+        albumDetailJob?.cancel()
+        artistDetailJob?.cancel()
         _albums.value = PagedList()
         _artists.value = PagedList()
         _albumDetail.value = AlbumDetailState()

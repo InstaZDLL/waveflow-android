@@ -184,6 +184,8 @@ class PagingCatalogApi(
      * garde contre le doublement ne peut pas être mise à l'épreuve.
      */
     private val gate: CompletableDeferred<Unit>? = null,
+    /** Même rôle que [gate], pour les détails. */
+    private val detailGate: CompletableDeferred<Unit>? = null,
 ) : CatalogApi {
 
     var albumCalls = 0
@@ -223,6 +225,7 @@ class PagingCatalogApi(
         accessToken: String,
         albumId: String,
     ): RemoteAlbumDetail {
+        detailGate?.await()
         detailFailure?.let { throw it }
         return RemoteAlbumDetail(
             album = albums.firstOrNull { it.id == albumId }
@@ -236,6 +239,7 @@ class PagingCatalogApi(
         accessToken: String,
         artistId: String,
     ): RemoteArtistDetail {
+        detailGate?.await()
         detailFailure?.let { throw it }
         return RemoteArtistDetail(
             artist = artists.firstOrNull { it.id == artistId }

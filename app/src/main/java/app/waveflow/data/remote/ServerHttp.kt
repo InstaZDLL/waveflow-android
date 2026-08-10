@@ -47,21 +47,33 @@ class ServerHttp(
         post(body.toRequestBody(JSON_MEDIA_TYPE))
     }
 
+    // `execute` prend son `method` en dernier pour la syntaxe de lambda finale ;
+    // les paramètres facultatifs qui le précèdent gardent leurs valeurs par
+    // défaut pour les appels qui n'en ont pas besoin.
+
+    /**
+     * @param pathSegment ajouté tel quel après [path], et encodé. Un
+     *   identifiant n'a pas à être interpolé dans le chemin : il viendrait
+     *   d'une réponse serveur ou d'un argument de navigation, et un `/` qui s'y
+     *   glisserait désignerait un autre point d'API.
+     */
     suspend fun get(
         serverUrl: String,
         path: String,
+        pathSegment: String? = null,
         query: Map<String, String> = emptyMap(),
         accessToken: String? = null,
-    ): String = execute(serverUrl, path, accessToken, query) { get() }
+    ): String = execute(serverUrl, path, accessToken, pathSegment, query) { get() }
 
     private suspend fun execute(
         serverUrl: String,
         path: String,
         accessToken: String?,
+        pathSegment: String? = null,
         query: Map<String, String> = emptyMap(),
         method: Request.Builder.() -> Request.Builder,
     ): String {
-        val url = serverUrl.toApiUrl(path, query)
+        val url = serverUrl.toApiUrl(path, pathSegment, query)
 
         val request = Request.Builder()
             .url(url)
@@ -102,7 +114,11 @@ class ServerHttp(
      * chemin déjà présent est conservé — le serveur peut vivre derrière un
      * proxy qui le préfixe.
      */
-    private fun String.toApiUrl(path: String, query: Map<String, String>): HttpUrl {
+    private fun String.toApiUrl(
+        path: String,
+        pathSegment: String?,
+        query: Map<String, String>,
+    ): HttpUrl {
         val trimmed = trim().trimEnd('/')
         if (trimmed.isEmpty()) throw ServerException.Rejected("Adresse du serveur vide.")
 
@@ -112,6 +128,7 @@ class ServerHttp(
 
         return base.newBuilder()
             .addPathSegments(path)
+            .apply { pathSegment?.let { addPathSegment(it) } }
             .apply { query.forEach { (name, value) -> addQueryParameter(name, value) } }
             .build()
     }

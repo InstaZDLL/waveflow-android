@@ -68,18 +68,18 @@ class AppContainer(app: Application) {
     fun createPlaybackController(): PlaybackController = Media3PlaybackController(appContext)
 
     /**
+     * Un seul transport pour tous les appels serveur : un pool de connexions
+     * partagé, et surtout un seul endroit qui classe les erreurs.
+     */
+    private val serverHttp = ServerHttp()
+
+    /**
      * Session serveur, indépendante de la bibliothèque locale : elle n'a besoin
      * ni de la permission audio ni du MediaStore.
      *
      * Le nom d'appareil est celui que le serveur affichera dans la liste des
      * sessions ; `Build.MODEL` est ce que l'utilisateur reconnaîtra.
      */
-    /**
-     * Un seul transport pour tous les appels serveur : un pool de connexions
-     * partagé, et surtout un seul endroit qui classe les erreurs.
-     */
-    private val serverHttp = ServerHttp()
-
     val serverSessionRepository = ServerSessionRepository(
         api = HttpServerApi(serverHttp),
         store = DataStoreSessionStore(app),

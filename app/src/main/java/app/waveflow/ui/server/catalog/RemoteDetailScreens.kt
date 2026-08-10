@@ -106,7 +106,9 @@ private fun <T> DetailContainer(
 ) {
     val value = state.value
     when {
-        value != null -> content(value)
+        // Le modificateur de l'appelant porte la mise en page attendue par
+        // l'écran : le perdre ici la laisserait à la LazyColumn par défaut.
+        value != null -> Box(modifier = modifier) { content(value) }
 
         state.isLoading -> Box(modifier = modifier.fillMaxSize()) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -139,7 +141,6 @@ private fun RemoteDetailHeader(
         artworkUri = null,
         title = title,
         subtitle = listOf(subtitle, summary).filter { it.isNotBlank() }.joinToString(" · "),
-        onClick = {},
         artworkShape = CircleShape,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -154,8 +155,8 @@ private fun RemoteSongRow(song: RemoteSong) {
             song.artist?.takeIf { it.isNotBlank() },
             formatDuration(song.durationMs),
         ).joinToString(" · "),
-        // La lecture distante arrive à l'étape suivante : une ligne qui ne
-        // réagit pas vaut mieux qu'une qui promet et ne fait rien.
-        onClick = {},
+        // Sans `onClick` : la lecture distante arrive à l'étape suivante, et une
+        // ligne annoncée cliquable qui ne fait rien vaut moins qu'une ligne
+        // simplement informative.
     )
 }

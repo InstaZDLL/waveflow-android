@@ -261,8 +261,8 @@ private fun ConnectedAccount(
 
     Spacer(Modifier.height(32.dp))
     Text(
-        text = "Le catalogue du serveur arrive dans une prochaine version. " +
-            "Cette connexion ne fait encore rien d'autre.",
+        text = "Le catalogue de ce serveur est consultable depuis l'onglet Serveur. " +
+            "La lecture à distance arrive dans une prochaine version.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

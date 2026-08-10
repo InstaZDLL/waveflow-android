@@ -123,10 +123,9 @@ private fun WaveFlowRoot() {
     val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
     val searchResults by searchViewModel.results.collectAsStateWithLifecycle()
     val serverState by serverViewModel.state.collectAsStateWithLifecycle()
-    val remoteAlbums by catalogViewModel.albums.collectAsStateWithLifecycle()
-    val remoteArtists by catalogViewModel.artists.collectAsStateWithLifecycle()
-    val remoteAlbumDetail by catalogViewModel.albumDetail.collectAsStateWithLifecycle()
-    val remoteArtistDetail by catalogViewModel.artistDetail.collectAsStateWithLifecycle()
+    // Les états du catalogue sont collectés dans leurs destinations, et non
+    // ici : chargés à la racine, chaque page reçue recomposerait le Scaffold,
+    // le NavHost et tous les écrans.
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -397,6 +396,11 @@ private fun WaveFlowRoot() {
                                 bottomPadding = listBottomPadding,
                             )
                         } else {
+                            val remoteAlbums by catalogViewModel.albums
+                                .collectAsStateWithLifecycle()
+                            val remoteArtists by catalogViewModel.artists
+                                .collectAsStateWithLifecycle()
+
                             ServerCatalogScreen(
                                 albums = remoteAlbums,
                                 artists = remoteArtists,
@@ -435,9 +439,10 @@ private fun WaveFlowRoot() {
                         val albumId = entry.arguments?.getString(Routes.ARG_ALBUM_ID)
                             ?: return@composable
                         LaunchedEffect(albumId) { catalogViewModel.openAlbum(albumId) }
+                        val detail by catalogViewModel.albumDetail.collectAsStateWithLifecycle()
 
                         RemoteAlbumDetailScreen(
-                            state = remoteAlbumDetail,
+                            state = detail,
                             onRetry = { catalogViewModel.openAlbum(albumId) },
                             bottomPadding = listBottomPadding,
                         )
@@ -450,9 +455,10 @@ private fun WaveFlowRoot() {
                         val artistId = entry.arguments?.getString(Routes.ARG_ARTIST_ID)
                             ?: return@composable
                         LaunchedEffect(artistId) { catalogViewModel.openArtist(artistId) }
+                        val detail by catalogViewModel.artistDetail.collectAsStateWithLifecycle()
 
                         RemoteArtistDetailScreen(
-                            state = remoteArtistDetail,
+                            state = detail,
                             onAlbumClick = {
                                 navController.navigate(Routes.serverAlbumDetail(it.id))
                             },

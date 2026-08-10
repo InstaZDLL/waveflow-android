@@ -108,6 +108,21 @@ class HttpCatalogApiTest {
     }
 
     @Test
+    fun `un identifiant est encode et ne peut pas designer un autre point d'API`() = runTest {
+        // L'identifiant vient d'une réponse serveur ou d'un argument de
+        // navigation : interpolé dans le chemin, un `/` qui s'y glisserait
+        // pointerait ailleurs.
+        server.enqueue(MockResponse().setBody(ALBUM_DETAIL_BODY))
+
+        api.album(url(), "wfa_1", "../artists/autre")
+
+        assertEquals(
+            "/api/v2/albums/..%2Fartists%2Fautre",
+            server.takeRequest().path,
+        )
+    }
+
+    @Test
     fun `un jeton refuse remonte comme tel`() = runTest {
         server.enqueue(
             MockResponse()

@@ -41,7 +41,8 @@ class HttpCatalogApi(
         albumId: String,
     ): RemoteAlbumDetail = http.get(
         serverUrl = serverUrl,
-        path = "$ALBUMS/$albumId",
+        path = ALBUMS,
+        pathSegment = albumId,
         accessToken = accessToken,
     ).decode<AlbumDetailResponse>().let { response ->
         RemoteAlbumDetail(
@@ -58,7 +59,8 @@ class HttpCatalogApi(
         artistId: String,
     ): RemoteArtistDetail = http.get(
         serverUrl = serverUrl,
-        path = "$ARTISTS/$artistId",
+        path = ARTISTS,
+        pathSegment = artistId,
         accessToken = accessToken,
     ).decode<ArtistDetailResponse>().let { response ->
         RemoteArtistDetail(

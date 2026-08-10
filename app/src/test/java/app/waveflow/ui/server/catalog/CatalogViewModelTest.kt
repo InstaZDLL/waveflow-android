@@ -205,6 +205,29 @@ class CatalogViewModelTest {
         }
 
     @Test
+    fun `ouvrir un album n'annule pas le chargement de l'artiste`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Parcours réel : depuis la page d'un artiste, on ouvre un de ses
+            // albums avant que l'artiste ait fini de charger. Avec un job
+            // commun, l'écran de l'artiste — toujours dans la pile — resterait
+            // bloqué sur son indicateur au retour.
+            val portail = CompletableDeferred<Unit>()
+            val viewModel = viewModel(
+                PagingCatalogApi(albums = albums(1), detailGate = portail),
+            )
+            advanceUntilIdle()
+
+            viewModel.openArtist("id-1")
+            viewModel.openAlbum("id-1")
+            portail.complete(Unit)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.artistDetail.value.isLoading)
+            assertEquals("id-1", viewModel.artistDetail.value.value?.artist?.id)
+            assertEquals("id-1", viewModel.albumDetail.value.value?.album?.id)
+        }
+
+    @Test
     fun `un detail qui echoue devient un message`() =
         runTest(mainDispatcherRule.dispatcher) {
             val catalog = PagingCatalogApi(
