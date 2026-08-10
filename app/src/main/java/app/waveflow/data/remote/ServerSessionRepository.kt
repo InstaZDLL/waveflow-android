@@ -104,6 +104,18 @@ class ServerSessionRepository(
         }
     }
 
+    /**
+     * Marque le jeton d'accès comme périmé.
+     *
+     * Utile quand le serveur en refuse un que l'horloge locale croit encore
+     * bon — révoqué depuis un autre appareil, par exemple. Le prochain
+     * [validAccessToken] renouvellera au lieu de resservir le même.
+     */
+    suspend fun expireAccessToken() = mutex.withLock {
+        val current = _session.value as? ServerSession.Connected ?: return@withLock
+        persist(current.copy(accessExpiresAtMs = 0L))
+    }
+
     /** À n'appeler que sous [mutex]. */
     private suspend fun persist(session: ServerSession) {
         // Le disque d'abord : l'état en mémoire ne doit jamais annoncer une

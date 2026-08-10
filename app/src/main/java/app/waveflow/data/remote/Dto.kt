@@ -1,5 +1,8 @@
 package app.waveflow.data.remote
 
+import app.waveflow.model.RemoteAlbum
+import app.waveflow.model.RemoteArtist
+import app.waveflow.model.RemoteSong
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -43,3 +46,80 @@ internal data class ErrorBody(
     val code: String,
     val message: String,
 )
+
+// --- Catalogue ------------------------------------------------------------
+//
+// Le serveur aplatit ses détails : `/albums/{id}` renvoie les champs de l'album
+// au premier niveau, avec `songs` à côté, et non un objet `album` imbriqué.
+// D'où la répétition des champs dans les réponses de détail.
+
+@Serializable
+internal data class AlbumResponse(
+    val id: String,
+    val title: String,
+    val artist: String? = null,
+    @SerialName("artist_id") val artistId: String? = null,
+    val year: Int? = null,
+) {
+    fun toModel() = RemoteAlbum(
+        id = id,
+        title = title,
+        artist = artist,
+        artistId = artistId,
+        year = year,
+    )
+}
+
+@Serializable
+internal data class ArtistResponse(
+    val id: String,
+    val name: String,
+    @SerialName("album_count") val albumCount: Int? = null,
+) {
+    fun toModel() = RemoteArtist(id = id, name = name, albumCount = albumCount)
+}
+
+@Serializable
+internal data class SongResponse(
+    val id: String,
+    val title: String,
+    val album: String? = null,
+    @SerialName("album_id") val albumId: String? = null,
+    val artist: String? = null,
+    val track: Int? = null,
+    @SerialName("duration_ms") val durationMs: Long,
+) {
+    fun toModel() = RemoteSong(
+        id = id,
+        title = title,
+        album = album,
+        albumId = albumId,
+        artist = artist,
+        trackNumber = track,
+        durationMs = durationMs,
+    )
+}
+
+@Serializable
+internal data class AlbumDetailResponse(
+    val id: String,
+    val title: String,
+    val artist: String? = null,
+    @SerialName("artist_id") val artistId: String? = null,
+    val year: Int? = null,
+    val songs: List<SongResponse> = emptyList(),
+) {
+    val album: AlbumResponse
+        get() = AlbumResponse(id, title, artist, artistId, year)
+}
+
+@Serializable
+internal data class ArtistDetailResponse(
+    val id: String,
+    val name: String,
+    @SerialName("album_count") val albumCount: Int? = null,
+    val albums: List<AlbumResponse> = emptyList(),
+) {
+    val artist: ArtistResponse
+        get() = ArtistResponse(id, name, albumCount)
+}

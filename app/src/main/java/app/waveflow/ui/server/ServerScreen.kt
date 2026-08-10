@@ -1,6 +1,7 @@
 package app.waveflow.ui.server
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,18 +47,44 @@ import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
 
 /**
- * Onglet Serveur : connexion, puis compte connecté.
+ * Ouverture d'une session serveur.
  *
  * Le serveur est une source à part de la bibliothèque de l'appareil ; rien ici
  * ne dépend de la permission audio ni du MediaStore.
+ *
+ * Séparé du compte depuis l'arrivée du catalogue : une fois connecté, l'onglet
+ * affiche ce catalogue, et le compte devient un écran qu'on ouvre.
  */
 @Composable
-fun ServerScreen(
+fun ServerSignInScreen(
     state: ServerUiState,
     onConnect: (serverUrl: String, username: String, password: String) -> Unit,
+    modifier: Modifier = Modifier,
+    bottomPadding: Dp = 0.dp,
+) {
+    ScrollableColumn(modifier = modifier, bottomPadding = bottomPadding) {
+        ConnectionForm(state = state, onConnect = onConnect)
+    }
+}
+
+/** Le compte connecté, et la sortie. */
+@Composable
+fun ServerAccountScreen(
+    session: ServerSession.Connected,
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
+) {
+    ScrollableColumn(modifier = modifier, bottomPadding = bottomPadding) {
+        ConnectedAccount(session = session, onDisconnect = onDisconnect)
+    }
+}
+
+@Composable
+private fun ScrollableColumn(
+    modifier: Modifier,
+    bottomPadding: Dp,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -66,12 +93,8 @@ fun ServerScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .padding(top = 32.dp, bottom = bottomPadding + 32.dp),
-    ) {
-        when (val connected = state.connected) {
-            null -> ConnectionForm(state = state, onConnect = onConnect)
-            else -> ConnectedAccount(session = connected, onDisconnect = onDisconnect)
-        }
-    }
+        content = content,
+    )
 }
 
 @Composable

@@ -29,11 +29,20 @@ object Routes {
     const val ARTIST_DETAIL = "$ARTISTS/{$ARG_ARTIST_ID}"
     const val PLAYLIST_DETAIL = "$PLAYLISTS/{$ARG_PLAYLIST_ID}"
 
+    /** Détails distants, sous la section Serveur : leurs clés sont des UUID. */
+    const val SERVER_ALBUM_DETAIL = "$SERVER/albums/{$ARG_ALBUM_ID}"
+    const val SERVER_ARTIST_DETAIL = "$SERVER/artists/{$ARG_ARTIST_ID}"
+    const val SERVER_ACCOUNT = "$SERVER/compte"
+
     fun albumDetail(albumId: Long): String = "$ALBUMS/$albumId"
 
     fun artistDetail(artistId: Long): String = "$ARTISTS/$artistId"
 
     fun playlistDetail(playlistId: Long): String = "$PLAYLISTS/$playlistId"
+
+    fun serverAlbumDetail(albumId: String): String = "$SERVER/albums/$albumId"
+
+    fun serverArtistDetail(artistId: String): String = "$SERVER/artists/$artistId"
 }
 
 /**

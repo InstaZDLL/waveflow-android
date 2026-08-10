@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,8 +70,13 @@ import app.waveflow.ui.playlists.PlaylistsViewModel
 import app.waveflow.ui.search.SearchField
 import app.waveflow.ui.search.SearchScreen
 import app.waveflow.ui.search.SearchViewModel
-import app.waveflow.ui.server.ServerScreen
+import app.waveflow.ui.server.ServerAccountScreen
+import app.waveflow.ui.server.ServerSignInScreen
 import app.waveflow.ui.server.ServerViewModel
+import app.waveflow.ui.server.catalog.CatalogViewModel
+import app.waveflow.ui.server.catalog.RemoteAlbumDetailScreen
+import app.waveflow.ui.server.catalog.RemoteArtistDetailScreen
+import app.waveflow.ui.server.catalog.ServerCatalogScreen
 import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -96,6 +102,9 @@ private val DETAIL_ROUTES = setOf(
     Routes.ALBUM_DETAIL,
     Routes.ARTIST_DETAIL,
     Routes.PLAYLIST_DETAIL,
+    Routes.SERVER_ALBUM_DETAIL,
+    Routes.SERVER_ARTIST_DETAIL,
+    Routes.SERVER_ACCOUNT,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,6 +115,7 @@ private fun WaveFlowRoot() {
     val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.Factory)
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val serverViewModel: ServerViewModel = viewModel(factory = ServerViewModel.Factory)
+    val catalogViewModel: CatalogViewModel = viewModel(factory = CatalogViewModel.Factory)
 
     val library by libraryViewModel.library.collectAsStateWithLifecycle()
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
@@ -113,6 +123,10 @@ private fun WaveFlowRoot() {
     val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
     val searchResults by searchViewModel.results.collectAsStateWithLifecycle()
     val serverState by serverViewModel.state.collectAsStateWithLifecycle()
+    val remoteAlbums by catalogViewModel.albums.collectAsStateWithLifecycle()
+    val remoteArtists by catalogViewModel.artists.collectAsStateWithLifecycle()
+    val remoteAlbumDetail by catalogViewModel.albumDetail.collectAsStateWithLifecycle()
+    val remoteArtistDetail by catalogViewModel.artistDetail.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -218,6 +232,19 @@ private fun WaveFlowRoot() {
                                     Icon(
                                         imageVector = Icons.Filled.Search,
                                         contentDescription = "Rechercher",
+                                    )
+                                }
+                            }
+
+                            // Le compte n'a plus sa place dans l'onglet, que le
+                            // catalogue occupe : il s'ouvre depuis ici.
+                            if (currentRoute == Routes.SERVER && serverState.isConnected) {
+                                IconButton(
+                                    onClick = { navController.navigate(Routes.SERVER_ACCOUNT) },
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.AccountCircle,
+                                        contentDescription = "Compte du serveur",
                                     )
                                 }
                             }
@@ -360,10 +387,76 @@ private fun WaveFlowRoot() {
                     }
 
                     composable(Routes.SERVER) {
-                        ServerScreen(
-                            state = serverState,
-                            onConnect = serverViewModel::connect,
-                            onDisconnect = serverViewModel::disconnect,
+                        // Connecté, l'onglet montre le catalogue ; le compte
+                        // devient un écran qu'on ouvre depuis la barre du haut.
+                        val connected = serverState.connected
+                        if (connected == null) {
+                            ServerSignInScreen(
+                                state = serverState,
+                                onConnect = serverViewModel::connect,
+                                bottomPadding = listBottomPadding,
+                            )
+                        } else {
+                            ServerCatalogScreen(
+                                albums = remoteAlbums,
+                                artists = remoteArtists,
+                                onAlbumClick = {
+                                    navController.navigate(Routes.serverAlbumDetail(it.id))
+                                },
+                                onArtistClick = {
+                                    navController.navigate(Routes.serverArtistDetail(it.id))
+                                },
+                                onLoadMoreAlbums = catalogViewModel::loadMoreAlbums,
+                                onLoadMoreArtists = catalogViewModel::loadMoreArtists,
+                                onRetryAlbums = catalogViewModel::retryAlbums,
+                                onRetryArtists = catalogViewModel::retryArtists,
+                                bottomPadding = listBottomPadding,
+                            )
+                        }
+                    }
+
+                    composable(Routes.SERVER_ACCOUNT) {
+                        serverState.connected?.let { session ->
+                            ServerAccountScreen(
+                                session = session,
+                                onDisconnect = {
+                                    serverViewModel.disconnect()
+                                    navController.popBackStack()
+                                },
+                                bottomPadding = listBottomPadding,
+                            )
+                        }
+                    }
+
+                    composable(
+                        route = Routes.SERVER_ALBUM_DETAIL,
+                        arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.StringType }),
+                    ) { entry ->
+                        val albumId = entry.arguments?.getString(Routes.ARG_ALBUM_ID)
+                            ?: return@composable
+                        LaunchedEffect(albumId) { catalogViewModel.openAlbum(albumId) }
+
+                        RemoteAlbumDetailScreen(
+                            state = remoteAlbumDetail,
+                            onRetry = { catalogViewModel.openAlbum(albumId) },
+                            bottomPadding = listBottomPadding,
+                        )
+                    }
+
+                    composable(
+                        route = Routes.SERVER_ARTIST_DETAIL,
+                        arguments = listOf(navArgument(Routes.ARG_ARTIST_ID) { type = NavType.StringType }),
+                    ) { entry ->
+                        val artistId = entry.arguments?.getString(Routes.ARG_ARTIST_ID)
+                            ?: return@composable
+                        LaunchedEffect(artistId) { catalogViewModel.openArtist(artistId) }
+
+                        RemoteArtistDetailScreen(
+                            state = remoteArtistDetail,
+                            onAlbumClick = {
+                                navController.navigate(Routes.serverAlbumDetail(it.id))
+                            },
+                            onRetry = { catalogViewModel.openArtist(artistId) },
                             bottomPadding = listBottomPadding,
                         )
                     }
@@ -509,6 +602,9 @@ private fun currentScreenTitle(
     Routes.ARTISTS -> "Artistes"
     Routes.PLAYLISTS -> "Playlists"
     Routes.SERVER -> "Serveur"
+    Routes.SERVER_ACCOUNT -> "Compte"
+    Routes.SERVER_ALBUM_DETAIL -> "Album"
+    Routes.SERVER_ARTIST_DETAIL -> "Artiste"
     Routes.ALBUM_DETAIL -> albumId?.let { library.album(it)?.title } ?: "Album"
     Routes.ARTIST_DETAIL -> artistId?.let { library.artist(it)?.name } ?: "Artiste"
     Routes.PLAYLIST_DETAIL -> playlistName ?: "Playlist"
