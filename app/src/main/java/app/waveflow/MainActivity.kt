@@ -69,6 +69,8 @@ import app.waveflow.ui.playlists.PlaylistsViewModel
 import app.waveflow.ui.search.SearchField
 import app.waveflow.ui.search.SearchScreen
 import app.waveflow.ui.search.SearchViewModel
+import app.waveflow.ui.server.ServerScreen
+import app.waveflow.ui.server.ServerViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -103,12 +105,14 @@ private fun WaveFlowRoot() {
     val playerViewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory)
     val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.Factory)
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
+    val serverViewModel: ServerViewModel = viewModel(factory = ServerViewModel.Factory)
 
     val library by libraryViewModel.library.collectAsStateWithLifecycle()
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
     val playlistsState by playlistsViewModel.state.collectAsStateWithLifecycle()
     val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
     val searchResults by searchViewModel.results.collectAsStateWithLifecycle()
+    val serverState by serverViewModel.state.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -327,6 +331,15 @@ private fun WaveFlowRoot() {
                             )
                         }
 
+                        composable(Routes.SERVER) {
+                            ServerScreen(
+                                state = serverState,
+                                onConnect = serverViewModel::connect,
+                                onDisconnect = serverViewModel::disconnect,
+                                bottomPadding = listBottomPadding,
+                            )
+                        }
+
                         composable(Routes.PLAYLISTS) {
                             PlaylistsScreen(
                                 state = playlistsState,
@@ -464,6 +477,7 @@ private fun currentScreenTitle(
     Routes.ALBUMS -> "Albums"
     Routes.ARTISTS -> "Artistes"
     Routes.PLAYLISTS -> "Playlists"
+    Routes.SERVER -> "Serveur"
     Routes.ALBUM_DETAIL -> albumId?.let { library.album(it)?.title } ?: "Album"
     Routes.ARTIST_DETAIL -> artistId?.let { library.artist(it)?.name } ?: "Artiste"
     Routes.PLAYLIST_DETAIL -> playlistName ?: "Playlist"

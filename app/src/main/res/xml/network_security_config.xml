@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Un serveur WaveFlow s'auto-héberge, souvent sur le réseau local et sans
+  certificat. Interdire le trafic en clair rendrait l'app inutilisable dans ce
+  cas, qui est le plus courant.
+
+  On aimerait n'ouvrir que les plages privées, mais `<domain>` n'accepte que des
+  noms d'hôtes et des adresses littérales : la notation CIDR n'existe pas ici.
+  L'autorisation est donc générale, et c'est à l'utilisateur de saisir une
+  adresse `https://` dès que le serveur sort de son réseau — l'écran de
+  connexion préfixe d'ailleurs en HTTPS quand le schéma est omis.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

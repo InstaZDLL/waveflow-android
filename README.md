@@ -3,9 +3,9 @@
 Native Android client for [WaveFlow](https://github.com/InstaZDLL/WaveFlow) — a
 local-first music player. Kotlin + Jetpack Compose + Media3.
 
-> **Status:** local-only. Plays, browses, searches and organises the device's
-> own files. Nothing talks to a WaveFlow server yet — see
-> [Server sync](#server-sync) for what that will take.
+> **Status:** local-first. Plays, browses, searches and organises the device's
+> own files. A WaveFlow server can be signed into; its catalogue is not exposed
+> yet — see [Server](#server) for what is and isn't wired up.
 
 ## Stack
 
@@ -18,6 +18,7 @@ local-first music player. Kotlin + Jetpack Compose + Media3.
 - **Local store:** Room — playlists only; tracks are never duplicated out of
   `MediaStore` (schemas versioned under `app/schemas/`)
 - **Images:** Coil
+- **Server:** OkHttp + kotlinx.serialization; session tokens in DataStore
 - **DI:** manual container for now (`AppContainer`); Hilt later
 - **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36 · **Compile SDK:** 37
 
@@ -40,7 +41,8 @@ app/src/main/java/app/waveflow/
 │  ├─ MediaStoreMusicRepository.kt  MediaStore query + ContentObserver
 │  ├─ PlaylistRepository.kt         Local playlist abstraction
 │  ├─ RoomPlaylistRepository.kt     Room-backed implementation
-│  └─ local/                        Room entities, DAO, database
+│  ├─ local/                        Room entities, DAO, database
+│  └─ remote/                       WaveFlow server: auth API, session, tokens
 ├─ playback/
 │  ├─ PlaybackService.kt          Media3 MediaSessionService (ExoPlayer)
 │  ├─ PlaybackController.kt       Playback facade + PlaybackState
@@ -71,6 +73,10 @@ app/src/main/java/app/waveflow/
    │  ├─ SearchViewModel.kt       Query → filtered library
    │  ├─ SearchScreen.kt          Songs / albums / artists sections
    │  └─ SearchField.kt           Query input
+   ├─ server/
+   │  ├─ ServerViewModel.kt       Sign in / out, error mapping
+   │  ├─ ServerUiState.kt         Session + progress + last failure
+   │  └─ ServerScreen.kt          Sign-in form, then the account
    ├─ permission/
    │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
    ├─ player/
@@ -124,6 +130,10 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `SearchViewModelTest` | query → results, clearing, following the library |
 | `GroupingTest` | album / artist derivation, sorting, missing tags |
 | `DurationFormatTest` | `m:ss` / `h:mm:ss` formatting |
+| `HttpServerApiTest` | request shapes, error classes, URL handling, unknown fields |
+| `ServerSessionRepositoryTest` | token refresh and rotation, session lifetime, sign-out |
+| `ServerViewModelTest` | validation, error wording, connection progress |
+| `ServerScreenTest` | sign-in form, connected account, no token on screen |
 
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
 
@@ -141,22 +151,44 @@ into `DragState` and tested there instead.
 - [x] Drag-to-reorder inside a playlist
 - [x] Search across songs, albums and artists
 - [x] Compose UI tests (Robolectric, no device)
-- [ ] WaveFlow server as a remote source: browse and stream its catalogue
+- [x] Sign in to a WaveFlow server (session, refresh, sign-out)
+- [ ] Browse the server catalogue
+- [ ] Stream from the server
 - [ ] Server user-data sync (playlists, favorites, ratings) — see below
 - [ ] Android Auto (Media3 `MediaLibraryService`)
 
-### Server sync
+## Server
 
-[WaveFlow Server](https://github.com/InstaZDLL/waveflow-server) ships the sync
-protocol today — `/api/v2/sync/snapshot`, `/changes`, `/ack` and a wake-up
-socket, specified in its `RFC-003`. Bearer tokens for native clients and
-authorized streaming (`/api/v2/tracks/{id}/stream`) are already there too, so
-consuming the server as a *remote source* needs no server-side work.
+The **Server** tab signs in to a [WaveFlow
+Server](https://github.com/InstaZDLL/waveflow-server) and keeps the session
+alive. That is all it does so far: nothing of the server's catalogue is shown,
+and nothing of the local library is sent anywhere. The two sources stay
+separate by design — the tab is its own section rather than a filter over the
+existing screens.
 
-Syncing the **local** library is a different matter, and it is not blocked on
-this app: the protocol carries server track UUIDs, and RFC-003 states it "never
-guesses a local/server track match" — reconciliation is a later milestone with
-its own RFC. Until that exists, local playlists stay local.
+Sign-in posts to `/api/v2/auth/login` with the device model as the session
+name, so the server lists it among the account's devices. The access token
+lasts fifteen minutes and is renewed through `/api/v2/auth/refresh`; the
+refresh token **rotates** on every use, which is why all token work is
+serialised behind one mutex — two concurrent renewals would start from the same
+token and one would be rejected, dropping a session that was perfectly valid.
+
+Tokens live in a DataStore, protected by the app sandbox rather than by
+encryption: `security-crypto` never left alpha and is no longer maintained. A
+rooted or unlocked device therefore exposes the refresh token — the mitigation
+is that it can be revoked from the server.
+
+Cleartext HTTP is permitted, because a self-hosted server usually sits on a LAN
+without a certificate. An address typed without a scheme is joined over HTTPS.
+
+### Sync
+
+The sync protocol — `/api/v2/sync/snapshot`, `/changes`, `/ack` and a wake-up
+socket — already exists server-side, specified in its `RFC-003`. Syncing the
+**local** library is nonetheless out of reach, and not because of this app: the
+protocol carries server track UUIDs, and RFC-003 states it "never guesses a
+local/server track match". Reconciliation is a later milestone with its own
+RFC. Until that exists, local playlists stay local.
 
 Whenever it does land, `playlist_songs` will need a Room migration: it keys on
 `MediaStore` ids, which do not survive a device re-index, let alone identify a

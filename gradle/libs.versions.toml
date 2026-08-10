@@ -15,6 +15,9 @@ ksp = "2.3.11"
 coroutinesTest = "1.11.0"
 robolectric = "4.16.1"
 androidxTestCore = "1.7.0"
+okhttp = "4.12.0"
+serialization = "1.7.3"
+datastore = "1.1.7"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -56,8 +59,19 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 # Palette — couleur dominante extraite de la pochette (fond du lecteur)
 androidx-palette = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 
+# Serveur WaveFlow — OkHttp arrivait déjà par Coil, déclaré ici parce qu'on
+# s'en sert directement. `mockwebserver` sert les tests du client HTTP.
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+
+# DataStore — jetons de session, hors de Room : ce n'est pas de la donnée
+# relationnelle et ça ne doit pas voyager avec les sauvegardes de playlists.
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 

@@ -1,17 +1,22 @@
 package app.waveflow
 
 import android.app.Application
+import android.os.Build
 import app.waveflow.data.LibraryStore
 import app.waveflow.data.MediaStoreMusicRepository
 import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
 import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
+import app.waveflow.data.remote.DataStoreSessionStore
+import app.waveflow.data.remote.HttpServerApi
+import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Point d'entrée de l'application.
@@ -27,6 +32,7 @@ class WaveFlowApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.restoreServerSession()
     }
 }
 
@@ -57,4 +63,22 @@ class AppContainer(app: Application) {
      * par le composant qui le demande (voir `PlayerViewModel.onCleared`).
      */
     fun createPlaybackController(): PlaybackController = Media3PlaybackController(appContext)
+
+    /**
+     * Session serveur, indépendante de la bibliothèque locale : elle n'a besoin
+     * ni de la permission audio ni du MediaStore.
+     *
+     * Le nom d'appareil est celui que le serveur affichera dans la liste des
+     * sessions ; `Build.MODEL` est ce que l'utilisateur reconnaîtra.
+     */
+    val serverSessionRepository = ServerSessionRepository(
+        api = HttpServerApi(),
+        store = DataStoreSessionStore(app),
+        deviceName = Build.MODEL ?: "Android",
+    )
+
+    /** Relit la session persistée, sans bloquer le démarrage. */
+    fun restoreServerSession() {
+        applicationScope.launch { serverSessionRepository.restore() }
+    }
 }

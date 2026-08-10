@@ -3,6 +3,7 @@ package app.waveflow.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -18,6 +19,7 @@ object Routes {
     const val ALBUMS = "albums"
     const val ARTISTS = "artists"
     const val PLAYLISTS = "playlists"
+    const val SERVER = "server"
 
     const val ARG_ALBUM_ID = "albumId"
     const val ARG_ARTIST_ID = "artistId"
@@ -34,7 +36,12 @@ object Routes {
     fun playlistDetail(playlistId: Long): String = "$PLAYLISTS/$playlistId"
 }
 
-/** Les quatre sections atteignables depuis la barre du bas. */
+/**
+ * Les sections atteignables depuis la barre du bas.
+ *
+ * Serveur est en dernier et à part : les quatre premières décrivent la
+ * bibliothèque de l'appareil, celle-ci une source distante.
+ */
 enum class TopLevelDestination(
     val route: String,
     val label: String,
@@ -44,6 +51,7 @@ enum class TopLevelDestination(
     Albums(Routes.ALBUMS, "Albums", Icons.Filled.Album),
     Artists(Routes.ARTISTS, "Artistes", Icons.Filled.Person),
     Playlists(Routes.PLAYLISTS, "Playlists", Icons.AutoMirrored.Filled.QueueMusic),
+    Server(Routes.SERVER, "Serveur", Icons.Filled.Cloud),
     ;
 
     /**
