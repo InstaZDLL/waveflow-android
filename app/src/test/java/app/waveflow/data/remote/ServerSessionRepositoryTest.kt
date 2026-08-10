@@ -3,6 +3,10 @@ package app.waveflow.data.remote
 import app.waveflow.model.ServerSession
 import app.waveflow.testing.FakeServerApi
 import app.waveflow.testing.FakeSessionStore
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -20,6 +24,7 @@ import org.robolectric.RobolectricTestRunner
  * Robolectric parce que le dépôt journalise ses fermetures de session par
  * `android.util.Log`, qui lève sur une JVM nue.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class ServerSessionRepositoryTest {
 
@@ -140,6 +145,50 @@ class ServerSessionRepositoryTest {
         val session = repository.session.value as ServerSession.Connected
         assertEquals("wfr_1", session.refreshToken)
         assertEquals(session, store.written)
+    }
+
+    @Test
+    fun `le renouvellement suivant repart du jeton renouvele`() = runTest {
+        // C'est tout l'enjeu de la rotation : réutiliser l'ancien vaudrait 401.
+        val api = FakeServerApi()
+        val repository = repository(
+            api = api,
+            store = FakeSessionStore(stored = connectedSession(expiresAtMs = maintenant)),
+        )
+        repository.restore()
+
+        repository.validAccessToken()
+        assertEquals("wfr_stocke", api.lastRefreshToken)
+
+        maintenant += 900_000L
+        repository.validAccessToken()
+        assertEquals("wfr_1", api.lastRefreshToken)
+    }
+
+    @Test
+    fun `deux demandes concurrentes ne declenchent qu'un renouvellement`() = runTest {
+        // Le serveur invalide l'ancien jeton dès qu'il en émet un nouveau :
+        // deux renouvellements partis du même jeton en perdraient un. Le portail
+        // maintient le premier appel en vol le temps que le second se présente,
+        // sans quoi ils ne se croiseraient jamais.
+        val portail = CompletableDeferred<Unit>()
+        val api = FakeServerApi(refreshGate = portail)
+        val repository = repository(
+            api = api,
+            store = FakeSessionStore(stored = connectedSession(expiresAtMs = maintenant)),
+        )
+        repository.restore()
+
+        val premier = async { repository.validAccessToken() }
+        val second = async { repository.validAccessToken() }
+        runCurrent()
+
+        portail.complete(Unit)
+
+        assertEquals("wfa_1", premier.await())
+        // Le second trouve un jeton frais et n'a plus rien à renouveler.
+        assertEquals("wfa_1", second.await())
+        assertEquals(1, api.refreshCalls)
     }
 
     @Test

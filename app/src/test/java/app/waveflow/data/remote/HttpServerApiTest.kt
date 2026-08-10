@@ -107,6 +107,21 @@ class HttpServerApiTest {
     }
 
     @Test
+    fun `une panne serveur est signalee comme inattendue, pas comme un rejet`() = runTest {
+        // Rien à ressaisir : c'est le serveur qui va mal, l'appel est à refaire.
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"unavailable","message":"Database unavailable"}"""),
+        )
+
+        val error = echecDe { api.login(url(), "admin", "secret", "Pixel") }
+
+        assertTrue(error.toString(), error is ServerException.Unexpected)
+        assertEquals("Database unavailable", error.message)
+    }
+
+    @Test
     fun `un serveur injoignable ne remonte pas comme un refus`() = runTest {
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
 

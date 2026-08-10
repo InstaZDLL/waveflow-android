@@ -1,5 +1,6 @@
 package app.waveflow.ui.server
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -67,8 +68,20 @@ class ServerViewModel(
 
     fun disconnect() {
         viewModelScope.launch {
-            sessionRepository.disconnect()
-            local.value = ServerUiState()
+            try {
+                sessionRepository.disconnect()
+                local.value = ServerUiState()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                // Le dépôt tolère déjà un serveur injoignable, mais l'effacement
+                // sur disque peut échouer. Sans ce filet, l'exception quitterait
+                // `viewModelScope` et ferait tomber l'application.
+                Log.w(TAG, "Déconnexion incomplète", error)
+                local.value = local.value.copy(
+                    errorMessage = "La déconnexion n'a pas pu être enregistrée.",
+                )
+            }
         }
     }
 
@@ -84,6 +97,8 @@ class ServerViewModel(
     }
 
     companion object {
+        private const val TAG = "ServerViewModel"
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]

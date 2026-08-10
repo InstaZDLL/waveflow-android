@@ -1,15 +1,19 @@
 package app.waveflow.data.remote
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.waveflow.model.ServerSession
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
 /**
  * Là où la session survit au redémarrage.
@@ -38,7 +42,20 @@ class DataStoreSessionStore(context: Context) : SessionStore {
 
     private val dataStore: DataStore<Preferences> = context.applicationContext.sessionDataStore
 
-    override suspend fun read(): ServerSession = dataStore.data.map { it.toSession() }.first()
+    override suspend fun read(): ServerSession = dataStore.data
+        // Un fichier illisible ou corrompu remonte en IOException. La lecture a
+        // lieu au démarrage, hors de toute portée qui rattraperait : mieux vaut
+        // repartir déconnecté et redemander le mot de passe que ne pas démarrer.
+        .catch { error ->
+            if (error is IOException) {
+                Log.w(TAG, "Session illisible, on repart déconnecté", error)
+                emit(emptyPreferences())
+            } else {
+                throw error
+            }
+        }
+        .map { it.toSession() }
+        .first()
 
     override suspend fun write(session: ServerSession) {
         when (session) {
@@ -81,6 +98,8 @@ class DataStoreSessionStore(context: Context) : SessionStore {
     }
 
     private companion object {
+        const val TAG = "SessionStore"
+
         val SERVER_URL = stringPreferencesKey("server_url")
         val USERNAME = stringPreferencesKey("username")
         val ACCESS_TOKEN = stringPreferencesKey("access_token")

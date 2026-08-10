@@ -49,9 +49,14 @@ class ServerScreenTest {
         }
     }
 
-    /** Nombre de nœuds portant exactement ce texte. */
+    /**
+     * Nombre de nœuds dont un texte contient [text].
+     *
+     * En sous-chaîne : un jeton glissé au milieu d'une phrase échapperait à une
+     * comparaison stricte, et c'est justement ce qu'on cherche à exclure.
+     */
     private fun ComposeContentTestRule.occurrencesDe(text: String): Int =
-        onAllNodes(hasText(text)).fetchSemanticsNodes().size
+        onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().size
 
     @Test
     fun `sans session l'ecran propose le formulaire`() {

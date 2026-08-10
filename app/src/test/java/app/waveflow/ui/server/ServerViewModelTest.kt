@@ -15,8 +15,16 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.io.IOException
 
+/**
+ * Robolectric parce que le ViewModel journalise ses échecs par
+ * `android.util.Log`, qui lève sur une JVM nue.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
 class ServerViewModelTest {
 
     @get:Rule
@@ -110,16 +118,21 @@ class ServerViewModelTest {
     @Test
     fun `un echec n'empeche pas une nouvelle tentative`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val viewModel = viewModel(api = FakeServerApi())
-            val refuse = viewModel(api = FakeServerApi(loginFailure = ServerException.Unauthorized("non")))
+            // Le même ViewModel : c'est justement la reprise après échec qu'on
+            // vérifie, pas deux instances indépendantes.
+            val api = FakeServerApi(loginFailure = ServerException.Unauthorized("non"))
+            val viewModel = viewModel(api = api)
 
-            refuse.connect("https://musique.test", "admin", "faux")
+            viewModel.connect("https://musique.test", "admin", "faux")
             advanceUntilIdle()
-            assertFalse("le bouton doit redevenir actif", refuse.state.value.isConnecting)
+            assertFalse("le bouton doit redevenir actif", viewModel.state.value.isConnecting)
 
+            api.loginFailure = null
             viewModel.connect("https://musique.test", "admin", "secret")
             advanceUntilIdle()
+
             assertTrue(viewModel.state.value.isConnected)
+            assertNull("l'échec précédent ne doit pas survivre", viewModel.state.value.errorMessage)
         }
 
     @Test
@@ -146,4 +159,20 @@ class ServerViewModelTest {
         assertFalse(viewModel.state.value.isConnected)
         assertNull(viewModel.state.value.errorMessage)
     }
+
+    @Test
+    fun `un stockage en echec pendant la deconnexion devient un message, pas un crash`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // L'exception quitterait `viewModelScope` et ferait tomber l'app.
+            val store = FakeSessionStore(writeFailure = IOException("disque plein"))
+            val viewModel = viewModel(store = store)
+
+            viewModel.disconnect()
+            advanceUntilIdle()
+
+            assertEquals(
+                "La déconnexion n'a pas pu être enregistrée.",
+                viewModel.state.value.errorMessage,
+            )
+        }
 }

@@ -49,7 +49,10 @@ data class AuthTokens(
  * Distingue ce sur quoi l'utilisateur peut agir de ce qui relève de la panne :
  * l'écran ne propose de ressaisir un mot de passe que pour [Unauthorized].
  */
-sealed class ServerException(message: String) : Exception(message) {
+sealed class ServerException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause) {
 
     /** Identifiants refusés, ou jeton de rafraîchissement périmé. */
     class Unauthorized(message: String) : ServerException(message)
@@ -58,8 +61,10 @@ sealed class ServerException(message: String) : Exception(message) {
     class Rejected(message: String) : ServerException(message)
 
     /** Serveur injoignable, TLS invalide, coupure en cours de route. */
-    class Unreachable(message: String) : ServerException(message)
+    class Unreachable(message: String, cause: Throwable? = null) :
+        ServerException(message, cause)
 
     /** Panne côté serveur, ou réponse que le client ne sait pas lire. */
-    class Unexpected(message: String) : ServerException(message)
+    class Unexpected(message: String, cause: Throwable? = null) :
+        ServerException(message, cause)
 }

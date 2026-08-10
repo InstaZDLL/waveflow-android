@@ -176,7 +176,9 @@ token and one would be rejected, dropping a session that was perfectly valid.
 Tokens live in a DataStore, protected by the app sandbox rather than by
 encryption: `security-crypto` never left alpha and is no longer maintained. A
 rooted or unlocked device therefore exposes the refresh token — the mitigation
-is that it can be revoked from the server.
+is that it can be revoked from the server. The file is excluded from cloud
+backup and device transfer, so a token never leaves the device it was issued
+to; signing in again simply asks for the password.
 
 Cleartext HTTP is permitted, because a self-hosted server usually sits on a LAN
 without a certificate. An address typed without a scheme is joined over HTTPS.

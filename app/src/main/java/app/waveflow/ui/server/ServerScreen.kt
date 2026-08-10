@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,6 +33,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,6 +86,10 @@ private fun ConnectionForm(
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
+
+    fun submit() {
+        if (!state.isConnecting) onConnect(serverUrl, username, password)
+    }
 
     Icon(
         imageVector = Icons.Filled.Cloud,
@@ -145,6 +153,9 @@ private fun ConnectionForm(
             keyboardType = KeyboardType.Password,
             imeAction = ImeAction.Done,
         ),
+        // « Terminé » doit valider : proposer l'action puis ne rien en faire
+        // oblige à revenir chercher le bouton.
+        keyboardActions = KeyboardActions(onDone = { submit() }),
         trailingIcon = {
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                 Icon(
@@ -170,13 +181,17 @@ private fun ConnectionForm(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                // Le message apparaît sans que le foyer bouge : sans région
+                // active, TalkBack ne dirait rien de l'échec.
+                .semantics { liveRegion = LiveRegionMode.Polite },
         )
     }
 
     Spacer(Modifier.height(24.dp))
     Button(
-        onClick = { onConnect(serverUrl, username, password) },
+        onClick = { submit() },
         enabled = !state.isConnecting,
         modifier = Modifier.fillMaxWidth(),
     ) {

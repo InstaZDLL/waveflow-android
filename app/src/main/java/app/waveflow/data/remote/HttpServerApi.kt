@@ -17,8 +17,9 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
-import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 /**
  * Client HTTP du serveur WaveFlow.
@@ -28,7 +29,7 @@ import kotlin.coroutines.resumeWithException
  * ajoutera, et une réponse enrichie ne doit pas casser une version installée.
  */
 class HttpServerApi(
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = defaultClient(),
 ) : ServerApi {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -70,12 +71,12 @@ class HttpServerApi(
             .apply { accessToken?.let { header("Authorization", "Bearer $it") } }
             .build()
 
-        // OkHttp bloque sur `execute()` ; l'appel asynchrone est enveloppé pour
-        // rester annulable, et le dispatcher IO couvre la lecture du corps.
-        val response = withContext(Dispatchers.IO) { client.newCall(request).await() }
-
-        return response.use {
-            if (it.isSuccessful) it.body?.string().orEmpty() else throw it.toException()
+        // La lecture du corps est bloquante et lit sur le réseau : elle doit
+        // rester sous le dispatcher IO, au même titre que l'appel lui-même.
+        return withContext(Dispatchers.IO) {
+            client.newCall(request).await().use {
+                if (it.isSuccessful) it.body?.string().orEmpty() else throw it.toException()
+            }
         }
     }
 
@@ -125,9 +126,7 @@ class HttpServerApi(
             )
         }
     } catch (error: SerializationException) {
-        throw ServerException.Unexpected(
-            "Réponse illisible du serveur : ${error.message}",
-        )
+        throw ServerException.Unexpected("Réponse illisible du serveur : ${error.message}", error)
     }
 
     private companion object {
@@ -135,6 +134,17 @@ class HttpServerApi(
         const val AUTH_LOGIN = "api/v2/auth/login"
         const val AUTH_REFRESH = "api/v2/auth/refresh"
         const val AUTH_LOGOUT = "api/v2/auth/logout"
+
+        /**
+         * Les délais par défaut d'OkHttp portent sur chaque étape prise à part ;
+         * aucun ne borne l'appel entier. Un serveur qui répond au compte-gouttes
+         * laisserait donc l'écran sur « Connexion… » indéfiniment.
+         */
+        val CALL_TIMEOUT = 30.seconds.toJavaDuration()
+
+        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .callTimeout(CALL_TIMEOUT)
+            .build()
     }
 }
 
@@ -147,12 +157,17 @@ class HttpServerApi(
 private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
     enqueue(object : Callback {
         override fun onResponse(call: Call, response: Response) {
-            continuation.resume(response)
+            // Une annulation entre l'arrivée de la réponse et sa remise laisse
+            // le corps ouvert, donc la connexion retenue : c'est à cette
+            // variante de `resume` de le refermer.
+            continuation.resume(response) { _, delivered, _ ->
+                runCatching { delivered.close() }
+            }
         }
 
         override fun onFailure(call: Call, e: IOException) {
             continuation.resumeIfActive(
-                ServerException.Unreachable(e.message ?: "Serveur injoignable."),
+                ServerException.Unreachable(e.message ?: "Serveur injoignable.", e),
             )
         }
     })
