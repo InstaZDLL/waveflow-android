@@ -1,5 +1,6 @@
 package app.waveflow.ui.navigation
 
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
@@ -43,9 +44,15 @@ object Routes {
 
     fun playlistDetail(playlistId: Long): String = "$PLAYLISTS/$playlistId"
 
-    fun serverAlbumDetail(albumId: String): String = "$SERVER_ALBUMS/$albumId"
+    /**
+     * Les identifiants distants sont encodés, contrairement aux locaux qui sont
+     * des entiers : un `/` dans un identifiant scinderait la route, qui ne
+     * correspondrait alors à aucune destination. La navigation les décode
+     * d'elle-même à la lecture de l'argument.
+     */
+    fun serverAlbumDetail(albumId: String): String = "$SERVER_ALBUMS/${Uri.encode(albumId)}"
 
-    fun serverArtistDetail(artistId: String): String = "$SERVER_ARTISTS/$artistId"
+    fun serverArtistDetail(artistId: String): String = "$SERVER_ARTISTS/${Uri.encode(artistId)}"
 }
 
 /**

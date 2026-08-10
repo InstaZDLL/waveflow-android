@@ -216,6 +216,7 @@ class PagingCatalogApi(
         limit: Int,
     ): List<RemoteArtist> {
         artistCalls++
+        gate?.await()
         failIfDue(artistCalls)
         return artists.page(offset, limit)
     }
