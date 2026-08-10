@@ -1,16 +1,17 @@
 package app.waveflow.ui.player
 
-import app.waveflow.model.Song
+import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
 
 /**
  * État du lecteur, partagé par le mini-player et l'écran plein écran.
  *
- * @property song morceau courant, `null` quand rien n'est chargé — dans ce cas
- *   le lecteur ne s'affiche pas du tout.
+ * @property track morceau courant, `null` quand rien n'est chargé — dans ce cas
+ *   le lecteur ne s'affiche pas du tout. Décrit par le lecteur lui-même et non
+ *   résolu dans la bibliothèque : il peut venir d'un serveur.
  */
 data class PlayerUiState(
-    val song: Song? = null,
+    val track: PlayingTrack? = null,
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,

@@ -113,6 +113,13 @@ internal data class AlbumDetailResponse(
         get() = AlbumResponse(id, title, artist, artistId, year)
 }
 
+/** `{"url": "/api/v2/stream/<ticket>", "expires_at": <ms>}` — l'URL est relative. */
+@Serializable
+internal data class StreamTicketResponse(
+    val url: String,
+    @SerialName("expires_at") val expiresAt: Long,
+)
+
 @Serializable
 internal data class ArtistDetailResponse(
     val id: String,

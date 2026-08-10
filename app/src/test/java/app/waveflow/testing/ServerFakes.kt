@@ -151,6 +151,15 @@ class FakeCatalogApi(
         )
     }
 
+    override suspend fun streamTicket(
+        serverUrl: String,
+        accessToken: String,
+        trackId: String,
+    ): String {
+        record(serverUrl, accessToken, null)
+        return "$serverUrl/api/v2/stream/ticket-$trackId"
+    }
+
     private fun record(serverUrl: String, accessToken: String, page: Pair<Int, Int>?) {
         calls++
         lastServerUrl = serverUrl
@@ -248,6 +257,12 @@ class PagingCatalogApi(
             albums = emptyList(),
         )
     }
+
+    override suspend fun streamTicket(
+        serverUrl: String,
+        accessToken: String,
+        trackId: String,
+    ): String = "$serverUrl/api/v2/stream/ticket-$trackId"
 
     private fun failIfDue(call: Int) {
         if (failFromCall > 0 && call >= failFromCall) {

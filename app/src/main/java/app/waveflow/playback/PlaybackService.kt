@@ -3,9 +3,13 @@ package app.waveflow.playback
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import app.waveflow.WaveFlowApp
 
 /**
  * Service de lecture porté par Media3.
@@ -23,7 +27,17 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
+        // Les pistes distantes portent un marqueur `waveflow://` que rien ne sait
+        // ouvrir : ce résolveur l'échange contre une URL de diffusion au moment
+        // où le lecteur en a besoin. Les fichiers locaux traversent la même
+        // chaîne sans être touchés.
+        val dataSourceFactory = ResolvingDataSource.Factory(
+            DefaultDataSource.Factory(this),
+            RemoteStreamResolver((application as WaveFlowApp).container.catalogRepository),
+        )
+
         val player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             // Route audio "musique" + gestion du focus audio (pause si un appel
             // arrive, etc.).
             .setAudioAttributes(

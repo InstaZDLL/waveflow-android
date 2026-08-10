@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.waveflow.model.orUnknownArtist
 import app.waveflow.ui.components.Artwork
 
 /**
@@ -43,8 +44,8 @@ fun MiniPlayer(
     onSkipNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val song = state.song ?: return
-    val accent = rememberArtworkAccent(song.artworkUri)
+    val track = state.track ?: return
+    val accent = rememberArtworkAccent(track.artworkUri)
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -63,20 +64,20 @@ fun MiniPlayer(
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
                 Artwork(
-                    artworkUri = song.artworkUri,
+                    artworkUri = track.artworkUri,
                     modifier = Modifier.size(44.dp),
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = song.title,
+                        text = track.title,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = song.displayArtist,
+                        text = track.artist.orUnknownArtist(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

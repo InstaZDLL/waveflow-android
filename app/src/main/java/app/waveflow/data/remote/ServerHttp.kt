@@ -133,6 +133,18 @@ class ServerHttp(
             .build()
     }
 
+    /**
+     * Résout une URL rendue par le serveur contre l'adresse de celui-ci.
+     *
+     * Le ticket de diffusion arrive en chemin relatif : c'est ici qu'il devient
+     * joignable, en réutilisant la même normalisation d'adresse que les appels.
+     */
+    fun absoluteUrl(serverUrl: String, path: String): String {
+        val base = serverUrl.toApiUrl(path = "", pathSegment = null, query = emptyMap())
+        return base.resolve(path)?.toString()
+            ?: throw ServerException.Unexpected("URL de diffusion invalide : $path")
+    }
+
     private fun Response.toException(): ServerException {
         // Le serveur répond `{code, message}` sur ses erreurs métier, mais un
         // corps mal formé lui fait renvoyer du texte brut : lire le message

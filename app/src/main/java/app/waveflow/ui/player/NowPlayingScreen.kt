@@ -48,7 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.waveflow.model.Song
+import app.waveflow.model.orUnknownArtist
+import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.formatDuration
@@ -75,13 +76,13 @@ fun NowPlayingScreen(
     // La file peut se vider pendant l'animation de fermeture : on continue
     // d'afficher le dernier morceau connu le temps que l'écran redescende,
     // plutôt que de le faire disparaître d'un coup.
-    var lastKnownSong by remember { mutableStateOf(state.song) }
-    LaunchedEffect(state.song) {
-        state.song?.let { lastKnownSong = it }
+    var lastKnownTrack by remember { mutableStateOf(state.track) }
+    LaunchedEffect(state.track) {
+        state.track?.let { lastKnownTrack = it }
     }
 
-    val song = state.song ?: lastKnownSong ?: return
-    val accent = rememberArtworkAccent(song.artworkUri)
+    val track = state.track ?: lastKnownTrack ?: return
+    val accent = rememberArtworkAccent(track.artworkUri)
 
     Box(
         modifier = modifier
@@ -97,12 +98,12 @@ fun NowPlayingScreen(
                 .windowInsetsPadding(WindowInsets.systemBars)
                 .padding(horizontal = 24.dp),
         ) {
-            PlayerHeader(song = song, onCollapse = onCollapse)
+            PlayerHeader(track = track, onCollapse = onCollapse)
 
             Spacer(Modifier.weight(1f))
 
             Artwork(
-                artworkUri = song.artworkUri,
+                artworkUri = track.artworkUri,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -112,14 +113,14 @@ fun NowPlayingScreen(
 
             Spacer(Modifier.weight(1f))
 
-            TrackTitle(song = song)
+            TrackTitle(track = track)
 
             Spacer(Modifier.height(16.dp))
 
             SeekBar(
                 positionMs = state.positionMs,
                 durationMs = state.durationMs,
-                trackKey = song.id,
+                trackKey = track.mediaId,
                 onSeek = onSeek,
             )
 
@@ -142,7 +143,7 @@ fun NowPlayingScreen(
 }
 
 @Composable
-private fun PlayerHeader(song: Song, onCollapse: () -> Unit) {
+private fun PlayerHeader(track: PlayingTrack, onCollapse: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -165,7 +166,7 @@ private fun PlayerHeader(song: Song, onCollapse: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = song.album ?: "Bibliothèque locale",
+                text = track.album ?: track.source.label,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -179,10 +180,10 @@ private fun PlayerHeader(song: Song, onCollapse: () -> Unit) {
 }
 
 @Composable
-private fun TrackTitle(song: Song) {
+private fun TrackTitle(track: PlayingTrack) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = song.title,
+            text = track.title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -191,7 +192,7 @@ private fun TrackTitle(song: Song) {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = song.displayArtist,
+            text = track.artist.orUnknownArtist(),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -204,7 +205,7 @@ private fun TrackTitle(song: Song) {
 private fun SeekBar(
     positionMs: Long,
     durationMs: Long,
-    trackKey: Long,
+    trackKey: String,
     onSeek: (Long) -> Unit,
 ) {
     // Pendant un glissement, la position affichée suit le doigt et non le

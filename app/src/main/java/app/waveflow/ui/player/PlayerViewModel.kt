@@ -6,12 +6,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
-import app.waveflow.data.LibraryStore
+import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -21,16 +21,17 @@ import kotlinx.coroutines.flow.stateIn
  * vivante empêcherait le service de s'arrêter.
  */
 class PlayerViewModel(
-    libraryStore: LibraryStore,
     private val playbackController: PlaybackController,
 ) : ViewModel() {
 
+    // Plus de croisement avec la bibliothèque : le lecteur décrit lui-même sa
+    // piste, ce qui vaut aussi pour celles du serveur, absentes du MediaStore.
+    // Cette projection est réévaluée à chaque tic de position — la garder sans
+    // recherche est ce qui la rend gratuite.
     val state: StateFlow<PlayerUiState> =
-        combine(libraryStore.library, playbackController.state) { library, playback ->
+        playbackController.state.map { playback ->
             PlayerUiState(
-                // Index plutôt que parcours : cette combinaison est réévaluée à
-                // chaque tic de position.
-                song = playback.currentSongId?.let { library.songsById[it] },
+                track = playback.current,
                 isPlaying = playback.isPlaying,
                 positionMs = playback.positionMs,
                 durationMs = playback.durationMs,
@@ -63,6 +64,23 @@ class PlayerViewModel(
 
     fun playShuffled(queue: List<Song>) = playbackController.playShuffled(queue)
 
+    /**
+     * Démarre [song] depuis une file de morceaux du serveur.
+     *
+     * Chemin distinct de [playFrom] : les deux catalogues ne partagent ni type
+     * ni identifiant, et la file remplace l'autre plutôt que de s'y mêler.
+     */
+    fun playRemoteFrom(queue: List<RemoteSong>, song: RemoteSong) {
+        val startIndex = queue.indexOfFirst { it.id == song.id }
+        if (startIndex < 0) return
+        playbackController.playRemote(queue, startIndex)
+    }
+
+    /** Démarre [queue] distante par son premier morceau. */
+    fun playRemoteFirst(queue: List<RemoteSong>) {
+        queue.firstOrNull()?.let { playRemoteFrom(queue, it) }
+    }
+
     fun togglePlayPause() = playbackController.playPause()
 
     fun skipNext() = playbackController.skipNext()
@@ -88,7 +106,6 @@ class PlayerViewModel(
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as WaveFlowApp
                 PlayerViewModel(
-                    libraryStore = app.container.libraryStore,
                     playbackController = app.container.createPlaybackController(),
                 )
             }

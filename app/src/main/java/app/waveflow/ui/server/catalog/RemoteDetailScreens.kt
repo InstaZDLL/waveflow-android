@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteSong
+import app.waveflow.playback.mediaId
 import app.waveflow.model.orUnknownArtist
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.CenteredMessage
@@ -28,6 +30,8 @@ import app.waveflow.ui.trackCountLabel
 @Composable
 fun RemoteAlbumDetailScreen(
     state: AlbumDetailState,
+    nowPlayingMediaId: String?,
+    onSongClick: (RemoteSong) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
@@ -49,7 +53,11 @@ fun RemoteAlbumDetailScreen(
             }
 
             items(detail.songs, key = { it.id }) { song ->
-                RemoteSongRow(song = song)
+                RemoteSongRow(
+                    song = song,
+                    isCurrent = song.mediaId == nowPlayingMediaId,
+                    onClick = { onSongClick(song) },
+                )
             }
         }
     }
@@ -147,7 +155,11 @@ private fun RemoteDetailHeader(
 }
 
 @Composable
-private fun RemoteSongRow(song: RemoteSong) {
+private fun RemoteSongRow(
+    song: RemoteSong,
+    isCurrent: Boolean,
+    onClick: () -> Unit,
+) {
     MediaRow(
         artworkUri = null,
         title = song.title,
@@ -155,8 +167,11 @@ private fun RemoteSongRow(song: RemoteSong) {
             song.artist?.takeIf { it.isNotBlank() },
             formatDuration(song.durationMs),
         ).joinToString(" · "),
-        // Sans `onClick` : la lecture distante arrive à l'étape suivante, et une
-        // ligne annoncée cliquable qui ne fait rien vaut moins qu'une ligne
-        // simplement informative.
+        onClick = onClick,
+        titleColor = if (isCurrent) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
     )
 }

@@ -4,20 +4,20 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import app.waveflow.data.LibraryStore
 import app.waveflow.playback.PlaybackState
-import app.waveflow.testing.FakeMusicRepository
+import app.waveflow.playback.PlayingTrack
+import app.waveflow.playback.TrackSource
 import app.waveflow.testing.FakePlaybackController
 import app.waveflow.testing.MainDispatcherRule
+import app.waveflow.testing.remoteSong
 import app.waveflow.testing.song
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -32,15 +32,12 @@ class PlayerViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val songs = listOf(song(id = 1L), song(id = 2L), song(id = 3L))
+    private val remoteSongs = listOf(remoteSong("a"), remoteSong("b"), remoteSong("c"))
     private val controller = FakePlaybackController()
-
-    private fun CoroutineScope.loadedStore(): LibraryStore =
-        LibraryStore(FakeMusicRepository(flowOf(songs)), this).also { it.load() }
 
     @Test
     fun `jouer un morceau met la file demandee et non toute la bibliotheque`() = runTest {
-        val viewModel = PlayerViewModel(backgroundScope.loadedStore(), controller)
-        advanceUntilIdle()
+        val viewModel = PlayerViewModel(controller)
 
         val albumQueue = songs.take(2)
         viewModel.playFrom(albumQueue, songs[1])
@@ -50,8 +47,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `jouer un morceau absent de la file ne declenche rien`() = runTest {
-        val viewModel = PlayerViewModel(backgroundScope.loadedStore(), controller)
-        advanceUntilIdle()
+        val viewModel = PlayerViewModel(controller)
 
         viewModel.playFrom(songs.take(2), song(id = 99L))
 
@@ -60,8 +56,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `playFirst sur une file vide ne declenche rien`() = runTest {
-        val viewModel = PlayerViewModel(backgroundScope.loadedStore(), controller)
-        advanceUntilIdle()
+        val viewModel = PlayerViewModel(controller)
 
         viewModel.playFirst(emptyList())
 
@@ -69,20 +64,57 @@ class PlayerViewModelTest {
     }
 
     @Test
-    fun `l'etat resout le morceau courant depuis la bibliotheque`() = runTest {
-        val store = backgroundScope.loadedStore()
-        val viewModel = PlayerViewModel(store, controller)
-        advanceUntilIdle()
+    fun `jouer un morceau distant passe par la file distante`() = runTest {
+        // Chemin distinct : les deux catalogues ne partagent ni type ni
+        // identifiant, et la file distante remplace la locale.
+        val viewModel = PlayerViewModel(controller)
+
+        viewModel.playRemoteFrom(remoteSongs, remoteSongs[2])
+
+        assertEquals(listOf(remoteSongs to 2), controller.playRemoteCalls)
+        assertTrue("la file locale ne doit pas être touchée", controller.playCalls.isEmpty())
+    }
+
+    @Test
+    fun `jouer un morceau distant absent de la file ne declenche rien`() = runTest {
+        val viewModel = PlayerViewModel(controller)
+
+        viewModel.playRemoteFrom(remoteSongs, remoteSong("inconnu"))
+
+        assertTrue(controller.playRemoteCalls.isEmpty())
+    }
+
+    @Test
+    fun `l'etat reprend la piste telle que le lecteur la decrit`() = runTest {
+        // Plus de résolution dans la bibliothèque : une piste du serveur n'y
+        // figure pas, et la chercher ne rendrait rien à afficher.
+        val viewModel = PlayerViewModel(controller)
 
         val job = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.state.collect {}
         }
         controller.emit(
-            PlaybackState(isConnected = true, currentSongId = 2L, isPlaying = true, durationMs = 60_000L),
+            PlaybackState(
+                isConnected = true,
+                current = PlayingTrack(
+                    mediaId = "remote:a",
+                    title = "Résonance",
+                    artist = "Bruit de Fond",
+                    album = "Écho",
+                    artworkUri = null,
+                    localSongId = null,
+                    source = TrackSource.Remote,
+                ),
+                isPlaying = true,
+                durationMs = 60_000L,
+            ),
         )
 
         val state = viewModel.state.value
-        assertEquals(2L, state.song?.id)
+        assertEquals("Résonance", state.track?.title)
+        assertEquals(TrackSource.Remote, state.track?.source)
+        // Rien à souligner dans les listes locales pour une piste distante.
+        assertNull(state.track?.localSongId)
         assertEquals(true, state.isPlaying)
 
         job.cancel()
@@ -90,13 +122,12 @@ class PlayerViewModelTest {
 
     @Test
     fun `le controleur est libere avec le ViewModel`() = runTest {
-        val store = backgroundScope.loadedStore()
         // On passe par un vrai ViewModelStore pour déclencher onCleared comme
         // le ferait la destruction de l'écran.
         val viewModelStore = ViewModelStore()
         val provider = ViewModelProvider(
             viewModelStore,
-            viewModelFactory { initializer { PlayerViewModel(store, controller) } },
+            viewModelFactory { initializer { PlayerViewModel(controller) } },
         )
         provider[PlayerViewModel::class.java]
         advanceUntilIdle()

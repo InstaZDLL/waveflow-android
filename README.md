@@ -4,8 +4,7 @@ Native Android client for [WaveFlow](https://github.com/InstaZDLL/WaveFlow) — 
 local-first music player. Kotlin + Jetpack Compose + Media3.
 
 > **Status:** local-first. Plays, browses, searches and organises the device's
-> own files. A WaveFlow server can be signed into and its catalogue browsed;
-> nothing streams from it yet — see [Server](#server).
+> own files, and streams from a WaveFlow server — see [Server](#server).
 
 ## Stack
 
@@ -47,7 +46,9 @@ app/src/main/java/app/waveflow/
 │  ├─ PlaybackService.kt          Media3 MediaSessionService (ExoPlayer)
 │  ├─ PlaybackController.kt       Playback facade + PlaybackState
 │  ├─ Media3PlaybackController.kt MediaController connection → StateFlow
-│  └─ MediaItemMapper.kt          Song ↔ MediaItem
+│  ├─ MediaItemMapper.kt          Song / RemoteSong → MediaItem, and back
+│  ├─ PlayingTrack.kt             What the player holds, whatever its source
+│  └─ RemoteStreamResolver.kt     Marker URI → ticketed stream URL
 └─ ui/
    ├─ theme/                Material 3 emerald theme
    ├─ DurationFormat.kt     m:ss / h:mm:ss
@@ -123,7 +124,7 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 |---|---|
 | `PlaylistDaoTest` | duplicate adds, `updatedAt` bumping, positions, `reorder` normalisation, `createWithSong` atomicity, cascade delete |
 | `LibraryStoreTest` | loading, read failures, single subscription, retry |
-| `PlayerViewModelTest` | contextual play queue, current-song resolution, controller release |
+| `PlayerViewModelTest` | contextual play queue, local vs remote queue, controller release |
 | `PlaylistsViewModelTest` | flow failures, write failures, resolution order, atomic creation, reorder rollback and staleness |
 | `DragStateTest` | drag arithmetic: target rank, visual offset, bounds, `moved` |
 | `PlaylistDetailScreenTest` | reorder accessibility actions, order restored after a failed write |
@@ -138,6 +139,8 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `HttpCatalogApiTest` | paging params, flattened details, track ordering |
 | `CatalogRepositoryTest` | token plumbing, retry after a refused token |
 | `CatalogViewModelTest` | paging, end of list, in-flight guard, clear on sign-out |
+| `MediaItemMapperTest` | local vs remote track identity, unreachable marker URI |
+| `RemoteStreamResolverTest` | ticket swap, local passthrough, DataSpec preserved |
 
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
 
@@ -157,7 +160,7 @@ into `DragState` and tested there instead.
 - [x] Compose UI tests (Robolectric, no device)
 - [x] Sign in to a WaveFlow server (session, refresh, sign-out)
 - [x] Browse the server catalogue (albums, artists, paginated)
-- [ ] Stream from the server
+- [x] Stream from the server (ticketed URLs, seeking)
 - [ ] Server user-data sync (playlists, favorites, ratings) — see below
 - [ ] Android Auto (Media3 `MediaLibraryService`)
 
@@ -165,15 +168,22 @@ into `DragState` and tested there instead.
 
 The **Server** tab signs in to a [WaveFlow
 Server](https://github.com/InstaZDLL/waveflow-server), keeps the session alive
-and browses its catalogue — albums, artists, and what each contains. Playback
-is not wired up yet, so tapping a remote track does nothing. Nothing of the
-local library is sent anywhere.
+and browses its catalogue — albums, artists, and what each contains. Tapping a
+remote track plays it. Nothing of the local library is sent anywhere.
 
 The two sources stay separate by design: the tab is its own section rather than
 a filter over the existing screens, and `RemoteAlbum` / `RemoteArtist` /
 `RemoteSong` are distinct types from their local counterparts. Their ids are
 UUIDs rather than `MediaStore` integers, and nothing can currently say that a
 remote track is the same file as a local one.
+
+Playback goes through a **stream ticket**: `POST /tracks/{id}/stream-ticket`
+returns a URL that needs no `Authorization` header, which is what lets ExoPlayer
+consume it directly — range requests for seeking included. The ticket is minted
+when the player opens the track, not when the queue is built: it lives an hour,
+and a long queue would outlast it before reaching its last tracks. A
+`ResolvingDataSource` does the swap, so local files and remote tracks share one
+player and one queue mechanism.
 
 Listing endpoints return a bare array — no total, no cursor — so the end of a
 list is inferred from a page shorter than requested. Cover art is not shown:

@@ -1,5 +1,6 @@
 package app.waveflow.playback
 
+import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import kotlinx.coroutines.flow.StateFlow
 
@@ -20,7 +21,8 @@ enum class RepeatMode {
  *
  * @property isConnected `true` une fois la liaison au service établie ; tant
  *   qu'il est `false`, les commandes sont ignorées.
- * @property currentSongId identifiant du morceau courant, `null` si la file est vide.
+ * @property current morceau courant, `null` si la file est vide. Décrit par ce
+ *   que le lecteur en sait : il peut venir de l'appareil comme d'un serveur.
  * @property isPlaying lecture réellement en cours (pas seulement demandée).
  * @property positionMs position de lecture en millisecondes.
  * @property durationMs durée du morceau courant, 0 si inconnue.
@@ -29,7 +31,7 @@ enum class RepeatMode {
  */
 data class PlaybackState(
     val isConnected: Boolean = false,
-    val currentSongId: Long? = null,
+    val current: PlayingTrack? = null,
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
@@ -53,6 +55,15 @@ interface PlaybackController {
 
     /** Charge [songs] comme file d'attente et démarre à [startIndex]. */
     fun play(songs: List<Song>, startIndex: Int)
+
+    /**
+     * Même chose pour des morceaux du serveur.
+     *
+     * File distincte plutôt que mêlée à la locale : les deux sources sont
+     * séparées partout ailleurs dans l'app, et rien ne permet de dire qu'une
+     * piste distante et une piste locale sont le même enregistrement.
+     */
+    fun playRemote(songs: List<RemoteSong>, startIndex: Int)
 
     /**
      * Charge [songs] en activant la lecture aléatoire et démarre sur un
