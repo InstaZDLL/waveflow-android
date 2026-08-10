@@ -2,6 +2,8 @@ package app.waveflow.data.remote
 
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
@@ -74,8 +76,24 @@ class HttpServerApi(
         // La lecture du corps est bloquante et lit sur le réseau : elle doit
         // rester sous le dispatcher IO, au même titre que l'appel lui-même.
         return withContext(Dispatchers.IO) {
-            client.newCall(request).await().use {
-                if (it.isSuccessful) it.body?.string().orEmpty() else throw it.toException()
+            try {
+                client.newCall(request).await().use {
+                    if (it.isSuccessful) it.body?.string().orEmpty() else throw it.toException()
+                }
+            } catch (broken: IOException) {
+                // Une coupure pendant la lecture du corps lève ici, et non dans
+                // le rappel d'échec de l'appel : sans cette conversion, une
+                // IOException nue traverserait toute la pile jusqu'à un
+                // `viewModelScope` qui ne la rattrape pas.
+                //
+                // OkHttp signale aussi l'annulation par une IOException. La
+                // reconvertir en « serveur injoignable » masquerait l'abandon
+                // de l'écran, d'où la vérification préalable.
+                currentCoroutineContext().ensureActive()
+                throw ServerException.Unreachable(
+                    broken.message ?: "Connexion interrompue.",
+                    broken,
+                )
             }
         }
     }

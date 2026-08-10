@@ -62,6 +62,15 @@ class ServerViewModel(
                     isConnecting = false,
                     errorMessage = error.toMessage(),
                 )
+            } catch (error: Exception) {
+                // Le serveur a pu accepter la connexion et l'enregistrement
+                // échouer ensuite. Sans ce filet, l'exception quitterait
+                // `viewModelScope` et ferait tomber l'application.
+                Log.w(TAG, "Session non enregistrée", error)
+                local.value = local.value.copy(
+                    isConnecting = false,
+                    errorMessage = "La session n'a pas pu être enregistrée sur l'appareil.",
+                )
             }
         }
     }

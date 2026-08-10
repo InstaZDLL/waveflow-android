@@ -131,6 +131,22 @@ class HttpServerApiTest {
     }
 
     @Test
+    fun `une coupure pendant la lecture du corps reste une exception de service`() = runTest {
+        // L'en-tête est arrivé, la coupure survient ensuite : l'échec ne passe
+        // donc pas par le rappel de l'appel mais par la lecture du corps. Une
+        // IOException nue traverserait la pile jusqu'à faire tomber l'app.
+        server.enqueue(
+            MockResponse()
+                .setBody(AUTH_BODY)
+                .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY),
+        )
+
+        val error = echecDe { api.login(url(), "admin", "secret", "Pixel") }
+
+        assertTrue(error.toString(), error is ServerException.Unreachable)
+    }
+
+    @Test
     fun `une reponse illisible est signalee comme inattendue`() = runTest {
         server.enqueue(MockResponse().setBody("""{"pas":"ce qu'on attend"}"""))
 

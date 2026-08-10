@@ -251,9 +251,13 @@ private fun WaveFlowRoot() {
              * l'onglet Serveur n'a besoin d'aucune permission, et sortir le
              * `NavHost` de la porte le recomposerait dans un autre sous-arbre,
              * lui faisant perdre sa pile de navigation.
+             *
+             * Sans modificateur : les marges du `Scaffold` sont déjà posées par
+             * le `Box` qui l'englobe, les redonner ici les doublerait sur le
+             * message de refus.
              */
             val gated: @Composable (@Composable () -> Unit) -> Unit = { content ->
-                AudioPermissionGate(modifier = Modifier.padding(innerPadding)) {
+                AudioPermissionGate {
                     // Ne démarre le scan et la connexion au service qu'une fois
                     // la permission acquise. Les deux appels sont idempotents,
                     // ce qui permet de les relancer à chaque écran gardé.

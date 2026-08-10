@@ -161,6 +161,24 @@ class ServerViewModelTest {
     }
 
     @Test
+    fun `un stockage en echec pendant la connexion devient un message, pas un crash`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Le serveur a accepté, c'est l'enregistrement qui échoue : rien ne
+            // rattraperait l'exception hors de `viewModelScope`.
+            val store = FakeSessionStore(writeFailure = IOException("disque plein"))
+            val viewModel = viewModel(store = store)
+
+            viewModel.connect("https://musique.test", "admin", "secret")
+            advanceUntilIdle()
+
+            assertEquals(
+                "La session n'a pas pu être enregistrée sur l'appareil.",
+                viewModel.state.value.errorMessage,
+            )
+            assertFalse("le bouton doit redevenir actif", viewModel.state.value.isConnecting)
+        }
+
+    @Test
     fun `un stockage en echec pendant la deconnexion devient un message, pas un crash`() =
         runTest(mainDispatcherRule.dispatcher) {
             // L'exception quitterait `viewModelScope` et ferait tomber l'app.
