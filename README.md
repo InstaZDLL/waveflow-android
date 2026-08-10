@@ -19,7 +19,7 @@ local-first music player. Kotlin + Jetpack Compose + Media3.
   `MediaStore` (schemas versioned under `app/schemas/`)
 - **Images:** Coil
 - **DI:** manual container for now (`AppContainer`); Hilt later
-- **Min SDK:** 26 (Android 8.0) · **Target/Compile SDK:** 36
+- **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36 · **Compile SDK:** 37
 
 ## Project layout
 
