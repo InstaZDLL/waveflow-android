@@ -69,6 +69,8 @@ import app.waveflow.ui.playlists.PlaylistsViewModel
 import app.waveflow.ui.search.SearchField
 import app.waveflow.ui.search.SearchScreen
 import app.waveflow.ui.search.SearchViewModel
+import app.waveflow.ui.server.ServerScreen
+import app.waveflow.ui.server.ServerViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -103,12 +105,14 @@ private fun WaveFlowRoot() {
     val playerViewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory)
     val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.Factory)
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
+    val serverViewModel: ServerViewModel = viewModel(factory = ServerViewModel.Factory)
 
     val library by libraryViewModel.library.collectAsStateWithLifecycle()
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
     val playlistsState by playlistsViewModel.state.collectAsStateWithLifecycle()
     val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
     val searchResults by searchViewModel.results.collectAsStateWithLifecycle()
+    val serverState by serverViewModel.state.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -239,25 +243,44 @@ private fun WaveFlowRoot() {
                 )
             },
         ) { innerPadding ->
-            AudioPermissionGate(modifier = Modifier.padding(innerPadding)) {
-                // Ne démarre le scan et la connexion au service qu'une fois la
-                // permission acquise.
-                LaunchedEffect(Unit) {
-                    libraryViewModel.onAudioAccessGranted()
-                    playerViewModel.connect()
+            /**
+             * Porte de permission audio, posée autour du seul contenu qui lit
+             * la bibliothèque de l'appareil.
+             *
+             * Elle enveloppe chaque écran concerné plutôt que le `NavHost` :
+             * l'onglet Serveur n'a besoin d'aucune permission, et sortir le
+             * `NavHost` de la porte le recomposerait dans un autre sous-arbre,
+             * lui faisant perdre sa pile de navigation.
+             *
+             * Sans modificateur : les marges du `Scaffold` sont déjà posées par
+             * le `Box` qui l'englobe, les redonner ici les doublerait sur le
+             * message de refus.
+             */
+            val gated: @Composable (@Composable () -> Unit) -> Unit = { content ->
+                AudioPermissionGate {
+                    // Ne démarre le scan et la connexion au service qu'une fois
+                    // la permission acquise. Les deux appels sont idempotents,
+                    // ce qui permet de les relancer à chaque écran gardé.
+                    LaunchedEffect(Unit) {
+                        libraryViewModel.onAudioAccessGranted()
+                        playerViewModel.connect()
+                    }
+                    content()
                 }
+            }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = Routes.SONGS,
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = Routes.SONGS,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        composable(Routes.SONGS) {
+                    composable(Routes.SONGS) {
+                        gated {
                             LibraryScreen(
                                 library = library,
                                 nowPlayingId = nowPlayingId,
@@ -267,8 +290,10 @@ private fun WaveFlowRoot() {
                                 onSongLongClick = { songToAdd = it },
                             )
                         }
+                    }
 
-                        composable(Routes.ALBUMS) {
+                    composable(Routes.ALBUMS) {
+                        gated {
                             AlbumsScreen(
                                 library = library,
                                 onAlbumClick = { navController.navigate(Routes.albumDetail(it.id)) },
@@ -276,8 +301,10 @@ private fun WaveFlowRoot() {
                                 bottomPadding = listBottomPadding,
                             )
                         }
+                    }
 
-                        composable(Routes.ARTISTS) {
+                    composable(Routes.ARTISTS) {
+                        gated {
                             ArtistsScreen(
                                 library = library,
                                 onArtistClick = { navController.navigate(Routes.artistDetail(it.id)) },
@@ -285,17 +312,19 @@ private fun WaveFlowRoot() {
                                 bottomPadding = listBottomPadding,
                             )
                         }
+                    }
 
-                        composable(
-                            route = Routes.ALBUM_DETAIL,
-                            arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
-                        ) { entry ->
-                            val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: return@composable
-                            // Le suivi de position recompose la racine toutes les
-                            // 500 ms : sans mémorisation, on refiltrerait toute la
-                            // bibliothèque à chaque fois.
-                            val songs = remember(library, albumId) { library.songsOfAlbum(albumId) }
+                    composable(
+                        route = Routes.ALBUM_DETAIL,
+                        arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
+                    ) { entry ->
+                        val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: return@composable
+                        // Le suivi de position recompose la racine toutes les
+                        // 500 ms : sans mémorisation, on refiltrerait toute la
+                        // bibliothèque à chaque fois.
+                        val songs = remember(library, albumId) { library.songsOfAlbum(albumId) }
 
+                        gated {
                             AlbumDetailScreen(
                                 album = library.album(albumId),
                                 songs = songs,
@@ -307,14 +336,16 @@ private fun WaveFlowRoot() {
                                 onSongLongClick = { songToAdd = it },
                             )
                         }
+                    }
 
-                        composable(
-                            route = Routes.ARTIST_DETAIL,
-                            arguments = listOf(navArgument(Routes.ARG_ARTIST_ID) { type = NavType.LongType }),
-                        ) { entry ->
-                            val artistId = entry.arguments?.getLong(Routes.ARG_ARTIST_ID) ?: return@composable
-                            val songs = remember(library, artistId) { library.songsOfArtist(artistId) }
+                    composable(
+                        route = Routes.ARTIST_DETAIL,
+                        arguments = listOf(navArgument(Routes.ARG_ARTIST_ID) { type = NavType.LongType }),
+                    ) { entry ->
+                        val artistId = entry.arguments?.getLong(Routes.ARG_ARTIST_ID) ?: return@composable
+                        val songs = remember(library, artistId) { library.songsOfArtist(artistId) }
 
+                        gated {
                             ArtistDetailScreen(
                                 artist = library.artist(artistId),
                                 songs = songs,
@@ -326,8 +357,19 @@ private fun WaveFlowRoot() {
                                 onSongLongClick = { songToAdd = it },
                             )
                         }
+                    }
 
-                        composable(Routes.PLAYLISTS) {
+                    composable(Routes.SERVER) {
+                        ServerScreen(
+                            state = serverState,
+                            onConnect = serverViewModel::connect,
+                            onDisconnect = serverViewModel::disconnect,
+                            bottomPadding = listBottomPadding,
+                        )
+                    }
+
+                    composable(Routes.PLAYLISTS) {
+                        gated {
                             PlaylistsScreen(
                                 state = playlistsState,
                                 onPlaylistClick = { navController.navigate(Routes.playlistDetail(it.id)) },
@@ -335,14 +377,16 @@ private fun WaveFlowRoot() {
                                 bottomPadding = listBottomPadding,
                             )
                         }
+                    }
 
-                        composable(
-                            route = Routes.PLAYLIST_DETAIL,
-                            arguments = listOf(navArgument(Routes.ARG_PLAYLIST_ID) { type = NavType.LongType }),
-                        ) { entry ->
-                            val playlistId = entry.arguments?.getLong(Routes.ARG_PLAYLIST_ID) ?: return@composable
-                            val songs = playlistsState.songs(playlistId)
+                    composable(
+                        route = Routes.PLAYLIST_DETAIL,
+                        arguments = listOf(navArgument(Routes.ARG_PLAYLIST_ID) { type = NavType.LongType }),
+                    ) { entry ->
+                        val playlistId = entry.arguments?.getLong(Routes.ARG_PLAYLIST_ID) ?: return@composable
+                        val songs = playlistsState.songs(playlistId)
 
+                        gated {
                             PlaylistDetailScreen(
                                 playlist = playlistsState.playlist(playlistId),
                                 songs = songs,
@@ -358,48 +402,48 @@ private fun WaveFlowRoot() {
                             )
                         }
                     }
+                }
 
-                    // Posée par-dessus le NavHost plutôt qu'à sa place : la
-                    // pile de navigation reste intacte, et fermer la recherche
-                    // rend l'écran exactement tel qu'il était.
-                    if (searchActive) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.background,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            SearchScreen(
-                                query = searchQuery,
-                                results = searchResults,
-                                nowPlayingId = nowPlayingId,
-                                // La file de lecture est la liste affichée :
-                                // enchaîner sur les résultats suivants est le
-                                // comportement attendu.
-                                onSongClick = { playerViewModel.playFrom(searchResults.songs, it) },
-                                onAlbumClick = {
-                                    closeSearch()
-                                    navController.navigate(Routes.albumDetail(it.id))
-                                },
-                                onArtistClick = {
-                                    closeSearch()
-                                    navController.navigate(Routes.artistDetail(it.id))
-                                },
-                                bottomPadding = listBottomPadding,
-                                onSongLongClick = { songToAdd = it },
-                            )
-                        }
-                    }
-
-                    // Inutile de le composer sous le lecteur plein écran, qui
-                    // le recouvre entièrement.
-                    if (!playerExpanded) {
-                        MiniPlayer(
-                            state = playerState,
-                            onExpand = { playerExpanded = true },
-                            onTogglePlayPause = playerViewModel::togglePlayPause,
-                            onSkipNext = playerViewModel::skipNext,
-                            modifier = Modifier.align(Alignment.BottomCenter),
+                // Posée par-dessus le NavHost plutôt qu'à sa place : la
+                // pile de navigation reste intacte, et fermer la recherche
+                // rend l'écran exactement tel qu'il était.
+                if (searchActive) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        SearchScreen(
+                            query = searchQuery,
+                            results = searchResults,
+                            nowPlayingId = nowPlayingId,
+                            // La file de lecture est la liste affichée :
+                            // enchaîner sur les résultats suivants est le
+                            // comportement attendu.
+                            onSongClick = { playerViewModel.playFrom(searchResults.songs, it) },
+                            onAlbumClick = {
+                                closeSearch()
+                                navController.navigate(Routes.albumDetail(it.id))
+                            },
+                            onArtistClick = {
+                                closeSearch()
+                                navController.navigate(Routes.artistDetail(it.id))
+                            },
+                            bottomPadding = listBottomPadding,
+                            onSongLongClick = { songToAdd = it },
                         )
                     }
+                }
+
+                // Inutile de le composer sous le lecteur plein écran, qui
+                // le recouvre entièrement.
+                if (!playerExpanded) {
+                    MiniPlayer(
+                        state = playerState,
+                        onExpand = { playerExpanded = true },
+                        onTogglePlayPause = playerViewModel::togglePlayPause,
+                        onSkipNext = playerViewModel::skipNext,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
             }
         }
@@ -464,6 +508,7 @@ private fun currentScreenTitle(
     Routes.ALBUMS -> "Albums"
     Routes.ARTISTS -> "Artistes"
     Routes.PLAYLISTS -> "Playlists"
+    Routes.SERVER -> "Serveur"
     Routes.ALBUM_DETAIL -> albumId?.let { library.album(it)?.title } ?: "Album"
     Routes.ARTIST_DETAIL -> artistId?.let { library.artist(it)?.name } ?: "Artiste"
     Routes.PLAYLIST_DETAIL -> playlistName ?: "Playlist"

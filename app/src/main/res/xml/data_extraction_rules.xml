@@ -1,19 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sauvegarde et transfert d'appareil, Android 12 et suivants.
+  https://developer.android.com/about/versions/12/backup-restore#xml-changes
+
+  Les jetons de session serveur sont exclus des deux : ils sont stockés en clair,
+  et un jeton de rafraîchissement restauré ailleurs y ouvrirait le compte. La
+  reconnexion redemande simplement le mot de passe.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="datastore/session_serveur.preferences_pb" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="datastore/session_serveur.preferences_pb" />
     </device-transfer>
-    -->
 </data-extraction-rules>

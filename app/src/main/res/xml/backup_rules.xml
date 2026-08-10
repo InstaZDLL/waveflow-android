@@ -1,13 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sauvegarde automatique, Android 11 et antérieurs.
+  https://developer.android.com/guide/topics/data/autobackup
 -->
 <full-backup-content>
     <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+      Les jetons de session serveur ne sortent pas de l'appareil : ils sont
+      stockés en clair, et un jeton de rafraîchissement restauré sur un autre
+      appareil y ouvrirait le compte.
+    -->
+    <exclude domain="file" path="datastore/session_serveur.preferences_pb" />
 </full-backup-content>
