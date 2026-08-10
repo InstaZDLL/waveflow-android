@@ -1,8 +1,14 @@
 package app.waveflow.testing
 
 import app.waveflow.data.remote.AuthTokens
+import app.waveflow.data.remote.CatalogApi
 import app.waveflow.data.remote.ServerApi
+import app.waveflow.data.remote.ServerException
 import app.waveflow.data.remote.SessionStore
+import app.waveflow.model.RemoteAlbum
+import app.waveflow.model.RemoteAlbumDetail
+import app.waveflow.model.RemoteArtist
+import app.waveflow.model.RemoteArtistDetail
 import app.waveflow.model.ServerSession
 import kotlinx.coroutines.CompletableDeferred
 
@@ -77,6 +83,180 @@ class FakeServerApi(
             expiresInSeconds = 900L,
         )
     }
+}
+
+/**
+ * Catalogue simulé.
+ *
+ * Retient ce qu'on lui a passé, et sait refuser un nombre donné d'appels avant
+ * d'accepter — ce qu'il faut pour éprouver le rejeu après renouvellement.
+ */
+class FakeCatalogApi(
+    private val failuresBeforeSuccess: Int = 0,
+    private val failure: Throwable? = null,
+    private val albums: List<RemoteAlbum> = emptyList(),
+    private val artists: List<RemoteArtist> = emptyList(),
+) : CatalogApi {
+
+    var calls = 0
+        private set
+    var lastServerUrl: String? = null
+        private set
+    var lastAccessToken: String? = null
+        private set
+    var lastPage: Pair<Int, Int>? = null
+        private set
+
+    override suspend fun albums(
+        serverUrl: String,
+        accessToken: String,
+        offset: Int,
+        limit: Int,
+    ): List<RemoteAlbum> {
+        record(serverUrl, accessToken, offset to limit)
+        return albums
+    }
+
+    override suspend fun artists(
+        serverUrl: String,
+        accessToken: String,
+        offset: Int,
+        limit: Int,
+    ): List<RemoteArtist> {
+        record(serverUrl, accessToken, offset to limit)
+        return artists
+    }
+
+    override suspend fun album(
+        serverUrl: String,
+        accessToken: String,
+        albumId: String,
+    ): RemoteAlbumDetail {
+        record(serverUrl, accessToken, null)
+        return RemoteAlbumDetail(
+            album = RemoteAlbum(albumId, "Album", null, null, null),
+            songs = emptyList(),
+        )
+    }
+
+    override suspend fun artist(
+        serverUrl: String,
+        accessToken: String,
+        artistId: String,
+    ): RemoteArtistDetail {
+        record(serverUrl, accessToken, null)
+        return RemoteArtistDetail(
+            artist = RemoteArtist(artistId, "Artiste", null),
+            albums = emptyList(),
+        )
+    }
+
+    private fun record(serverUrl: String, accessToken: String, page: Pair<Int, Int>?) {
+        calls++
+        lastServerUrl = serverUrl
+        lastAccessToken = accessToken
+        page?.let { lastPage = it }
+
+        failure?.let { throw it }
+        if (calls <= failuresBeforeSuccess) {
+            throw ServerException.Unauthorized("jeton refusé")
+        }
+    }
+}
+
+/**
+ * Catalogue simulé qui pagine pour de vrai.
+ *
+ * Découpe [albums] et [artists] selon l'offset et la limite reçus : une fixture
+ * qui rendrait toujours la même page ne prouverait rien de la pagination.
+ */
+class PagingCatalogApi(
+    private val albums: List<RemoteAlbum> = emptyList(),
+    private val artists: List<RemoteArtist> = emptyList(),
+    /** Numéro d'appel à partir duquel les listes échouent, 0 pour jamais. */
+    private var failFromCall: Int = 0,
+    private val detailFailure: Throwable? = null,
+    /**
+     * Si non nul, les listes attendent ce signal avant de rendre la main.
+     *
+     * Sans lui, un dispatcher non confiné termine chaque page avant que la
+     * suivante ne parte : aucune requête n'est jamais réellement en vol, et la
+     * garde contre le doublement ne peut pas être mise à l'épreuve.
+     */
+    private val gate: CompletableDeferred<Unit>? = null,
+    /** Même rôle que [gate], pour les détails. */
+    private val detailGate: CompletableDeferred<Unit>? = null,
+) : CatalogApi {
+
+    var albumCalls = 0
+        private set
+    var artistCalls = 0
+        private set
+
+    fun stopFailing() {
+        failFromCall = 0
+    }
+
+    override suspend fun albums(
+        serverUrl: String,
+        accessToken: String,
+        offset: Int,
+        limit: Int,
+    ): List<RemoteAlbum> {
+        albumCalls++
+        gate?.await()
+        failIfDue(albumCalls)
+        return albums.page(offset, limit)
+    }
+
+    override suspend fun artists(
+        serverUrl: String,
+        accessToken: String,
+        offset: Int,
+        limit: Int,
+    ): List<RemoteArtist> {
+        artistCalls++
+        gate?.await()
+        failIfDue(artistCalls)
+        return artists.page(offset, limit)
+    }
+
+    override suspend fun album(
+        serverUrl: String,
+        accessToken: String,
+        albumId: String,
+    ): RemoteAlbumDetail {
+        detailGate?.await()
+        detailFailure?.let { throw it }
+        return RemoteAlbumDetail(
+            album = albums.firstOrNull { it.id == albumId }
+                ?: RemoteAlbum(albumId, "Album", null, null, null),
+            songs = emptyList(),
+        )
+    }
+
+    override suspend fun artist(
+        serverUrl: String,
+        accessToken: String,
+        artistId: String,
+    ): RemoteArtistDetail {
+        detailGate?.await()
+        detailFailure?.let { throw it }
+        return RemoteArtistDetail(
+            artist = artists.firstOrNull { it.id == artistId }
+                ?: RemoteArtist(artistId, "Artiste", null),
+            albums = emptyList(),
+        )
+    }
+
+    private fun failIfDue(call: Int) {
+        if (failFromCall > 0 && call >= failFromCall) {
+            throw ServerException.Unreachable("coupure")
+        }
+    }
+
+    private fun <T> List<T>.page(offset: Int, limit: Int): List<T> =
+        drop(offset).take(limit)
 }
 
 /** Persistance en mémoire, qui retient ce qu'on lui a demandé d'écrire. */

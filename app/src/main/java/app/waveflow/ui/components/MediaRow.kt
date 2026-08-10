@@ -27,21 +27,25 @@ import androidx.compose.ui.unit.dp
  * une destination.
  *
  * @param artworkShape ronde pour un artiste, arrondie pour un album.
+ * @param onClick `null` pour une ligne purement informative. Rendre le clic
+ *   facultatif plutôt que d'en passer un vide : un `Modifier.clickable` inerte
+ *   annonce quand même la ligne comme actionnable à TalkBack, et l'ondulation
+ *   promet une navigation qui n'arrive pas.
  */
 @Composable
 fun MediaRow(
     artworkUri: Uri?,
     title: String,
     subtitle: String,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     artworkShape: Shape = RoundedCornerShape(6.dp),
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Artwork(

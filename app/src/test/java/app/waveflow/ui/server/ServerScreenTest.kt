@@ -39,13 +39,20 @@ class ServerScreenTest {
         accessExpiresAtMs = 0L,
     )
 
+    /** Formulaire de connexion : l'écran affiché tant qu'aucune session n'existe. */
     private fun afficher(state: ServerUiState) {
         compose.setContent {
-            ServerScreen(
+            ServerSignInScreen(
                 state = state,
                 onConnect = { url, user, password -> connexions += Triple(url, user, password) },
-                onDisconnect = { deconnexions++ },
             )
+        }
+    }
+
+    /** Écran de compte : atteint depuis la barre du haut, une fois connecté. */
+    private fun afficherCompte() {
+        compose.setContent {
+            ServerAccountScreen(session = session, onDisconnect = { deconnexions++ })
         }
     }
 
@@ -116,8 +123,8 @@ class ServerScreenTest {
     }
 
     @Test
-    fun `une session ouverte remplace le formulaire par le compte`() {
-        afficher(ServerUiState(session = session))
+    fun `l'ecran de compte montre l'identifiant et l'adresse`() {
+        afficherCompte()
 
         compose.onNodeWithText("admin").assertIsDisplayed()
         compose.onNodeWithText("https://musique.test").assertIsDisplayed()
@@ -129,7 +136,7 @@ class ServerScreenTest {
     @Test
     fun `aucun jeton n'est affiche a l'ecran`() {
         // Ils passent par l'état, ils ne doivent pas se retrouver lisibles.
-        afficher(ServerUiState(session = session))
+        afficherCompte()
 
         assertEquals(0, compose.occurrencesDe("wfa_1"))
         assertEquals(0, compose.occurrencesDe("wfr_1"))
@@ -137,7 +144,7 @@ class ServerScreenTest {
 
     @Test
     fun `le bouton de deconnexion previent l'appelant`() {
-        afficher(ServerUiState(session = session))
+        afficherCompte()
 
         compose.onNodeWithText("Se déconnecter").performClick()
 

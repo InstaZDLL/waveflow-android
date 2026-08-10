@@ -8,8 +8,11 @@ import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
 import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
+import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.DataStoreSessionStore
+import app.waveflow.data.remote.HttpCatalogApi
 import app.waveflow.data.remote.HttpServerApi
+import app.waveflow.data.remote.ServerHttp
 import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
@@ -65,6 +68,12 @@ class AppContainer(app: Application) {
     fun createPlaybackController(): PlaybackController = Media3PlaybackController(appContext)
 
     /**
+     * Un seul transport pour tous les appels serveur : un pool de connexions
+     * partagé, et surtout un seul endroit qui classe les erreurs.
+     */
+    private val serverHttp = ServerHttp()
+
+    /**
      * Session serveur, indépendante de la bibliothèque locale : elle n'a besoin
      * ni de la permission audio ni du MediaStore.
      *
@@ -72,9 +81,14 @@ class AppContainer(app: Application) {
      * sessions ; `Build.MODEL` est ce que l'utilisateur reconnaîtra.
      */
     val serverSessionRepository = ServerSessionRepository(
-        api = HttpServerApi(),
+        api = HttpServerApi(serverHttp),
         store = DataStoreSessionStore(app),
         deviceName = Build.MODEL ?: "Android",
+    )
+
+    val catalogRepository = CatalogRepository(
+        api = HttpCatalogApi(serverHttp),
+        sessionRepository = serverSessionRepository,
     )
 
     /** Relit la session persistée, sans bloquer le démarrage. */

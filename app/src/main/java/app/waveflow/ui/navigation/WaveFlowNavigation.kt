@@ -1,5 +1,6 @@
 package app.waveflow.ui.navigation
 
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
@@ -29,11 +30,29 @@ object Routes {
     const val ARTIST_DETAIL = "$ARTISTS/{$ARG_ARTIST_ID}"
     const val PLAYLIST_DETAIL = "$PLAYLISTS/{$ARG_PLAYLIST_ID}"
 
+    /** Détails distants, sous la section Serveur : leurs clés sont des UUID. */
+    private const val SERVER_ALBUMS = "$SERVER/albums"
+    private const val SERVER_ARTISTS = "$SERVER/artists"
+
+    const val SERVER_ALBUM_DETAIL = "$SERVER_ALBUMS/{$ARG_ALBUM_ID}"
+    const val SERVER_ARTIST_DETAIL = "$SERVER_ARTISTS/{$ARG_ARTIST_ID}"
+    const val SERVER_ACCOUNT = "$SERVER/compte"
+
     fun albumDetail(albumId: Long): String = "$ALBUMS/$albumId"
 
     fun artistDetail(artistId: Long): String = "$ARTISTS/$artistId"
 
     fun playlistDetail(playlistId: Long): String = "$PLAYLISTS/$playlistId"
+
+    /**
+     * Les identifiants distants sont encodés, contrairement aux locaux qui sont
+     * des entiers : un `/` dans un identifiant scinderait la route, qui ne
+     * correspondrait alors à aucune destination. La navigation les décode
+     * d'elle-même à la lecture de l'argument.
+     */
+    fun serverAlbumDetail(albumId: String): String = "$SERVER_ALBUMS/${Uri.encode(albumId)}"
+
+    fun serverArtistDetail(artistId: String): String = "$SERVER_ARTISTS/${Uri.encode(artistId)}"
 }
 
 /**

@@ -4,8 +4,8 @@ Native Android client for [WaveFlow](https://github.com/InstaZDLL/WaveFlow) — 
 local-first music player. Kotlin + Jetpack Compose + Media3.
 
 > **Status:** local-first. Plays, browses, searches and organises the device's
-> own files. A WaveFlow server can be signed into; its catalogue is not exposed
-> yet — see [Server](#server) for what is and isn't wired up.
+> own files. A WaveFlow server can be signed into and its catalogue browsed;
+> nothing streams from it yet — see [Server](#server).
 
 ## Stack
 
@@ -42,7 +42,7 @@ app/src/main/java/app/waveflow/
 │  ├─ PlaylistRepository.kt         Local playlist abstraction
 │  ├─ RoomPlaylistRepository.kt     Room-backed implementation
 │  ├─ local/                        Room entities, DAO, database
-│  └─ remote/                       WaveFlow server: auth API, session, tokens
+│  └─ remote/                       WaveFlow server: HTTP, auth, session, catalogue
 ├─ playback/
 │  ├─ PlaybackService.kt          Media3 MediaSessionService (ExoPlayer)
 │  ├─ PlaybackController.kt       Playback facade + PlaybackState
@@ -76,7 +76,8 @@ app/src/main/java/app/waveflow/
    ├─ server/
    │  ├─ ServerViewModel.kt       Sign in / out, error mapping
    │  ├─ ServerUiState.kt         Session + progress + last failure
-   │  └─ ServerScreen.kt          Sign-in form, then the account
+   │  ├─ ServerScreen.kt          Sign-in form and account screens
+   │  └─ catalog/                 Remote albums / artists, paginated
    ├─ permission/
    │  └─ AudioPermissionGate.kt   Grant / deny / permanently-denied flow
    ├─ player/
@@ -134,6 +135,9 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `ServerSessionRepositoryTest` | token refresh and rotation, session lifetime, sign-out |
 | `ServerViewModelTest` | validation, error wording, connection progress |
 | `ServerScreenTest` | sign-in form, connected account, no token on screen |
+| `HttpCatalogApiTest` | paging params, flattened details, track ordering |
+| `CatalogRepositoryTest` | token plumbing, retry after a refused token |
+| `CatalogViewModelTest` | paging, end of list, in-flight guard, clear on sign-out |
 
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
 
@@ -152,7 +156,7 @@ into `DragState` and tested there instead.
 - [x] Search across songs, albums and artists
 - [x] Compose UI tests (Robolectric, no device)
 - [x] Sign in to a WaveFlow server (session, refresh, sign-out)
-- [ ] Browse the server catalogue
+- [x] Browse the server catalogue (albums, artists, paginated)
 - [ ] Stream from the server
 - [ ] Server user-data sync (playlists, favorites, ratings) — see below
 - [ ] Android Auto (Media3 `MediaLibraryService`)
@@ -160,11 +164,21 @@ into `DragState` and tested there instead.
 ## Server
 
 The **Server** tab signs in to a [WaveFlow
-Server](https://github.com/InstaZDLL/waveflow-server) and keeps the session
-alive. That is all it does so far: nothing of the server's catalogue is shown,
-and nothing of the local library is sent anywhere. The two sources stay
-separate by design — the tab is its own section rather than a filter over the
-existing screens.
+Server](https://github.com/InstaZDLL/waveflow-server), keeps the session alive
+and browses its catalogue — albums, artists, and what each contains. Playback
+is not wired up yet, so tapping a remote track does nothing. Nothing of the
+local library is sent anywhere.
+
+The two sources stay separate by design: the tab is its own section rather than
+a filter over the existing screens, and `RemoteAlbum` / `RemoteArtist` /
+`RemoteSong` are distinct types from their local counterparts. Their ids are
+UUIDs rather than `MediaStore` integers, and nothing can currently say that a
+remote track is the same file as a local one.
+
+Listing endpoints return a bare array — no total, no cursor — so the end of a
+list is inferred from a page shorter than requested. Cover art is not shown:
+the v2 API exposes an `artwork_hash` but no endpoint serving the image; only
+the Subsonic facade does, behind its own separate credential.
 
 Sign-in posts to `/api/v2/auth/login` with the device model as the session
 name, so the server lists it among the account's devices. The access token
