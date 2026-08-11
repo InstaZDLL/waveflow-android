@@ -142,8 +142,8 @@ private fun WaveFlowRoot() {
         searchViewModel.clear()
     }
 
-    val nowPlayingId = playerState.song?.id
-    val hasTrack = playerState.song != null
+    val nowPlayingId = playerState.track?.localSongId
+    val hasTrack = playerState.track != null
 
     // Les écritures de playlist qui échouent se signalent une fois, sans
     // remplacer le contenu de l'écran.
@@ -443,6 +443,14 @@ private fun WaveFlowRoot() {
 
                         RemoteAlbumDetailScreen(
                             state = detail,
+                            nowPlayingMediaId = playerState.track?.mediaId,
+                            // La file de lecture est l'album affiché, comme
+                            // pour un album local.
+                            onSongClick = { song ->
+                                detail.value?.songs?.let {
+                                    playerViewModel.playRemoteFrom(it, song)
+                                }
+                            },
                             onRetry = { catalogViewModel.openAlbum(albumId) },
                             bottomPadding = listBottomPadding,
                         )

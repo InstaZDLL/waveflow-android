@@ -30,6 +30,16 @@ class CatalogRepository(
         authorized { url, token -> api.artist(url, token, artistId) }
 
     /**
+     * URL de diffusion d'une piste, valable une heure côté serveur.
+     *
+     * Demandée au moment de lire, et non à la constitution de la file : une
+     * longue file dépasserait l'échéance avant d'atteindre ses derniers
+     * morceaux.
+     */
+    suspend fun streamUrl(trackId: String): String =
+        authorized { url, token -> api.streamTicket(url, token, trackId) }
+
+    /**
      * Exécute [call] avec un jeton valide, en réessayant une fois sur refus.
      *
      * [ServerSessionRepository.validAccessToken] renouvelle déjà avant

@@ -123,6 +123,61 @@ class HttpCatalogApiTest {
     }
 
     @Test
+    fun `le ticket de diffusion devient une URL absolue`() = runTest {
+        server.enqueue(MockResponse().setBody(TICKET_BODY))
+
+        val streamUrl = api.streamTicket(url(), "wfa_1", "c07f8d98")
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/v2/tracks/c07f8d98/stream-ticket", request.path)
+        assertEquals("Bearer wfa_1", request.getHeader("Authorization"))
+
+        assertEquals("${url()}/api/v2/stream/VkdLrczM", streamUrl)
+    }
+
+    @Test
+    fun `le prefixe de proxy est conserve dans l'URL de diffusion`() = runTest {
+        // Le serveur rend `/api/v2/stream/…` sans savoir qu'un proxy le préfixe.
+        // Résoudre ce chemin contre la racine effacerait le préfixe, et l'URL
+        // n'atteindrait plus le serveur.
+        server.enqueue(MockResponse().setBody(TICKET_BODY))
+
+        val streamUrl = api.streamTicket("${url()}/musique", "wfa_1", "c07f8d98")
+
+        assertEquals("${url()}/musique/api/v2/stream/VkdLrczM", streamUrl)
+    }
+
+    @Test
+    fun `un ticket en reference reseau est refuse`() = runTest {
+        // `//hôte/…` emprunte le schéma courant et change d'hôte sans en avoir
+        // l'air : la lecture partirait ailleurs que sur le serveur où
+        // l'utilisateur s'est authentifié.
+        server.enqueue(
+            MockResponse().setBody("""{"url":"//ailleurs.test/api/v2/stream/x","expires_at":0}"""),
+        )
+
+        val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98") }
+
+        assertTrue(error.toString(), error is ServerException.Unexpected)
+    }
+
+    @Test
+    fun `un ticket en URL complete est refuse`() = runTest {
+        // Même conclusion par un autre chemin : le contrat est un chemin du
+        // serveur, pas une URL qu'il choisirait librement.
+        server.enqueue(
+            MockResponse().setBody(
+                """{"url":"https://ailleurs.test/api/v2/stream/x","expires_at":0}""",
+            ),
+        )
+
+        val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98") }
+
+        assertTrue(error.toString(), error is ServerException.Unexpected)
+    }
+
+    @Test
     fun `un jeton refuse remonte comme tel`() = runTest {
         server.enqueue(
             MockResponse()
@@ -251,6 +306,11 @@ class HttpCatalogApiTest {
                 }
               ]
             }
+        """.trimIndent()
+
+        /** L'URL est relative au serveur, c'est ce que rend `stream-ticket`. */
+        val TICKET_BODY = """
+            {"url": "/api/v2/stream/VkdLrczM", "expires_at": 1786395364096}
         """.trimIndent()
 
         val ARTIST_DETAIL_BODY = """

@@ -69,6 +69,21 @@ class HttpCatalogApi(
         )
     }
 
+    override suspend fun streamTicket(
+        serverUrl: String,
+        accessToken: String,
+        trackId: String,
+    ): String {
+        val ticket = http.post(
+            serverUrl = serverUrl,
+            path = "$TRACKS/$trackId/stream-ticket",
+            body = "{}",
+            accessToken = accessToken,
+        ).decode<StreamTicketResponse>()
+
+        return http.absoluteUrl(serverUrl, ticket.url)
+    }
+
     private fun pageQuery(offset: Int, limit: Int) = mapOf(
         "offset" to offset.toString(),
         "limit" to limit.toString(),
@@ -83,6 +98,7 @@ class HttpCatalogApi(
     private companion object {
         const val ALBUMS = "api/v2/albums"
         const val ARTISTS = "api/v2/artists"
+        const val TRACKS = "api/v2/tracks"
 
         /** Sans numéro de piste, on retombe sur le titre plutôt que sur rien. */
         val BY_TRACK_THEN_TITLE = compareBy<app.waveflow.model.RemoteSong>(

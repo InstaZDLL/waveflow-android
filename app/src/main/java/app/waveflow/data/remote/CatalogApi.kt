@@ -35,6 +35,16 @@ interface CatalogApi {
 
     /** `GET /api/v2/artists/{id}` : l'artiste et ses albums. */
     suspend fun artist(serverUrl: String, accessToken: String, artistId: String): RemoteArtistDetail
+
+    /**
+     * `POST /api/v2/tracks/{id}/stream-ticket`.
+     *
+     * Rend une URL de diffusion **absolue**, qui ne demande aucun en-tête
+     * d'autorisation — le serveur la rend relative, elle est résolue ici contre
+     * [serverUrl]. C'est ce qui permet de la confier telle quelle à ExoPlayer,
+     * y compris pour les requêtes de plage d'un déplacement dans le morceau.
+     */
+    suspend fun streamTicket(serverUrl: String, accessToken: String, trackId: String): String
 }
 
 /**

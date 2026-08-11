@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
@@ -90,6 +91,16 @@ class Media3PlaybackController(
         ctrl.play()
     }
 
+    override fun playRemote(songs: List<RemoteSong>, startIndex: Int) {
+        val ctrl = controller ?: return
+        if (songs.isEmpty()) return
+
+        ctrl.shuffleModeEnabled = false
+        ctrl.setMediaItems(songs.map { it.toMediaItem() }, startIndex.coerceIn(songs.indices), 0L)
+        ctrl.prepare()
+        ctrl.play()
+    }
+
     override fun playShuffled(songs: List<Song>) {
         val ctrl = controller ?: return
         if (songs.isEmpty()) return
@@ -145,7 +156,7 @@ class Media3PlaybackController(
     private fun syncFrom(player: Player) {
         _state.value = PlaybackState(
             isConnected = true,
-            currentSongId = player.currentMediaItem?.songId,
+            current = player.currentMediaItem?.toPlayingTrack(),
             isPlaying = player.isPlaying,
             positionMs = player.currentPosition.coerceAtLeast(0L),
             durationMs = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0L) ?: 0L,

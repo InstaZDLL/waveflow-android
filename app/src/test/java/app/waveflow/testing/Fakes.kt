@@ -5,6 +5,7 @@ import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
 import app.waveflow.model.Playlist
 import app.waveflow.model.PlaylistEntry
+import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackState
@@ -39,6 +40,25 @@ fun song(
     albumId = albumId,
     durationMs = durationMs,
     artworkUri = null,
+)
+
+/** Fabrique de morceaux distants pour les tests. */
+fun remoteSong(
+    id: String,
+    title: String = "Titre $id",
+    artist: String? = "Artiste $id",
+    album: String? = "Album $id",
+    albumId: String? = "album-$id",
+    trackNumber: Int? = 1,
+    durationMs: Long = 60_000L,
+): RemoteSong = RemoteSong(
+    id = id,
+    title = title,
+    album = album,
+    albumId = albumId,
+    artist = artist,
+    trackNumber = trackNumber,
+    durationMs = durationMs,
 )
 
 class FakeMusicRepository(
@@ -120,6 +140,7 @@ class FakePlaybackController : PlaybackController {
     var released = false
         private set
     val playCalls = mutableListOf<Pair<List<Song>, Int>>()
+    val playRemoteCalls = mutableListOf<Pair<List<RemoteSong>, Int>>()
     val playShuffledCalls = mutableListOf<List<Song>>()
 
     override fun connect() {
@@ -129,6 +150,10 @@ class FakePlaybackController : PlaybackController {
 
     override fun play(songs: List<Song>, startIndex: Int) {
         playCalls += songs to startIndex
+    }
+
+    override fun playRemote(songs: List<RemoteSong>, startIndex: Int) {
+        playRemoteCalls += songs to startIndex
     }
 
     override fun playShuffled(songs: List<Song>) {

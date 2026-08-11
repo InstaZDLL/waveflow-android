@@ -133,6 +133,29 @@ class ServerHttp(
             .build()
     }
 
+    /**
+     * Résout un chemin rendu par le serveur contre l'adresse de celui-ci.
+     *
+     * Le ticket de diffusion arrive sous la forme `/api/v2/stream/<ticket>`.
+     * Le passer à `resolve` écraserait le chemin de base : un serveur derrière
+     * un proxy qui le préfixe verrait son préfixe disparaître. Il est donc
+     * traité comme n'importe quel chemin d'API, par la même construction que
+     * les appels — qui, elle, conserve le préfixe.
+     *
+     * Seul un chemin absolu du serveur est accepté. Une URL complète ou une
+     * référence réseau (`//hôte/…`) désignerait un autre hôte que celui où
+     * l'utilisateur s'est authentifié.
+     */
+    fun absoluteUrl(serverUrl: String, path: String): String {
+        if (!path.startsWith("/") || path.startsWith("//")) {
+            throw ServerException.Unexpected("Chemin de diffusion inattendu : $path")
+        }
+
+        return serverUrl
+            .toApiUrl(path = path.removePrefix("/"), pathSegment = null, query = emptyMap())
+            .toString()
+    }
+
     private fun Response.toException(): ServerException {
         // Le serveur répond `{code, message}` sur ses erreurs métier, mais un
         // corps mal formé lui fait renvoyer du texte brut : lire le message

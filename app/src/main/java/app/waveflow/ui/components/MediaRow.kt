@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.dp
  * une destination.
  *
  * @param artworkShape ronde pour un artiste, arrondie pour un album.
+ * @param titleColor teintée pour signaler la ligne en cours de lecture, comme
+ *   le fait [SongRow] dans les listes locales.
  * @param onClick `null` pour une ligne purement informative. Rendre le clic
  *   facultatif plutôt que d'en passer un vide : un `Modifier.clickable` inerte
  *   annonce quand même la ligne comme actionnable à TalkBack, et l'ondulation
@@ -40,6 +43,7 @@ fun MediaRow(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     artworkShape: Shape = RoundedCornerShape(6.dp),
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -58,7 +62,7 @@ fun MediaRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
