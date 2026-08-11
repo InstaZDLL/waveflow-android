@@ -149,11 +149,27 @@ class HttpCatalogApiTest {
     }
 
     @Test
-    fun `un ticket qui designe un autre hote est refuse`() = runTest {
-        // Une URL complète ou une référence réseau enverrait la lecture ailleurs
-        // que sur le serveur où l'utilisateur s'est authentifié.
+    fun `un ticket en reference reseau est refuse`() = runTest {
+        // `//hôte/…` emprunte le schéma courant et change d'hôte sans en avoir
+        // l'air : la lecture partirait ailleurs que sur le serveur où
+        // l'utilisateur s'est authentifié.
         server.enqueue(
             MockResponse().setBody("""{"url":"//ailleurs.test/api/v2/stream/x","expires_at":0}"""),
+        )
+
+        val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98") }
+
+        assertTrue(error.toString(), error is ServerException.Unexpected)
+    }
+
+    @Test
+    fun `un ticket en URL complete est refuse`() = runTest {
+        // Même conclusion par un autre chemin : le contrat est un chemin du
+        // serveur, pas une URL qu'il choisirait librement.
+        server.enqueue(
+            MockResponse().setBody(
+                """{"url":"https://ailleurs.test/api/v2/stream/x","expires_at":0}""",
+            ),
         )
 
         val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98") }
