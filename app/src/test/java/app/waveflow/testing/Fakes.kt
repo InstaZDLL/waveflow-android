@@ -51,6 +51,7 @@ fun remoteSong(
     albumId: String? = "album-$id",
     trackNumber: Int? = 1,
     durationMs: Long = 60_000L,
+    artworkUri: Uri? = null,
 ): RemoteSong = RemoteSong(
     id = id,
     title = title,
@@ -59,6 +60,7 @@ fun remoteSong(
     artist = artist,
     trackNumber = trackNumber,
     durationMs = durationMs,
+    artworkUri = artworkUri,
 )
 
 class FakeMusicRepository(

@@ -141,6 +141,8 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `CatalogViewModelTest` | paging, end of list, in-flight guard, clear on sign-out |
 | `MediaItemMapperTest` | local vs remote track identity, unreachable marker URI |
 | `RemoteStreamResolverTest` | ticket swap, local passthrough, DataSpec preserved |
+| `ArtworkUrlsTest` | URL only when a cover exists, proxy prefix, invalid address |
+| `ServerImageAuthInterceptorTest` | signing scope, third-party host, refresh on 401 |
 
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
 
@@ -186,9 +188,13 @@ and a long queue would outlast it before reaching its last tracks. A
 player and one queue mechanism.
 
 Listing endpoints return a bare array — no total, no cursor — so the end of a
-list is inferred from a page shorter than requested. Cover art is not shown:
-the v2 API exposes an `artwork_hash` but no endpoint serving the image; only
-the Subsonic facade does, behind its own separate credential.
+list is inferred from a page shorter than requested.
+
+Cover art comes from `/api/v2/artwork/{id}`, behind the same bearer as the rest
+of the native API. Coil knows nothing about the session, so an interceptor signs
+those requests — and only those: a host other than the connected server is never
+handed the token. A URL is built only when the payload carries an
+`artwork_hash`, otherwise every coverless row would cost a 404.
 
 Sign-in posts to `/api/v2/auth/login` with the device model as the session
 name, so the server lists it among the account's devices. The access token

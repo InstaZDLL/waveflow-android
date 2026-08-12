@@ -119,12 +119,7 @@ class ServerHttp(
         pathSegment: String?,
         query: Map<String, String>,
     ): HttpUrl {
-        val trimmed = trim().trimEnd('/')
-        if (trimmed.isEmpty()) throw ServerException.Rejected("Adresse du serveur vide.")
-
-        val absolute = if (trimmed.contains("://")) trimmed else "https://$trimmed"
-        val base = absolute.toHttpUrlOrNull()
-            ?: throw ServerException.Rejected("Adresse du serveur invalide : $this")
+        val base = parseBase(this)
 
         return base.newBuilder()
             .addPathSegments(path)
@@ -173,6 +168,22 @@ class ServerHttp(
     }
 
     companion object {
+        /**
+         * Normalise l'adresse saisie par l'utilisateur.
+         *
+         * Le schéma est le seul ajout : `192.168.1.10:4533` seul n'est pas une
+         * URL pour OkHttp alors que c'est ce qu'on tape. Exposée pour que la
+         * signature des requêtes d'images compare le même hôte que les appels.
+         */
+        fun parseBase(serverUrl: String): HttpUrl {
+            val trimmed = serverUrl.trim().trimEnd('/')
+            if (trimmed.isEmpty()) throw ServerException.Rejected("Adresse du serveur vide.")
+
+            val absolute = if (trimmed.contains("://")) trimmed else "https://$trimmed"
+            return absolute.toHttpUrlOrNull()
+                ?: throw ServerException.Rejected("Adresse du serveur invalide : $serverUrl")
+        }
+
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         /**

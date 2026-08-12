@@ -62,7 +62,7 @@ class CatalogViewModelTest {
     }
 
     private fun albums(count: Int): List<RemoteAlbum> =
-        (1..count).map { RemoteAlbum("id-$it", "Album $it", "Aurore", "artiste-1", null) }
+        (1..count).map { RemoteAlbum("id-$it", "Album $it", "Aurore", "artiste-1", null, null) }
 
     @Test
     fun `une session ouverte declenche la premiere page`() =
