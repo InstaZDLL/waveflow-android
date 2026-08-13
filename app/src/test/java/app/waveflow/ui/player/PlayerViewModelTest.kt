@@ -92,6 +92,9 @@ class PlayerViewModelTest {
 
         assertEquals(listOf(remoteSongs), controller.playRemoteShuffledCalls)
         assertTrue("la file locale ne doit pas être touchée", controller.playShuffledCalls.isEmpty())
+        // Ni lecture ordonnée en plus : elle poserait la file une seconde fois
+        // et l'emporterait, rendant le bouton Aléatoire sans effet.
+        assertTrue("aucune lecture ordonnée distante", controller.playRemoteCalls.isEmpty())
     }
 
     @Test
