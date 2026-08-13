@@ -362,6 +362,15 @@ class HttpCatalogApiTest {
             ]
         """.trimIndent()
 
+        /**
+         * Un artiste avec pochette.
+         *
+         * Le serveur n'en produit aucun aujourd'hui — son scanner ne peuple pas
+         * `artist.artwork_hash` — mais la colonne existe, la requête la
+         * sélectionne, et la route artwork autorise déjà un hachage porté par un
+         * artiste. Figer l'absence ici ferait échouer ce test le jour où le
+         * scanner s'y met, pour un comportement pourtant juste.
+         */
         val ARTISTS_WITH_ARTWORK = """
             [
               {
