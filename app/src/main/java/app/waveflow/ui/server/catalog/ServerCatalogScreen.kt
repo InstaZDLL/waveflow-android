@@ -14,7 +14,9 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -230,10 +232,19 @@ private fun RemoteSearchResultsList(
             )
         }
 
-        else -> LazyColumn(
-            contentPadding = PaddingValues(bottom = bottomPadding),
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        else -> {
+            val listState = rememberLazyListState()
+
+            // Une nouvelle requête donne une autre liste : rester au milieu de
+            // l'ancienne ferait manquer les premiers résultats, ceux que le
+            // serveur juge les plus pertinents.
+            LaunchedEffect(state.query.trim()) { listState.scrollToItem(0) }
+
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(bottom = bottomPadding),
+                modifier = Modifier.fillMaxSize(),
+            ) {
             items(state.results.songs, key = { "song-${it.id}" }) { song ->
                 MediaRow(
                     artworkUri = song.artworkUri,
@@ -258,6 +269,7 @@ private fun RemoteSearchResultsList(
                     onClick = { onArtistClick(artist) },
                     artworkShape = CircleShape,
                 )
+            }
             }
         }
     }

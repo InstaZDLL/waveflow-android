@@ -15,12 +15,11 @@ import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteSearchResults
 import app.waveflow.model.ServerSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
@@ -38,7 +37,7 @@ import kotlinx.coroutines.launch
  * Les pages ne sont pas conservées à la déconnexion : elles appartiennent à un
  * compte, et l'écran suivant pourrait être celui d'un autre.
  */
-@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class CatalogViewModel(
     private val catalogRepository: CatalogRepository,
     session: StateFlow<ServerSession>,
@@ -83,11 +82,9 @@ class CatalogViewModel(
         // Contrairement à la recherche locale, qui filtre en mémoire à chaque
         // frappe, celle-ci part sur le réseau : sans délai de grâce, taper
         // « écho » lancerait quatre requêtes dont trois inutiles.
-        // `flatMapLatest` abandonne la précédente dès qu'une frappe arrive.
         _search
             .map { it.query.trim() }
             .distinctUntilChanged()
-            .debounce { if (it.isBlank()) 0L else SEARCH_DEBOUNCE_MS }
             .flatMapLatest { query -> searchFlow(query) }
             .onEach { outcome -> _search.update { outcome(it) } }
             .launchIn(viewModelScope)
@@ -106,6 +103,15 @@ class CatalogViewModel(
      *
      * Renvoyer des transformations plutôt que des états complets évite d'écraser
      * la requête que l'utilisateur continue de taper pendant l'appel.
+     *
+     * Le délai de grâce est **dans** ce flux, et non avant `flatMapLatest` :
+     * placé avant, il retarderait aussi l'arrivée de la nouvelle requête, et la
+     * précédente continuerait de courir pendant ce temps — jusqu'à rendre des
+     * résultats périmés sous une requête déjà changée. Ici, une frappe annule
+     * immédiatement l'attente comme l'appel en cours.
+     *
+     * Une requête vide n'attend pas : effacer le champ doit vider l'écran tout
+     * de suite.
      */
     private fun searchFlow(query: String): Flow<(RemoteSearchState) -> RemoteSearchState> = flow {
         if (query.isBlank()) {
@@ -113,6 +119,7 @@ class CatalogViewModel(
             return@flow
         }
 
+        delay(SEARCH_DEBOUNCE_MS)
         emit { it.copy(isSearching = true, errorMessage = null) }
         try {
             val results = catalogRepository.search(query)

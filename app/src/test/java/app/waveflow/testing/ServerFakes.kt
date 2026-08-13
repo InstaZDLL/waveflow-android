@@ -289,7 +289,9 @@ class PagingCatalogApi(
         searchGate?.await()
         searchFailure?.let { throw it }
         return RemoteSearchResults(
-            songs = searchResults.filter { it.title.contains(query, ignoreCase = true) },
+            songs = searchResults
+                .filter { it.title.contains(query, ignoreCase = true) }
+                .page(offset, limit),
         )
     }
 
