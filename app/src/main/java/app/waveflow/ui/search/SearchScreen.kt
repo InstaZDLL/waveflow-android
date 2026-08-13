@@ -20,6 +20,8 @@ import app.waveflow.model.Artist
 import app.waveflow.model.SearchResults
 import app.waveflow.model.Song
 import app.waveflow.ui.albumCountLabel
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.MediaRow
 import app.waveflow.ui.components.SongRow
@@ -43,6 +45,13 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
     onSongLongClick: (Song) -> Unit = {},
+    /**
+     * Proposé quand la recherche locale ne trouve rien et qu'un serveur est
+     * connecté. Un bouton explicite plutôt que des résultats distants qui
+     * s'ajouteraient d'eux-mêmes : les deux sources restent séparées, et
+     * l'utilisateur sait toujours où il cherche.
+     */
+    onSearchOnServer: (() -> Unit)? = null,
 ) {
     if (query.isBlank() || results.isEmpty) {
         Box(modifier = modifier.fillMaxSize()) {
@@ -50,9 +59,14 @@ fun SearchScreen(
                 message = if (query.isBlank()) {
                     "Cherchez un titre, un album ou un artiste."
                 } else {
-                    "Aucun résultat pour « ${query.trim()} »."
+                    "Aucun résultat pour « ${query.trim()} » sur cet appareil."
                 },
                 modifier = Modifier.align(Alignment.Center),
+                action = onSearchOnServer
+                    ?.takeIf { query.isNotBlank() }
+                    ?.let { chercher ->
+                        { Button(onClick = chercher) { Text("Chercher sur le serveur") } }
+                    },
             )
         }
         return

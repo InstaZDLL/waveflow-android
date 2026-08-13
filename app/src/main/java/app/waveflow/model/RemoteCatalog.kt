@@ -53,3 +53,19 @@ data class RemoteArtistDetail(
     val artist: RemoteArtist,
     val albums: List<RemoteAlbum>,
 )
+
+/**
+ * Résultats d'une recherche sur le serveur.
+ *
+ * Le serveur les rend groupés par type et déjà classés : contrairement à la
+ * recherche locale, rien n'est trié ici — c'est son index qui décide de la
+ * pertinence.
+ */
+data class RemoteSearchResults(
+    val songs: List<RemoteSong> = emptyList(),
+    val albums: List<RemoteAlbum> = emptyList(),
+    val artists: List<RemoteArtist> = emptyList(),
+) {
+    val isEmpty: Boolean
+        get() = songs.isEmpty() && albums.isEmpty() && artists.isEmpty()
+}

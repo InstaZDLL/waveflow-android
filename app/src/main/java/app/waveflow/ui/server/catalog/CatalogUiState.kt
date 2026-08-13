@@ -2,6 +2,7 @@ package app.waveflow.ui.server.catalog
 
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtistDetail
+import app.waveflow.model.RemoteSearchResults
 
 /**
  * Une liste paginée en cours de chargement.
@@ -31,6 +32,25 @@ data class DetailState<T>(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
 )
+
+/**
+ * Recherche sur le serveur.
+ *
+ * Distincte de la recherche locale, qui filtre en mémoire : celle-ci part sur
+ * le réseau, peut échouer, et met du temps. L'écran doit pouvoir le montrer.
+ */
+data class RemoteSearchState(
+    val query: String = "",
+    val results: RemoteSearchResults = RemoteSearchResults(),
+    val isSearching: Boolean = false,
+    val errorMessage: String? = null,
+) {
+    val isActive: Boolean get() = query.isNotBlank()
+
+    /** Vrai quand la recherche a abouti sans rien trouver. */
+    val foundNothing: Boolean
+        get() = isActive && !isSearching && errorMessage == null && results.isEmpty
+}
 
 typealias AlbumDetailState = DetailState<RemoteAlbumDetail>
 

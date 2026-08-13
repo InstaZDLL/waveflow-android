@@ -139,6 +139,7 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `HttpCatalogApiTest` | paging params, flattened details, track ordering |
 | `CatalogRepositoryTest` | token plumbing, retry after a refused token |
 | `CatalogViewModelTest` | paging, end of list, in-flight guard, clear on sign-out |
+| `CatalogSearchTest` | debounce pinned both ways, blank queries, failures, sign-out |
 | `MediaItemMapperTest` | local vs remote track identity, unreachable marker URI |
 | `RemoteStreamResolverTest` | ticket swap, local passthrough, DataSpec preserved |
 | `RemoteAlbumDetailScreenTest` | Play and Shuffle are distinct, empty album, track tap |
@@ -159,7 +160,7 @@ into `DragState` and tested there instead.
 - [x] Album / artist browsing (Navigation Compose + bottom bar)
 - [x] Local playlists (Room): create, rename, delete, add / remove tracks
 - [x] Drag-to-reorder inside a playlist
-- [x] Search across songs, albums and artists
+- [x] Search across songs, albums and artists (device and server, separately)
 - [x] Compose UI tests (Robolectric, no device)
 - [x] Sign in to a WaveFlow server (session, refresh, sign-out)
 - [x] Browse the server catalogue (albums, artists, paginated)
@@ -174,6 +175,17 @@ Server](https://github.com/InstaZDLL/waveflow-server), keeps the session alive
 and browses its catalogue — albums, artists, and what each contains. A remote
 album plays like a local one: tap a track, or use Play / Shuffle. Nothing of the
 local library is sent anywhere.
+
+Search stays split in two. The magnifier in the top bar searches the device; the
+Server tab has its own field. RFC-003 forbids guessing that a local track and a
+server track are the same recording, so a single merged result list would show
+the same album twice with nothing to explain why — it would pose on screen the
+question the protocol has not answered. When a device search finds nothing and a
+server is connected, an explicit *Chercher sur le serveur* button hands the
+query over; results never drift in on their own.
+
+Unlike the local search, which filters in memory, each keystroke here would hit
+the network, so the query is debounced and the previous request is dropped.
 
 The two sources stay separate by design: the tab is its own section rather than
 a filter over the existing screens, and `RemoteAlbum` / `RemoteArtist` /

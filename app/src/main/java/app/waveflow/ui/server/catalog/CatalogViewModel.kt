@@ -12,10 +12,18 @@ import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.ServerException
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteArtist
+import app.waveflow.model.RemoteSearchResults
 import app.waveflow.model.ServerSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -30,6 +38,7 @@ import kotlinx.coroutines.launch
  * Les pages ne sont pas conservées à la déconnexion : elles appartiennent à un
  * compte, et l'écran suivant pourrait être celui d'un autre.
  */
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class CatalogViewModel(
     private val catalogRepository: CatalogRepository,
     session: StateFlow<ServerSession>,
@@ -46,6 +55,9 @@ class CatalogViewModel(
 
     private val _artistDetail = MutableStateFlow(ArtistDetailState())
     val artistDetail: StateFlow<ArtistDetailState> = _artistDetail.asStateFlow()
+
+    private val _search = MutableStateFlow(RemoteSearchState())
+    val search: StateFlow<RemoteSearchState> = _search.asStateFlow()
 
     /** Une seule page en vol par liste : deux requêtes doubleraient le contenu. */
     private var albumsJob: Job? = null
@@ -67,6 +79,55 @@ class CatalogViewModel(
             .distinctUntilChanged()
             .onEach { connected -> if (connected) loadFirstPages() else clear() }
             .launchIn(viewModelScope)
+
+        // Contrairement à la recherche locale, qui filtre en mémoire à chaque
+        // frappe, celle-ci part sur le réseau : sans délai de grâce, taper
+        // « écho » lancerait quatre requêtes dont trois inutiles.
+        // `flatMapLatest` abandonne la précédente dès qu'une frappe arrive.
+        _search
+            .map { it.query.trim() }
+            .distinctUntilChanged()
+            .debounce { if (it.isBlank()) 0L else SEARCH_DEBOUNCE_MS }
+            .flatMapLatest { query -> searchFlow(query) }
+            .onEach { outcome -> _search.update { outcome(it) } }
+            .launchIn(viewModelScope)
+    }
+
+    fun onSearchQueryChange(query: String) {
+        _search.update { it.copy(query = query) }
+    }
+
+    fun clearSearch() {
+        _search.value = RemoteSearchState()
+    }
+
+    /**
+     * Une recherche, sous forme de mises à jour successives de l'état.
+     *
+     * Renvoyer des transformations plutôt que des états complets évite d'écraser
+     * la requête que l'utilisateur continue de taper pendant l'appel.
+     */
+    private fun searchFlow(query: String): Flow<(RemoteSearchState) -> RemoteSearchState> = flow {
+        if (query.isBlank()) {
+            emit { it.copy(results = RemoteSearchResults(), isSearching = false, errorMessage = null) }
+            return@flow
+        }
+
+        emit { it.copy(isSearching = true, errorMessage = null) }
+        try {
+            val results = catalogRepository.search(query)
+            emit { it.copy(results = results, isSearching = false) }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            emit {
+                it.copy(
+                    results = RemoteSearchResults(),
+                    isSearching = false,
+                    errorMessage = error.toMessage(),
+                )
+            }
+        }
     }
 
     /** Charge la page suivante d'albums, si elle a lieu d'être. */
@@ -168,6 +229,7 @@ class CatalogViewModel(
         _artists.value = PagedList()
         _albumDetail.value = AlbumDetailState()
         _artistDetail.value = ArtistDetailState()
+        _search.value = RemoteSearchState()
     }
 
     private fun Exception.toMessage(): String = when (this) {
@@ -184,6 +246,9 @@ class CatalogViewModel(
 
     companion object {
         private const val TAG = "CatalogViewModel"
+
+        /** De quoi laisser finir un mot avant d'interroger le serveur. */
+        private const val SEARCH_DEBOUNCE_MS = 300L
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

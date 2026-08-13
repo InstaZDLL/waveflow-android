@@ -4,6 +4,7 @@ import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
+import app.waveflow.model.RemoteSearchResults
 
 /**
  * Lecture du catalogue d'un serveur WaveFlow.
@@ -35,6 +36,19 @@ interface CatalogApi {
 
     /** `GET /api/v2/artists/{id}` : l'artiste et ses albums. */
     suspend fun artist(serverUrl: String, accessToken: String, artistId: String): RemoteArtistDetail
+
+    /**
+     * `GET /api/v2/search`, sur les trois types à la fois.
+     *
+     * La pertinence est celle de l'index du serveur : rien n'est reclassé ici.
+     */
+    suspend fun search(
+        serverUrl: String,
+        accessToken: String,
+        query: String,
+        offset: Int,
+        limit: Int,
+    ): RemoteSearchResults
 
     /**
      * `POST /api/v2/tracks/{id}/stream-ticket`.
