@@ -144,6 +144,7 @@ class FakePlaybackController : PlaybackController {
     val playCalls = mutableListOf<Pair<List<Song>, Int>>()
     val playRemoteCalls = mutableListOf<Pair<List<RemoteSong>, Int>>()
     val playShuffledCalls = mutableListOf<List<Song>>()
+    val playRemoteShuffledCalls = mutableListOf<List<RemoteSong>>()
 
     override fun connect() {
         connectCount++
@@ -160,6 +161,10 @@ class FakePlaybackController : PlaybackController {
 
     override fun playShuffled(songs: List<Song>) {
         playShuffledCalls += songs
+    }
+
+    override fun playRemoteShuffled(songs: List<RemoteSong>) {
+        playRemoteShuffledCalls += songs
     }
 
     override fun playPause() = Unit

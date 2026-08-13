@@ -81,6 +81,9 @@ class PlayerViewModel(
         queue.firstOrNull()?.let { playRemoteFrom(queue, it) }
     }
 
+    fun playRemoteShuffled(queue: List<RemoteSong>) =
+        playbackController.playRemoteShuffled(queue)
+
     fun togglePlayPause() = playbackController.playPause()
 
     fun skipNext() = playbackController.skipNext()
