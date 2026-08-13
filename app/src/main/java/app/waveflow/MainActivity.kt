@@ -451,6 +451,12 @@ private fun WaveFlowRoot() {
                                     playerViewModel.playRemoteFrom(it, song)
                                 }
                             },
+                            onPlay = {
+                                detail.value?.songs?.let(playerViewModel::playRemoteFirst)
+                            },
+                            onShuffle = {
+                                detail.value?.songs?.let(playerViewModel::playRemoteShuffled)
+                            },
                             onRetry = { catalogViewModel.openAlbum(albumId) },
                             bottomPadding = listBottomPadding,
                         )

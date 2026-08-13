@@ -21,6 +21,7 @@ import app.waveflow.model.RemoteSong
 import app.waveflow.playback.mediaId
 import app.waveflow.model.orUnknownArtist
 import app.waveflow.ui.albumCountLabel
+import app.waveflow.ui.browse.DetailHeader
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.MediaRow
 import app.waveflow.ui.formatDuration
@@ -32,6 +33,8 @@ fun RemoteAlbumDetailScreen(
     state: AlbumDetailState,
     nowPlayingMediaId: String?,
     onSongClick: (RemoteSong) -> Unit,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
@@ -42,14 +45,18 @@ fun RemoteAlbumDetailScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             item {
-                RemoteDetailHeader(
+                // Le même en-tête que les albums locaux : il ne connaît que des
+                // chaînes, une image et deux rappels. Rien ne justifiait d'en
+                // maintenir un second une fois la lecture distante branchée.
+                DetailHeader(
                     artworkUri = detail.album.artworkUri,
                     title = detail.album.title,
                     subtitle = detail.album.artist.orUnknownArtist(),
-                    summary = listOfNotNull(
-                        trackCountLabel(detail.songs.size),
-                        detail.album.year?.toString(),
-                    ).joinToString(" · "),
+                    trackCount = detail.songs.size,
+                    durationMs = detail.songs.sumOf { it.durationMs },
+                    onPlay = onPlay,
+                    onShuffle = onShuffle,
+                    playEnabled = detail.songs.isNotEmpty(),
                 )
             }
 
@@ -79,10 +86,12 @@ fun RemoteArtistDetailScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             item {
-                RemoteDetailHeader(
+                // Sans boutons, contrairement à l'album : le détail d'un artiste
+                // rend ses albums, pas ses pistes. Proposer « Lecture » ici
+                // demanderait de charger chaque album d'abord.
+                RemoteArtistHeader(
                     artworkUri = detail.artist.artworkUri,
-                    title = detail.artist.name,
-                    subtitle = "Artiste",
+                    name = detail.artist.name,
                     summary = albumCountLabel(detail.artist.albumCount ?: detail.albums.size),
                 )
             }
@@ -133,23 +142,21 @@ private fun <T> DetailContainer(
 }
 
 /**
- * En-tête d'un détail distant.
+ * En-tête d'un artiste distant.
  *
- * `DetailHeader` de la navigation locale n'est pas réutilisé : il porte les
- * boutons Lecture et Aléatoire, or rien n'est encore lisible depuis le serveur.
- * Proposer des commandes inertes serait pire que de ne pas les montrer.
+ * Volontairement dépourvu de commandes : le détail d'un artiste rend ses
+ * albums et non ses pistes, il n'y a donc pas de file à lancer.
  */
 @Composable
-private fun RemoteDetailHeader(
+private fun RemoteArtistHeader(
     artworkUri: android.net.Uri?,
-    title: String,
-    subtitle: String,
+    name: String,
     summary: String,
 ) {
     MediaRow(
         artworkUri = artworkUri,
-        title = title,
-        subtitle = listOf(subtitle, summary).filter { it.isNotBlank() }.joinToString(" · "),
+        title = name,
+        subtitle = listOf("Artiste", summary).filter { it.isNotBlank() }.joinToString(" · "),
         artworkShape = CircleShape,
         modifier = Modifier.fillMaxWidth(),
     )

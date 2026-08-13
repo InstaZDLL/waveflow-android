@@ -141,6 +141,7 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `CatalogViewModelTest` | paging, end of list, in-flight guard, clear on sign-out |
 | `MediaItemMapperTest` | local vs remote track identity, unreachable marker URI |
 | `RemoteStreamResolverTest` | ticket swap, local passthrough, DataSpec preserved |
+| `RemoteAlbumDetailScreenTest` | Play and Shuffle are distinct, empty album, track tap |
 | `ArtworkUrlsTest` | URL only when a cover exists, proxy prefix, invalid address |
 | `ServerImageAuthInterceptorTest` | signing scope, third-party host, refresh on 401 |
 
@@ -170,8 +171,9 @@ into `DragState` and tested there instead.
 
 The **Server** tab signs in to a [WaveFlow
 Server](https://github.com/InstaZDLL/waveflow-server), keeps the session alive
-and browses its catalogue — albums, artists, and what each contains. Tapping a
-remote track plays it. Nothing of the local library is sent anywhere.
+and browses its catalogue — albums, artists, and what each contains. A remote
+album plays like a local one: tap a track, or use Play / Shuffle. Nothing of the
+local library is sent anywhere.
 
 The two sources stay separate by design: the tab is its own section rather than
 a filter over the existing screens, and `RemoteAlbum` / `RemoteArtist` /

@@ -71,6 +71,9 @@ interface PlaybackController {
      */
     fun playShuffled(songs: List<Song>)
 
+    /** Même chose pour des morceaux du serveur. */
+    fun playRemoteShuffled(songs: List<RemoteSong>)
+
     fun playPause()
 
     fun skipNext()

@@ -85,6 +85,16 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `l'aleatoire distant passe par la file distante`() = runTest {
+        val viewModel = PlayerViewModel(controller)
+
+        viewModel.playRemoteShuffled(remoteSongs)
+
+        assertEquals(listOf(remoteSongs), controller.playRemoteShuffledCalls)
+        assertTrue("la file locale ne doit pas être touchée", controller.playShuffledCalls.isEmpty())
+    }
+
+    @Test
     fun `l'etat reprend la piste telle que le lecteur la decrit`() = runTest {
         // Plus de résolution dans la bibliothèque : une piste du serveur n'y
         // figure pas, et la chercher ne rendrait rien à afficher.
