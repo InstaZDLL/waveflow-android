@@ -27,10 +27,15 @@ class ArtworkUrls(private val serverUrl: String, private val http: ServerHttp) {
     fun forHash(artworkHash: String?): Uri? {
         if (artworkHash.isNullOrBlank()) return null
 
+        // Le hachage est un segment à part entière, et non interpolé : il vient
+        // d'une réponse serveur, et un `/` qui s'y glisserait désignerait un
+        // autre point d'API.
+        //
         // Construite en plein rendu d'une liste : une adresse de serveur
         // invalide doit coûter une vignette, pas l'écran entier.
-        return runCatching { http.absoluteUrl(serverUrl, "/$PATH/$artworkHash").toUri() }
-            .getOrNull()
+        return runCatching {
+            http.absoluteUrl(serverUrl, "/$PATH", pathSegment = artworkHash).toUri()
+        }.getOrNull()
     }
 
     private companion object {

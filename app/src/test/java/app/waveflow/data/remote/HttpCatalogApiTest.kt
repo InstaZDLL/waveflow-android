@@ -9,6 +9,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 /**
  * Le client du catalogue face à un serveur de test.
@@ -16,7 +18,12 @@ import org.junit.Test
  * Les corps sont ceux relevés sur `waveflow-server` 2.0.0-beta.0 : notamment le
  * fait que les détails sont **aplatis** — `/albums/{id}` renvoie les champs de
  * l'album au premier niveau, avec `songs` à côté, et non un objet imbriqué.
+ *
+ * Robolectric depuis que le catalogue porte des adresses de pochettes : ce sont
+ * des `android.net.Uri`, que `ArtworkUrls` construit sans jamais lever — une
+ * JVM nue les rendrait donc toutes nulles, en silence.
  */
+@RunWith(RobolectricTestRunner::class)
 class HttpCatalogApiTest {
 
     private lateinit var server: MockWebServer
@@ -120,6 +127,37 @@ class HttpCatalogApiTest {
             "/api/v2/albums/..%2Fartists%2Fautre",
             server.takeRequest().path,
         )
+    }
+
+    @Test
+    fun `le hachage de pochette devient une adresse, sur toutes les entites`() = runTest {
+        // La liste d'albums, la liste d'artistes, le détail d'un album et ses
+        // pistes : chacun porte son propre `artwork_hash`, et chacun doit le
+        // voir devenir une adresse.
+        server.enqueue(MockResponse().setBody(ALBUMS_WITH_ARTWORK))
+        server.enqueue(MockResponse().setBody(ARTISTS_WITH_ARTWORK))
+        server.enqueue(MockResponse().setBody(ALBUM_DETAIL_WITH_ARTWORK))
+
+        val albums = api.albums(url(), "wfa_1", 0, 50)
+        assertEquals("${url()}/api/v2/artwork/hash-album", albums[0].artworkUri.toString())
+        // Le second n'en a pas : aucune adresse, pas une adresse vers un 404.
+        assertNull(albums[1].artworkUri)
+
+        val artists = api.artists(url(), "wfa_1", 0, 50)
+        assertEquals("${url()}/api/v2/artwork/hash-artiste", artists[0].artworkUri.toString())
+
+        val detail = api.album(url(), "wfa_1", "1daf991a")
+        assertEquals("${url()}/api/v2/artwork/hash-album", detail.album.artworkUri.toString())
+        assertEquals("${url()}/api/v2/artwork/hash-piste", detail.songs[0].artworkUri.toString())
+    }
+
+    @Test
+    fun `le detail d'un artiste porte les pochettes de ses albums`() = runTest {
+        server.enqueue(MockResponse().setBody(ARTIST_DETAIL_WITH_ARTWORK))
+
+        val detail = api.artist(url(), "wfa_1", "f7ba66f7")
+        assertEquals("${url()}/api/v2/artwork/hash-artiste", detail.artist.artworkUri.toString())
+        assertEquals("${url()}/api/v2/artwork/hash-album", detail.albums[0].artworkUri.toString())
     }
 
     @Test
@@ -303,6 +341,58 @@ class HttpCatalogApiTest {
                   "id": "s1", "library_id": "l", "title": "Avec numéro",
                   "track": 1, "duration_ms": 1000, "suffix": "mp3", "size": 1,
                   "created_at": 0
+                }
+              ]
+            }
+        """.trimIndent()
+
+        /** Un album avec pochette, un sans : les deux cas dans une même page. */
+        val ALBUMS_WITH_ARTWORK = """
+            [
+              {
+                "id": "1daf991a", "library_id": "l", "title": "Nuit Blanche",
+                "artist": "Aurore", "artwork_hash": "hash-album",
+                "created_at": 0, "play_count": 0
+              },
+              {
+                "id": "ecbc899a", "library_id": "l", "title": "Second Souffle",
+                "artist": "Aurore", "artwork_hash": null,
+                "created_at": 0, "play_count": 0
+              }
+            ]
+        """.trimIndent()
+
+        val ARTISTS_WITH_ARTWORK = """
+            [
+              {
+                "id": "f7ba66f7", "library_id": "l", "name": "Aurore",
+                "artwork_hash": "hash-artiste", "album_count": 2
+              }
+            ]
+        """.trimIndent()
+
+        val ALBUM_DETAIL_WITH_ARTWORK = """
+            {
+              "id": "1daf991a", "library_id": "l", "title": "Nuit Blanche",
+              "artist": "Aurore", "artwork_hash": "hash-album",
+              "songs": [
+                {
+                  "id": "c1", "library_id": "l", "title": "Première Lueur",
+                  "track": 1, "duration_ms": 3030, "suffix": "mp3", "size": 1,
+                  "artwork_hash": "hash-piste", "created_at": 0
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val ARTIST_DETAIL_WITH_ARTWORK = """
+            {
+              "id": "f7ba66f7", "library_id": "l", "name": "Aurore",
+              "artwork_hash": "hash-artiste",
+              "albums": [
+                {
+                  "id": "1daf991a", "library_id": "l", "title": "Nuit Blanche",
+                  "artwork_hash": "hash-album", "created_at": 0, "play_count": 0
                 }
               ]
             }

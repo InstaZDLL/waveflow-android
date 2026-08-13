@@ -140,14 +140,17 @@ class ServerHttp(
      * Seul un chemin absolu du serveur est accepté. Une URL complète ou une
      * référence réseau (`//hôte/…`) désignerait un autre hôte que celui où
      * l'utilisateur s'est authentifié.
+     *
+     * @param pathSegment ajouté après [path], et encodé — un identifiant ou un
+     *   hachage venu d'une réponse n'a pas à être interpolé dans le chemin.
      */
-    fun absoluteUrl(serverUrl: String, path: String): String {
+    fun absoluteUrl(serverUrl: String, path: String, pathSegment: String? = null): String {
         if (!path.startsWith("/") || path.startsWith("//")) {
             throw ServerException.Unexpected("Chemin de diffusion inattendu : $path")
         }
 
         return serverUrl
-            .toApiUrl(path = path.removePrefix("/"), pathSegment = null, query = emptyMap())
+            .toApiUrl(path = path.removePrefix("/"), pathSegment = pathSegment, query = emptyMap())
             .toString()
     }
 

@@ -43,6 +43,13 @@ class ArtworkUrlsTest {
     }
 
     @Test
+    fun `un hachage est encode et ne peut pas designer un autre point d'API`() {
+        val uri = urls().forHash("../stream/vole")
+
+        assertEquals("https://musique.test/api/v2/artwork/..%2Fstream%2Fvole", uri.toString())
+    }
+
+    @Test
     fun `sans pochette aucune adresse n'est produite`() {
         // Une adresse produirait un 404 par ligne de liste, à chaque défilement.
         assertNull(urls().forHash(null))
