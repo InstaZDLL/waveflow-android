@@ -68,7 +68,7 @@ internal data class AlbumResponse(
         artist = artist,
         artistId = artistId,
         year = year,
-        artworkUri = artwork.forEntity(id, artworkHash),
+        artworkUri = artwork.forHash(artworkHash),
     )
 }
 
@@ -83,7 +83,7 @@ internal data class ArtistResponse(
         id = id,
         name = name,
         albumCount = albumCount,
-        artworkUri = artwork.forEntity(id, artworkHash),
+        artworkUri = artwork.forHash(artworkHash),
     )
 }
 
@@ -106,7 +106,7 @@ internal data class SongResponse(
         artist = artist,
         trackNumber = track,
         durationMs = durationMs,
-        artworkUri = artwork.forEntity(id, artworkHash),
+        artworkUri = artwork.forHash(artworkHash),
     )
 }
 

@@ -12,10 +12,8 @@ import android.net.Uri
  * explicitement cette réconciliation à un jalon ultérieur. Fusionner les deux
  * modèles maintenant reviendrait à préjuger de ce travail.
  *
- * [RemoteAlbum.artworkUri] et ses homologues pointent vers `/api/v2/artwork/`,
- * qui exige le même jeton que le reste de l'API : voir `ServerImageLoader`.
- * Nuls quand l'entité n'a pas de pochette — inutile de demander au serveur une
- * image dont il vient de dire qu'elle n'existe pas.
+ * `artworkUri` est nul quand l'entité n'a pas de pochette. Sa construction
+ * appartient à la couche de données ; l'affichage n'a qu'à la charger.
  */
 data class RemoteAlbum(
     val id: String,

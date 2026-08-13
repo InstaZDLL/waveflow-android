@@ -6,21 +6,30 @@ import androidx.core.net.toUri
 /**
  * Construit les adresses de pochettes d'un serveur.
  *
- * `/api/v2/artwork/{id}` accepte aussi bien un `artwork_hash` que l'identifiant
- * de l'entité qui le porte : c'est ce dernier qui est utilisé, il évite de
- * dépendre d'un hachage qui pourrait changer au réencodage d'une jaquette.
+ * L'adresse est bâtie sur le **hachage** de la pochette, et non sur
+ * l'identifiant de l'entité qui la porte — `/api/v2/artwork/` accepte les deux.
+ * Le hachage désigne le contenu, ce qui donne deux propriétés que l'identifiant
+ * n'a pas :
  *
- * Le hachage sert seulement à savoir **s'il y a** une pochette. Absent, aucune
- * adresse n'est produite : demander une image dont la charge utile vient de dire
- * qu'elle n'existe pas coûterait un aller-retour par ligne de liste, pour un
- * 404 à chaque fois.
+ * - remplacer une jaquette change le hachage, donc l'adresse, donc la clé de
+ *   cache. Sur l'identifiant, l'ancienne image resterait affichée aussi
+ *   longtemps que le cache la garde — le serveur annonce `max-age=86400` ;
+ * - un album et ses pistes portent le même hachage. Une seule entrée de cache
+ *   et un seul téléchargement, là où l'identifiant en aurait produit autant que
+ *   de lignes affichées.
+ *
+ * Une entité sans hachage n'a pas de pochette : aucune adresse n'est produite.
+ * En construire une coûterait un aller-retour par ligne pour un 404 à chaque
+ * fois, à chaque défilement.
  */
 class ArtworkUrls(private val serverUrl: String, private val http: ServerHttp) {
 
-    fun forEntity(entityId: String, artworkHash: String?): Uri? {
+    fun forHash(artworkHash: String?): Uri? {
         if (artworkHash.isNullOrBlank()) return null
 
-        return runCatching { http.absoluteUrl(serverUrl, "/$PATH/$entityId").toUri() }
+        // Construite en plein rendu d'une liste : une adresse de serveur
+        // invalide doit coûter une vignette, pas l'écran entier.
+        return runCatching { http.absoluteUrl(serverUrl, "/$PATH/$artworkHash").toUri() }
             .getOrNull()
     }
 

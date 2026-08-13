@@ -11,7 +11,7 @@ import okhttp3.Response
  * `/api/v2/artwork/` exige le même Bearer que le reste de l'API native, et
  * Coil ne connaît rien de la session : cet intercepteur l'ajoute pour lui.
  *
- * Seules les requêtes vers l'hôte du serveur connecté sont signées. Une
+ * Seules les requêtes vers l'origine du serveur connecté sont signées. Une
  * pochette locale — un `content://` — ne passe pas par OkHttp, mais une
  * jaquette venue d'ailleurs pourrait ; lui joindre le jeton reviendrait à le
  * confier à un tiers.
@@ -28,7 +28,7 @@ class ServerImageAuthInterceptor(
         val session = sessionRepository.session.value as? ServerSession.Connected
             ?: return chain.proceed(request)
 
-        if (!request.url.isSameHostAs(session.serverUrl)) return chain.proceed(request)
+        if (!request.url.isSameOriginAs(session.serverUrl)) return chain.proceed(request)
 
         val token = runCatching { runBlocking { sessionRepository.validAccessToken() } }
             .getOrNull()
@@ -55,14 +55,20 @@ class ServerImageAuthInterceptor(
         newBuilder().header("Authorization", "Bearer $token").build()
 
     /**
-     * Compare l'hôte et le port à ceux du serveur connecté.
+     * Compare l'origine — schéma, hôte et port — à celle du serveur connecté.
+     *
+     * Le schéma compte autant que le reste : un serveur joint en HTTPS et une
+     * adresse en `http://` vers le même hôte et le même port enverraient le
+     * jeton en clair. Les ports par défaut suffisent à les distinguer quand
+     * ils sont implicites, pas quand le port est explicite — ce qui est le cas
+     * courant d'un serveur auto-hébergé.
      *
      * L'adresse saisie par l'utilisateur passe par la même normalisation que
      * les appels d'API : sans schéma, elle est jointe en HTTPS.
      */
-    private fun okhttp3.HttpUrl.isSameHostAs(serverUrl: String): Boolean {
+    private fun okhttp3.HttpUrl.isSameOriginAs(serverUrl: String): Boolean {
         val server = runCatching { ServerHttp.parseBase(serverUrl) }.getOrNull() ?: return false
-        return host == server.host && port == server.port
+        return scheme == server.scheme && host == server.host && port == server.port
     }
 
     private companion object {

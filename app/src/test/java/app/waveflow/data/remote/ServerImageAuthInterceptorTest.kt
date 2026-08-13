@@ -112,6 +112,19 @@ class ServerImageAuthInterceptorTest {
     }
 
     @Test
+    fun `le meme hote en clair ne recoit pas le jeton d'un serveur en HTTPS`() = runTest {
+        // Le port ne suffit pas à distinguer les deux quand il est explicite,
+        // ce qui est le cas courant d'un serveur auto-hébergé : sans comparer
+        // le schéma, le jeton partirait en clair vers le même hôte.
+        server.enqueue(MockResponse().setBody("image"))
+        val enHttps = "https://${server.hostName}:${server.port}"
+
+        fetch(clientWith(sessions(serverUrl = enHttps)), "${url()}/api/v2/artwork/abc123")
+
+        assertNull(server.takeRequest().getHeader("Authorization"))
+    }
+
+    @Test
     fun `un jeton refuse est renouvele et la requete rejouee`() = runTest {
         // Révocation depuis un autre appareil : l'horloge locale croit le jeton
         // encore valide, seul le serveur sait que non.
