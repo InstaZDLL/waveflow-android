@@ -21,7 +21,7 @@ class HttpCatalogApi(
         path = ALBUMS,
         query = pageQuery(offset, limit),
         accessToken = accessToken,
-    ).decode<List<AlbumResponse>>().map { it.toModel() }
+    ).decode<List<AlbumResponse>>().map { it.toModel(artwork(serverUrl)) }
 
     override suspend fun artists(
         serverUrl: String,
@@ -33,7 +33,7 @@ class HttpCatalogApi(
         path = ARTISTS,
         query = pageQuery(offset, limit),
         accessToken = accessToken,
-    ).decode<List<ArtistResponse>>().map { it.toModel() }
+    ).decode<List<ArtistResponse>>().map { it.toModel(artwork(serverUrl)) }
 
     override suspend fun album(
         serverUrl: String,
@@ -45,11 +45,12 @@ class HttpCatalogApi(
         pathSegment = albumId,
         accessToken = accessToken,
     ).decode<AlbumDetailResponse>().let { response ->
+        val artwork = artwork(serverUrl)
         RemoteAlbumDetail(
-            album = response.album.toModel(),
+            album = response.album.toModel(artwork),
             // Le serveur ne garantit pas l'ordre des morceaux d'un album ;
             // le numéro de piste, lui, est ce que l'utilisateur attend.
-            songs = response.songs.map { it.toModel() }.sortedWith(BY_TRACK_THEN_TITLE),
+            songs = response.songs.map { it.toModel(artwork) }.sortedWith(BY_TRACK_THEN_TITLE),
         )
     }
 
@@ -63,9 +64,10 @@ class HttpCatalogApi(
         pathSegment = artistId,
         accessToken = accessToken,
     ).decode<ArtistDetailResponse>().let { response ->
+        val artwork = artwork(serverUrl)
         RemoteArtistDetail(
-            artist = response.artist.toModel(),
-            albums = response.albums.map { it.toModel() },
+            artist = response.artist.toModel(artwork),
+            albums = response.albums.map { it.toModel(artwork) },
         )
     }
 
@@ -83,6 +85,8 @@ class HttpCatalogApi(
 
         return http.absoluteUrl(serverUrl, ticket.url)
     }
+
+    private fun artwork(serverUrl: String) = ArtworkUrls(serverUrl, http)
 
     private fun pageQuery(offset: Int, limit: Int) = mapOf(
         "offset" to offset.toString(),

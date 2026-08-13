@@ -33,8 +33,8 @@ private enum class CatalogTab(val label: String) {
  * Catalogue d'un serveur connecté.
  *
  * En listes et non en grille de pochettes, contrairement aux albums locaux :
- * l'API v2 n'expose aucun point d'accès aux images, une grille n'afficherait
- * donc que des vignettes vides.
+ * le catalogue d'un serveur se parcourt volontiers par recherche et par nom,
+ * là où la bibliothèque de l'appareil tient dans quelques écrans.
  */
 @Composable
 fun ServerCatalogScreen(
@@ -113,7 +113,7 @@ private fun AlbumsTab(
         ) {
             items(state.items, key = { it.id }) { album ->
                 MediaRow(
-                    artworkUri = null,
+                    artworkUri = album.artworkUri,
                     title = album.title,
                     subtitle = album.artist.orUnknownArtist(),
                     onClick = { onAlbumClick(album) },
@@ -147,10 +147,8 @@ private fun ArtistsTab(
         ) {
             items(state.items, key = { it.id }) { artist ->
                 MediaRow(
-                    artworkUri = null,
+                    artworkUri = artist.artworkUri,
                     title = artist.name,
-                    // Le serveur omet le compte sur certains chemins : mieux
-                    // vaut une ligne sans sous-titre qu'un « 0 album » faux.
                     subtitle = artist.albumCount?.let(::albumCountLabel).orEmpty(),
                     onClick = { onArtistClick(artist) },
                     artworkShape = CircleShape,

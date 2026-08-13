@@ -141,6 +141,8 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `CatalogViewModelTest` | paging, end of list, in-flight guard, clear on sign-out |
 | `MediaItemMapperTest` | local vs remote track identity, unreachable marker URI |
 | `RemoteStreamResolverTest` | ticket swap, local passthrough, DataSpec preserved |
+| `ArtworkUrlsTest` | URL only when a cover exists, proxy prefix, invalid address |
+| `ServerImageAuthInterceptorTest` | signing scope, third-party host, refresh on 401 |
 
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
 
@@ -186,9 +188,19 @@ and a long queue would outlast it before reaching its last tracks. A
 player and one queue mechanism.
 
 Listing endpoints return a bare array — no total, no cursor — so the end of a
-list is inferred from a page shorter than requested. Cover art is not shown:
-the v2 API exposes an `artwork_hash` but no endpoint serving the image; only
-the Subsonic facade does, behind its own separate credential.
+list is inferred from a page shorter than requested.
+
+Cover art comes from `/api/v2/artwork/{artwork_hash}`, behind the same bearer as
+the rest of the native API. Coil knows nothing about the session, so an
+interceptor signs those requests — and only those: an origin other than the
+connected server's (scheme, host and port) is never handed the token.
+
+The URL is keyed on the hash rather than on the entity id, which the endpoint
+would also accept. The hash names the content, so replacing a cover changes the
+URL and the stale image is not served from cache for a day; and an album and its
+tracks share one hash, hence one cache entry and one download instead of one per
+row. No hash means no cover, and no URL — otherwise every coverless row would
+cost a 404.
 
 Sign-in posts to `/api/v2/auth/login` with the device model as the session
 name, so the server lists it among the account's devices. The access token

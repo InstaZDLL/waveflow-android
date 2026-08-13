@@ -1,5 +1,7 @@
 package app.waveflow.model
 
+import android.net.Uri
+
 /**
  * Le catalogue d'un serveur WaveFlow.
  *
@@ -9,6 +11,9 @@ package app.waveflow.model
  * distante est la même qu'une piste locale — la RFC-003 du serveur renvoie
  * explicitement cette réconciliation à un jalon ultérieur. Fusionner les deux
  * modèles maintenant reviendrait à préjuger de ce travail.
+ *
+ * `artworkUri` est nul quand l'entité n'a pas de pochette. Sa construction
+ * appartient à la couche de données ; l'affichage n'a qu'à la charger.
  */
 data class RemoteAlbum(
     val id: String,
@@ -16,13 +21,14 @@ data class RemoteAlbum(
     val artist: String?,
     val artistId: String?,
     val year: Int?,
+    val artworkUri: Uri?,
 )
 
 data class RemoteArtist(
     val id: String,
     val name: String,
-    /** Connu depuis la liste, absent du détail : le serveur ne le renvoie pas. */
     val albumCount: Int?,
+    val artworkUri: Uri?,
 )
 
 data class RemoteSong(
@@ -33,6 +39,7 @@ data class RemoteSong(
     val artist: String?,
     val trackNumber: Int?,
     val durationMs: Long,
+    val artworkUri: Uri?,
 )
 
 /** Un album et son contenu, tels que renvoyés d'un seul appel. */

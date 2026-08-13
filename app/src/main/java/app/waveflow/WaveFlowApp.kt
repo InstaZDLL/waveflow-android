@@ -8,11 +8,15 @@ import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
 import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import okhttp3.OkHttpClient
 import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.DataStoreSessionStore
 import app.waveflow.data.remote.HttpCatalogApi
 import app.waveflow.data.remote.HttpServerApi
 import app.waveflow.data.remote.ServerHttp
+import app.waveflow.data.remote.ServerImageAuthInterceptor
 import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
@@ -28,7 +32,7 @@ import kotlinx.coroutines.launch
  * un simple conteneur suffit tant que le graphe reste petit. On migrera vers
  * Hilt quand le nombre de dépendances le justifiera.
  */
-class WaveFlowApp : Application() {
+class WaveFlowApp : Application(), ImageLoaderFactory {
     lateinit var container: AppContainer
         private set
 
@@ -37,6 +41,21 @@ class WaveFlowApp : Application() {
         container = AppContainer(this)
         container.restoreServerSession()
     }
+
+    /**
+     * Chargeur d'images unique, partagé par les pochettes locales et distantes.
+     *
+     * Les secondes viennent de `/api/v2/artwork/`, derrière le même jeton que le
+     * reste de l'API : Coil ne connaît rien de la session, c'est l'intercepteur
+     * qui la lui apporte.
+     */
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .okHttpClient {
+            OkHttpClient.Builder()
+                .addInterceptor(ServerImageAuthInterceptor(container.serverSessionRepository))
+                .build()
+        }
+        .build()
 }
 
 /** Conteneur d'objets partagés à l'échelle de l'application. */

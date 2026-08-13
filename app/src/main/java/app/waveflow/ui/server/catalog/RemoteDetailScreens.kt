@@ -43,6 +43,7 @@ fun RemoteAlbumDetailScreen(
         ) {
             item {
                 RemoteDetailHeader(
+                    artworkUri = detail.album.artworkUri,
                     title = detail.album.title,
                     subtitle = detail.album.artist.orUnknownArtist(),
                     summary = listOfNotNull(
@@ -79,17 +80,16 @@ fun RemoteArtistDetailScreen(
         ) {
             item {
                 RemoteDetailHeader(
+                    artworkUri = detail.artist.artworkUri,
                     title = detail.artist.name,
                     subtitle = "Artiste",
-                    // Le compte du serveur est absent sur ce chemin ; celui des
-                    // albums renvoyés est ce qu'on sait vraiment.
-                    summary = albumCountLabel(detail.albums.size),
+                    summary = albumCountLabel(detail.artist.albumCount ?: detail.albums.size),
                 )
             }
 
             items(detail.albums, key = { it.id }) { album ->
                 MediaRow(
-                    artworkUri = null,
+                    artworkUri = album.artworkUri,
                     title = album.title,
                     subtitle = album.year?.toString().orEmpty(),
                     onClick = { onAlbumClick(album) },
@@ -141,12 +141,13 @@ private fun <T> DetailContainer(
  */
 @Composable
 private fun RemoteDetailHeader(
+    artworkUri: android.net.Uri?,
     title: String,
     subtitle: String,
     summary: String,
 ) {
     MediaRow(
-        artworkUri = null,
+        artworkUri = artworkUri,
         title = title,
         subtitle = listOf(subtitle, summary).filter { it.isNotBlank() }.joinToString(" · "),
         artworkShape = CircleShape,
@@ -161,7 +162,7 @@ private fun RemoteSongRow(
     onClick: () -> Unit,
 ) {
     MediaRow(
-        artworkUri = null,
+        artworkUri = song.artworkUri,
         title = song.title,
         subtitle = listOfNotNull(
             song.artist?.takeIf { it.isNotBlank() },

@@ -60,13 +60,15 @@ internal data class AlbumResponse(
     val artist: String? = null,
     @SerialName("artist_id") val artistId: String? = null,
     val year: Int? = null,
+    @SerialName("artwork_hash") val artworkHash: String? = null,
 ) {
-    fun toModel() = RemoteAlbum(
+    fun toModel(artwork: ArtworkUrls) = RemoteAlbum(
         id = id,
         title = title,
         artist = artist,
         artistId = artistId,
         year = year,
+        artworkUri = artwork.forHash(artworkHash),
     )
 }
 
@@ -75,8 +77,14 @@ internal data class ArtistResponse(
     val id: String,
     val name: String,
     @SerialName("album_count") val albumCount: Int? = null,
+    @SerialName("artwork_hash") val artworkHash: String? = null,
 ) {
-    fun toModel() = RemoteArtist(id = id, name = name, albumCount = albumCount)
+    fun toModel(artwork: ArtworkUrls) = RemoteArtist(
+        id = id,
+        name = name,
+        albumCount = albumCount,
+        artworkUri = artwork.forHash(artworkHash),
+    )
 }
 
 @Serializable
@@ -88,8 +96,9 @@ internal data class SongResponse(
     val artist: String? = null,
     val track: Int? = null,
     @SerialName("duration_ms") val durationMs: Long,
+    @SerialName("artwork_hash") val artworkHash: String? = null,
 ) {
-    fun toModel() = RemoteSong(
+    fun toModel(artwork: ArtworkUrls) = RemoteSong(
         id = id,
         title = title,
         album = album,
@@ -97,6 +106,7 @@ internal data class SongResponse(
         artist = artist,
         trackNumber = track,
         durationMs = durationMs,
+        artworkUri = artwork.forHash(artworkHash),
     )
 }
 
@@ -107,10 +117,11 @@ internal data class AlbumDetailResponse(
     val artist: String? = null,
     @SerialName("artist_id") val artistId: String? = null,
     val year: Int? = null,
+    @SerialName("artwork_hash") val artworkHash: String? = null,
     val songs: List<SongResponse> = emptyList(),
 ) {
     val album: AlbumResponse
-        get() = AlbumResponse(id, title, artist, artistId, year)
+        get() = AlbumResponse(id, title, artist, artistId, year, artworkHash)
 }
 
 /** `{"url": "/api/v2/stream/<ticket>", "expires_at": <ms>}` — l'URL est relative. */
@@ -125,8 +136,9 @@ internal data class ArtistDetailResponse(
     val id: String,
     val name: String,
     @SerialName("album_count") val albumCount: Int? = null,
+    @SerialName("artwork_hash") val artworkHash: String? = null,
     val albums: List<AlbumResponse> = emptyList(),
 ) {
     val artist: ArtistResponse
-        get() = ArtistResponse(id, name, albumCount)
+        get() = ArtistResponse(id, name, albumCount, artworkHash)
 }

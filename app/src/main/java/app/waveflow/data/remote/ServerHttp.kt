@@ -119,12 +119,7 @@ class ServerHttp(
         pathSegment: String?,
         query: Map<String, String>,
     ): HttpUrl {
-        val trimmed = trim().trimEnd('/')
-        if (trimmed.isEmpty()) throw ServerException.Rejected("Adresse du serveur vide.")
-
-        val absolute = if (trimmed.contains("://")) trimmed else "https://$trimmed"
-        val base = absolute.toHttpUrlOrNull()
-            ?: throw ServerException.Rejected("Adresse du serveur invalide : $this")
+        val base = parseBase(this)
 
         return base.newBuilder()
             .addPathSegments(path)
@@ -145,14 +140,17 @@ class ServerHttp(
      * Seul un chemin absolu du serveur est accepté. Une URL complète ou une
      * référence réseau (`//hôte/…`) désignerait un autre hôte que celui où
      * l'utilisateur s'est authentifié.
+     *
+     * @param pathSegment ajouté après [path], et encodé — un identifiant ou un
+     *   hachage venu d'une réponse n'a pas à être interpolé dans le chemin.
      */
-    fun absoluteUrl(serverUrl: String, path: String): String {
+    fun absoluteUrl(serverUrl: String, path: String, pathSegment: String? = null): String {
         if (!path.startsWith("/") || path.startsWith("//")) {
             throw ServerException.Unexpected("Chemin de diffusion inattendu : $path")
         }
 
         return serverUrl
-            .toApiUrl(path = path.removePrefix("/"), pathSegment = null, query = emptyMap())
+            .toApiUrl(path = path.removePrefix("/"), pathSegment = pathSegment, query = emptyMap())
             .toString()
     }
 
@@ -173,6 +171,22 @@ class ServerHttp(
     }
 
     companion object {
+        /**
+         * Normalise l'adresse saisie par l'utilisateur.
+         *
+         * Le schéma est le seul ajout : `192.168.1.10:4533` seul n'est pas une
+         * URL pour OkHttp alors que c'est ce qu'on tape. Exposée pour que la
+         * signature des requêtes d'images compare le même hôte que les appels.
+         */
+        fun parseBase(serverUrl: String): HttpUrl {
+            val trimmed = serverUrl.trim().trimEnd('/')
+            if (trimmed.isEmpty()) throw ServerException.Rejected("Adresse du serveur vide.")
+
+            val absolute = if (trimmed.contains("://")) trimmed else "https://$trimmed"
+            return absolute.toHttpUrlOrNull()
+                ?: throw ServerException.Rejected("Adresse du serveur invalide : $serverUrl")
+        }
+
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         /**

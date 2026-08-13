@@ -134,7 +134,7 @@ class FakeCatalogApi(
     ): RemoteAlbumDetail {
         record(serverUrl, accessToken, null)
         return RemoteAlbumDetail(
-            album = RemoteAlbum(albumId, "Album", null, null, null),
+            album = RemoteAlbum(albumId, "Album", null, null, null, null),
             songs = emptyList(),
         )
     }
@@ -146,7 +146,7 @@ class FakeCatalogApi(
     ): RemoteArtistDetail {
         record(serverUrl, accessToken, null)
         return RemoteArtistDetail(
-            artist = RemoteArtist(artistId, "Artiste", null),
+            artist = RemoteArtist(artistId, "Artiste", null, null),
             albums = emptyList(),
         )
     }
@@ -239,7 +239,7 @@ class PagingCatalogApi(
         detailFailure?.let { throw it }
         return RemoteAlbumDetail(
             album = albums.firstOrNull { it.id == albumId }
-                ?: RemoteAlbum(albumId, "Album", null, null, null),
+                ?: RemoteAlbum(albumId, "Album", null, null, null, null),
             songs = emptyList(),
         )
     }
@@ -253,7 +253,7 @@ class PagingCatalogApi(
         detailFailure?.let { throw it }
         return RemoteArtistDetail(
             artist = artists.firstOrNull { it.id == artistId }
-                ?: RemoteArtist(artistId, "Artiste", null),
+                ?: RemoteArtist(artistId, "Artiste", null, null),
             albums = emptyList(),
         )
     }
