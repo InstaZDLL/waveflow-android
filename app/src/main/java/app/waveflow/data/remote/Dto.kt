@@ -124,6 +124,14 @@ internal data class AlbumDetailResponse(
         get() = AlbumResponse(id, title, artist, artistId, year, artworkHash)
 }
 
+/** `/api/v2/search` : les trois types dans une seule réponse. */
+@Serializable
+internal data class SearchResponse(
+    val artists: List<ArtistResponse> = emptyList(),
+    val albums: List<AlbumResponse> = emptyList(),
+    val songs: List<SongResponse> = emptyList(),
+)
+
 /** `{"url": "/api/v2/stream/<ticket>", "expires_at": <ms>}` — l'URL est relative. */
 @Serializable
 internal data class StreamTicketResponse(

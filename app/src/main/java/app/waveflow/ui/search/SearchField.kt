@@ -26,12 +26,18 @@ fun SearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * `false` pour un champ permanent, qui fait déjà partie de l'écran.
+     * Prendre le focus n'a de sens que pour une barre qu'on vient d'ouvrir —
+     * sinon le clavier monte à chaque visite de l'onglet.
+     */
+    autoFocus: Boolean = true,
 ) {
     val focusRequester = remember { FocusRequester() }
 
     // Le champ s'ouvre prêt à recevoir la frappe : sans ça, ouvrir la
     // recherche demanderait un second appui pour faire monter le clavier.
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(autoFocus) { if (autoFocus) focusRequester.requestFocus() }
 
     TextField(
         value = query,

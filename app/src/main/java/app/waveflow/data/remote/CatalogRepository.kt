@@ -4,6 +4,7 @@ import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
+import app.waveflow.model.RemoteSearchResults
 import app.waveflow.model.ServerSession
 
 /**
@@ -28,6 +29,9 @@ class CatalogRepository(
 
     suspend fun artist(artistId: String): RemoteArtistDetail =
         authorized { url, token -> api.artist(url, token, artistId) }
+
+    suspend fun search(query: String, limit: Int = CATALOG_PAGE_SIZE): RemoteSearchResults =
+        authorized { url, token -> api.search(url, token, query, offset = 0, limit = limit) }
 
     /**
      * URL de diffusion d'une piste, valable une heure côté serveur.

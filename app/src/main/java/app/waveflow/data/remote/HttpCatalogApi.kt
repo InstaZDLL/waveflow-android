@@ -4,6 +4,7 @@ import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
+import app.waveflow.model.RemoteSearchResults
 import kotlinx.serialization.SerializationException
 
 /** Catalogue distant, par-dessus [ServerHttp]. */
@@ -71,6 +72,26 @@ class HttpCatalogApi(
         )
     }
 
+    override suspend fun search(
+        serverUrl: String,
+        accessToken: String,
+        query: String,
+        offset: Int,
+        limit: Int,
+    ): RemoteSearchResults = http.get(
+        serverUrl = serverUrl,
+        path = SEARCH,
+        query = pageQuery(offset, limit) + ("q" to query),
+        accessToken = accessToken,
+    ).decode<SearchResponse>().let { response ->
+        val artwork = artwork(serverUrl)
+        RemoteSearchResults(
+            songs = response.songs.map { it.toModel(artwork) },
+            albums = response.albums.map { it.toModel(artwork) },
+            artists = response.artists.map { it.toModel(artwork) },
+        )
+    }
+
     override suspend fun streamTicket(
         serverUrl: String,
         accessToken: String,
@@ -103,6 +124,7 @@ class HttpCatalogApi(
         const val ALBUMS = "api/v2/albums"
         const val ARTISTS = "api/v2/artists"
         const val TRACKS = "api/v2/tracks"
+        const val SEARCH = "api/v2/search"
 
         /** Sans numéro de piste, on retombe sur le titre plutôt que sur rien. */
         val BY_TRACK_THEN_TITLE = compareBy<app.waveflow.model.RemoteSong>(

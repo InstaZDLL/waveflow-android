@@ -9,6 +9,8 @@ import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
+import app.waveflow.model.RemoteSearchResults
+import app.waveflow.model.RemoteSong
 import app.waveflow.model.ServerSession
 import kotlinx.coroutines.CompletableDeferred
 
@@ -151,6 +153,17 @@ class FakeCatalogApi(
         )
     }
 
+    override suspend fun search(
+        serverUrl: String,
+        accessToken: String,
+        query: String,
+        offset: Int,
+        limit: Int,
+    ): RemoteSearchResults {
+        record(serverUrl, accessToken, offset to limit)
+        return RemoteSearchResults()
+    }
+
     override suspend fun streamTicket(
         serverUrl: String,
         accessToken: String,
@@ -195,6 +208,10 @@ class PagingCatalogApi(
     private val gate: CompletableDeferred<Unit>? = null,
     /** Même rôle que [gate], pour les détails. */
     private val detailGate: CompletableDeferred<Unit>? = null,
+    /** Même rôle, pour la recherche. */
+    private val searchGate: CompletableDeferred<Unit>? = null,
+    private val searchFailure: Throwable? = null,
+    private val searchResults: List<RemoteSong> = emptyList(),
 ) : CatalogApi {
 
     var albumCalls = 0
@@ -255,6 +272,24 @@ class PagingCatalogApi(
             artist = artists.firstOrNull { it.id == artistId }
                 ?: RemoteArtist(artistId, "Artiste", null, null),
             albums = emptyList(),
+        )
+    }
+
+    /** Requêtes reçues, dans l'ordre : c'est l'anti-rebond qu'on éprouve. */
+    val searchQueries = mutableListOf<String>()
+
+    override suspend fun search(
+        serverUrl: String,
+        accessToken: String,
+        query: String,
+        offset: Int,
+        limit: Int,
+    ): RemoteSearchResults {
+        searchQueries += query
+        searchGate?.await()
+        searchFailure?.let { throw it }
+        return RemoteSearchResults(
+            songs = searchResults.filter { it.title.contains(query, ignoreCase = true) },
         )
     }
 

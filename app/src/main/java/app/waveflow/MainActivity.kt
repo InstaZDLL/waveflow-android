@@ -400,10 +400,17 @@ private fun WaveFlowRoot() {
                                 .collectAsStateWithLifecycle()
                             val remoteArtists by catalogViewModel.artists
                                 .collectAsStateWithLifecycle()
+                            val remoteSearch by catalogViewModel.search
+                                .collectAsStateWithLifecycle()
 
                             ServerCatalogScreen(
                                 albums = remoteAlbums,
                                 artists = remoteArtists,
+                                search = remoteSearch,
+                                onSearchQueryChange = catalogViewModel::onSearchQueryChange,
+                                // Un résultat de recherche se lit seul : la file
+                                // est ce morceau, faute de contexte d'album.
+                                onSongClick = { playerViewModel.playRemoteFrom(listOf(it), it) },
                                 onAlbumClick = {
                                     navController.navigate(Routes.serverAlbumDetail(it.id))
                                 },
@@ -543,6 +550,17 @@ private fun WaveFlowRoot() {
                             },
                             bottomPadding = listBottomPadding,
                             onSongLongClick = { songToAdd = it },
+                            // Proposé seulement quand un serveur est connecté :
+                            // sinon le bouton mènerait à un écran de connexion,
+                            // que l'utilisateur n'a pas demandé.
+                            onSearchOnServer = serverState.connected?.let {
+                                {
+                                    val terme = searchQuery
+                                    closeSearch()
+                                    catalogViewModel.onSearchQueryChange(terme)
+                                    navController.switchTab(TopLevelDestination.Server)
+                                }
+                            },
                         )
                     }
                 }
