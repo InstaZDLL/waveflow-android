@@ -108,11 +108,13 @@ class CatalogSearchTest {
             val viewModel = viewModel(catalog)
 
             viewModel.onSearchQueryChange("Écho")
-            advanceTimeBy(200)
+            advanceTimeBy(299)
             runCurrent()
             assertTrue("rien tant que la frappe peut continuer", catalog.searchQueries.isEmpty())
 
-            advanceTimeBy(200)
+            // La milliseconde qui suit : le délai est épinglé à sa valeur, pas
+            // à un intervalle où n'importe quelle constante passerait.
+            advanceTimeBy(1)
             runCurrent()
             assertEquals(listOf("Écho"), catalog.searchQueries)
         }
@@ -177,6 +179,48 @@ class CatalogSearchTest {
             advanceUntilIdle()
 
             assertEquals("Écho lo", viewModel.search.value.query)
+        }
+
+    @Test
+    fun `une frappe annule la recherche en cours, resultats compris`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Le délai est sous `flatMapLatest`, pas avant : placé avant, il
+            // retarderait la nouvelle requête et la précédente continuerait de
+            // courir, jusqu'à rendre ses résultats sous une requête changée.
+            val portail = CompletableDeferred<Unit>()
+            val catalog = PagingCatalogApi(searchResults = catalogue, searchGate = portail)
+            val viewModel = viewModel(catalog)
+
+            viewModel.onSearchQueryChange("Écho")
+            advanceTimeBy(400)
+            runCurrent()
+            assertEquals("la première est partie", listOf("Écho"), catalog.searchQueries)
+
+            // Elle est toujours en vol quand la suivante arrive, et se
+            // débloque juste après.
+            viewModel.onSearchQueryChange("Réso")
+            portail.complete(Unit)
+
+            // Moins que le délai de grâce : la seconde recherche n'est pas
+            // encore partie. C'est l'instant qui départage les deux montages —
+            // le délai placé avant `flatMapLatest` laisserait la première
+            // rendre ici ses résultats, sous une requête déjà changée. Les deux
+            // convergent ensuite, ce que la fin du test ne prouverait donc pas.
+            advanceTimeBy(100)
+            runCurrent()
+            assertTrue(
+                "aucun résultat périmé sous la nouvelle requête",
+                viewModel.search.value.results.isEmpty,
+            )
+
+            advanceUntilIdle()
+            val state = viewModel.search.value
+            assertEquals("Réso", state.query)
+            assertEquals(
+                "les résultats sont ceux de la requête affichée",
+                listOf("Résonance"),
+                state.results.songs.map { it.title },
+            )
         }
 
     @Test
