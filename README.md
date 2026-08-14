@@ -142,6 +142,7 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `CatalogSearchTest` | debounce pinned both ways, blank queries, failures, sign-out |
 | `MediaItemMapperTest` | local vs remote track identity, unreachable marker URI |
 | `RemoteStreamResolverTest` | ticket swap, local passthrough, DataSpec preserved |
+| `RemoteMediaCacheTest` | second read costs no bytes and no ticket, local bypass |
 | `RemoteAlbumDetailScreenTest` | Play and Shuffle are distinct, empty album, track tap |
 | `ArtworkUrlsTest` | URL only when a cover exists, proxy prefix, invalid address |
 | `ServerImageAuthInterceptorTest` | signing scope, third-party host, refresh on 401 |
@@ -166,6 +167,7 @@ into `DragState` and tested there instead.
 - [x] Browse the server catalogue (albums, artists, paginated)
 - [x] Stream from the server (ticketed URLs, seeking)
 - [ ] Server user-data sync (playlists, favorites, ratings) — see below
+- [x] Playback cache for streamed tracks
 - [ ] Android Auto (Media3 `MediaLibraryService`)
 
 ## Server
@@ -186,6 +188,15 @@ query over; results never drift in on their own.
 
 Unlike the local search, which filters in memory, each keystroke here would hit
 the network, so the query is debounced and the previous request is dropped.
+
+Streamed tracks are cached on disk, 200 MB with least-recently-used eviction, in
+the app cache directory so the system can reclaim it. The cache **wraps** the
+ticket resolver rather than sitting behind it: a cached track asks the server for
+nothing at all, and the cache key is the item's — not the stream URL, which
+carries a single-use ticket and would never match itself. The key names the
+rendering too, not just the track, since the server serves the same track in
+several formats. Device files bypass the cache entirely; they are already on
+disk.
 
 The two sources stay separate by design: the tab is its own section rather than
 a filter over the existing screens, and `RemoteAlbum` / `RemoteArtist` /

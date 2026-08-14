@@ -40,6 +40,7 @@ fun RemoteSong.toMediaItem(): MediaItem =
     MediaItem.Builder()
         .setMediaId("$REMOTE_PREFIX$id")
         .setUri("$REMOTE_SCHEME://track/$id".toUri())
+        .setCustomCacheKey(cacheKeyOf(id))
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(title)
@@ -72,6 +73,24 @@ val RemoteSong.mediaId: String
 /** Identifiant MediaStore porté par ce [MediaItem], ou `null` s'il vient d'ailleurs. */
 val MediaItem.localSongId: Long?
     get() = mediaId.removePrefix(LOCAL_PREFIX).takeIf { mediaId.startsWith(LOCAL_PREFIX) }?.toLongOrNull()
+
+/**
+ * Clé de cache d'une piste distante.
+ *
+ * Explicite plutôt que déduite de l'URL : celle-ci porte un ticket qui change à
+ * chaque ouverture, et ne coïnciderait donc jamais avec elle-même.
+ *
+ * Le rendu fait partie de la clé, pas seulement la piste. Le serveur sert la
+ * même piste en plusieurs formats et débits ; une clé qui les confondrait
+ * rendrait un Opus à 64 kbit/s à qui demande l'original. Aujourd'hui le client
+ * ne demande que [DEFAULT_FORMAT], mais la clé est déjà prête à en distinguer
+ * d'autres.
+ */
+internal fun cacheKeyOf(trackId: String, format: String = DEFAULT_FORMAT): String =
+    "$REMOTE_PREFIX$trackId:$format"
+
+/** Le défaut du serveur : le fichier tel quel, sans transcodage. */
+internal const val DEFAULT_FORMAT = "raw"
 
 /** Identifiant de piste serveur, ou `null` si la piste est locale. */
 internal fun trackIdOfRemoteUri(uri: android.net.Uri): String? =
