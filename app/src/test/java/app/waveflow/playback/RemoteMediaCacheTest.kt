@@ -1,5 +1,9 @@
 package app.waveflow.playback
 
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.net.Uri
+import android.os.ParcelFileDescriptor
 import androidx.core.net.toUri
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
@@ -13,6 +17,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 
@@ -73,9 +78,13 @@ class RemoteMediaCacheTest {
         }
     }
 
-    private fun specDe(trackId: String) = DataSpec.Builder()
+    private fun specDe(
+        trackId: String,
+        format: String = DEFAULT_FORMAT,
+        bitrate: Int? = null,
+    ) = DataSpec.Builder()
         .setUri("waveflow://track/$trackId".toUri())
-        .setKey(cacheKeyOf(trackId))
+        .setKey(cacheKeyOf(trackId, format, bitrate))
         .build()
 
     @Test
@@ -110,6 +119,37 @@ class RemoteMediaCacheTest {
     }
 
     @Test
+    fun `deux debits d'une meme piste ne se recouvrent pas`() {
+        // Le serveur sert la même piste en plusieurs rendus. Une clé qui les
+        // confondrait servirait le premier téléchargé à qui demande l'autre.
+        server.enqueue(MockResponse().setBody("opus 64"))
+        server.enqueue(MockResponse().setBody("opus 128"))
+
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        val bas = lire(factory.createDataSource(), specDe("piste-1", "opus", 64))
+        val haut = lire(factory.createDataSource(), specDe("piste-1", "opus", 128))
+
+        assertEquals("opus 64", String(bas))
+        assertEquals("opus 128", String(haut))
+        assertEquals("deux rendus, deux tickets", 2, ticketsDemandes)
+    }
+
+    @Test
+    fun `deux formats d'une meme piste ne se recouvrent pas`() {
+        server.enqueue(MockResponse().setBody("original"))
+        server.enqueue(MockResponse().setBody("transcode"))
+
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        val brut = lire(factory.createDataSource(), specDe("piste-1"))
+        val transcode = lire(factory.createDataSource(), specDe("piste-1", "mp3"))
+
+        assertEquals("original", String(brut))
+        assertEquals("transcode", String(transcode))
+    }
+
+    @Test
     fun `un fichier local ne passe pas par le cache`() {
         // Il est déjà sur le disque : le recopier doublerait sa place.
         val fichier = File.createTempFile("local", ".bin").apply { writeBytes("local".toByteArray()) }
@@ -124,5 +164,70 @@ class RemoteMediaCacheTest {
         assertEquals("aucun ticket pour un fichier local", 0, ticketsDemandes)
         assertEquals("aucune requête réseau", 0, server.requestCount)
         fichier.delete()
+    }
+
+    @Test
+    fun `un content ne passe pas non plus par le cache`() {
+        // C'est le schéma réel des pistes de l'appareil : le `file://` du test
+        // précédent n'apparaît nulle part dans l'application.
+        val fichier = File.createTempFile("mediastore", ".bin")
+            .apply { writeBytes("depuis le MediaStore".toByteArray()) }
+        FichierFournisseur.fichier = fichier
+        Robolectric.setupContentProvider(FichierFournisseur::class.java, AUTORITE)
+
+        val factory = mediaCache.dataSourceFactory(resolver)
+        val lu = lire(
+            factory.createDataSource(),
+            DataSpec.Builder().setUri("content://$AUTORITE/audio/42".toUri()).build(),
+        )
+
+        assertEquals("depuis le MediaStore", String(lu))
+        assertEquals("aucun ticket pour une piste locale", 0, ticketsDemandes)
+        assertEquals("aucune requête réseau", 0, server.requestCount)
+        fichier.delete()
+    }
+}
+
+private const val AUTORITE = "app.waveflow.test.audio"
+
+/**
+ * Sert un fichier temporaire derrière une URI `content://`.
+ *
+ * `ContentDataSource` ouvre un descripteur, pas un flux : un simple flux
+ * enregistré dans le résolveur de Robolectric ne suffirait pas.
+ */
+class FichierFournisseur : ContentProvider() {
+
+    override fun onCreate(): Boolean = true
+
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor =
+        ParcelFileDescriptor.open(
+            requireNotNull(fichier) { "aucun fichier posé" },
+            ParcelFileDescriptor.MODE_READ_ONLY,
+        )
+
+    override fun getType(uri: Uri): String = "application/octet-stream"
+
+    override fun query(
+        uri: Uri,
+        projection: Array<out String>?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+        sortOrder: String?,
+    ) = null
+
+    override fun insert(uri: Uri, values: ContentValues?) = null
+
+    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
+
+    override fun update(
+        uri: Uri,
+        values: ContentValues?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+    ) = 0
+
+    companion object {
+        var fichier: File? = null
     }
 }

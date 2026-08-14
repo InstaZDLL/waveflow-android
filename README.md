@@ -193,9 +193,9 @@ Streamed tracks are cached on disk, 200 MB with least-recently-used eviction, in
 the app cache directory so the system can reclaim it. The cache **wraps** the
 ticket resolver rather than sitting behind it: a cached track asks the server for
 nothing at all, and the cache key is the item's — not the stream URL, which
-carries a single-use ticket and would never match itself. The key names the
-rendering too, not just the track, since the server serves the same track in
-several formats. Device files bypass the cache entirely; they are already on
+carries a single-use ticket and would never match itself. The key names the whole
+rendering — format and bitrate, not just the track — since the server serves the
+same track in several versions, exactly as it keys its own cache entries. Device files bypass the cache entirely; they are already on
 disk.
 
 The two sources stay separate by design: the tab is its own section rather than
