@@ -89,8 +89,11 @@ val MediaItem.localSongId: Long?
  * transcodage n'est pas branché. Mettre les deux dès maintenant évite qu'un
  * ajout futur du format oublie le débit, et fasse se recouvrir deux versions.
  *
- * @param bitrate omis de la clé quand il est nul, pour que le cas courant reste
- *   lisible : `remote:<id>:raw`.
+ * @param bitrate omis de la clé quand il ne décrit aucun rendu — absent, nul ou
+ *   négatif — pour que le cas courant reste lisible : `remote:<id>:raw`. Aucun
+ *   appelant ne passe zéro aujourd'hui, mais un réglage qui coderait ainsi
+ *   « qualité d'origine » ouvrirait sinon une seconde entrée de cache pour le
+ *   même rendu.
  */
 internal fun cacheKeyOf(
     trackId: String,
@@ -98,7 +101,7 @@ internal fun cacheKeyOf(
     bitrate: Int? = null,
 ): String = buildString {
     append(REMOTE_PREFIX).append(trackId).append(':').append(format)
-    bitrate?.let { append(':').append(it) }
+    bitrate?.takeIf { it > 0 }?.let { append(':').append(it) }
 }
 
 /** Le défaut du serveur : le fichier tel quel, sans transcodage. */

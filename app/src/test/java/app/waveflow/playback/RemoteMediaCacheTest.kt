@@ -136,6 +136,23 @@ class RemoteMediaCacheTest {
     }
 
     @Test
+    fun `un debit nul reutilise l'entree sans debit`() {
+        // Le pendant du test précédent : deux façons d'exprimer le même rendu
+        // ne doivent pas le télécharger deux fois.
+        server.enqueue(MockResponse().setBody("original"))
+
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        val sansDebit = lire(factory.createDataSource(), specDe("piste-1"))
+        val debitNul = lire(factory.createDataSource(), specDe("piste-1", bitrate = 0))
+
+        assertEquals("original", String(sansDebit))
+        assertEquals("original", String(debitNul))
+        assertEquals("une seule requête réseau", 1, server.requestCount)
+        assertEquals("un seul ticket réclamé", 1, ticketsDemandes)
+    }
+
+    @Test
     fun `deux formats d'une meme piste ne se recouvrent pas`() {
         server.enqueue(MockResponse().setBody("original"))
         server.enqueue(MockResponse().setBody("transcode"))
