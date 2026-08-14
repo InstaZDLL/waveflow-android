@@ -193,12 +193,20 @@ class RemoteMediaCacheTest {
         Robolectric.setupContentProvider(FichierFournisseur::class.java, AUTORITE)
 
         val factory = mediaCache.dataSourceFactory(resolver)
-        val lu = lire(
-            factory.createDataSource(),
-            DataSpec.Builder().setUri("content://$AUTORITE/audio/42".toUri()).build(),
-        )
+        val spec = DataSpec.Builder().setUri("content://$AUTORITE/audio/42".toUri()).build()
 
+        val lu = lire(factory.createDataSource(), spec)
         assertEquals("depuis le MediaStore", String(lu))
+
+        // Le fichier change sous la même URI — un réencodage, une réécriture de
+        // tags. Une lecture qui rendrait encore l'ancien contenu trahirait un
+        // cache posé au-dessus des sources locales : l'arrangement Media3 le
+        // plus courant, et celui qu'un « nettoyage » de cette fabrique
+        // produirait le plus naturellement.
+        fichier.writeBytes("réencodé depuis".toByteArray())
+        val relu = lire(factory.createDataSource(), spec)
+
+        assertEquals("réencodé depuis", String(relu))
         assertEquals("aucun ticket pour une piste locale", 0, ticketsDemandes)
         assertEquals("aucune requête réseau", 0, server.requestCount)
         fichier.delete()
