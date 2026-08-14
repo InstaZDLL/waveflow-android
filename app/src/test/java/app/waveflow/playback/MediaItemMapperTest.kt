@@ -4,6 +4,7 @@ import androidx.core.net.toUri
 import app.waveflow.testing.remoteSong
 import app.waveflow.testing.song
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -71,6 +72,18 @@ class MediaItemMapperTest {
         val remote = remoteSong(id = "c07f8d98")
 
         assertEquals(remote.mediaId, remote.toMediaItem().toPlayingTrack().mediaId)
+    }
+
+    @Test
+    fun `un debit qui ne decrit rien n'entre pas dans la cle`() {
+        // Zéro n'est pas un rendu : le laisser dans la clé ouvrirait une
+        // seconde entrée de cache pour ce que le serveur sert déjà sous
+        // l'absence de débit.
+        val sansDebit = cacheKeyOf("piste", "raw")
+
+        assertEquals(sansDebit, cacheKeyOf("piste", "raw", bitrate = 0))
+        assertEquals(sansDebit, cacheKeyOf("piste", "raw", bitrate = -1))
+        assertNotEquals(sansDebit, cacheKeyOf("piste", "raw", bitrate = 128))
     }
 
     @Test

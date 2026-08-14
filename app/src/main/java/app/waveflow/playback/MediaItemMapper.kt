@@ -40,6 +40,7 @@ fun RemoteSong.toMediaItem(): MediaItem =
     MediaItem.Builder()
         .setMediaId("$REMOTE_PREFIX$id")
         .setUri("$REMOTE_SCHEME://track/$id".toUri())
+        .setCustomCacheKey(cacheKeyOf(id))
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(title)
@@ -72,6 +73,39 @@ val RemoteSong.mediaId: String
 /** Identifiant MediaStore porté par ce [MediaItem], ou `null` s'il vient d'ailleurs. */
 val MediaItem.localSongId: Long?
     get() = mediaId.removePrefix(LOCAL_PREFIX).takeIf { mediaId.startsWith(LOCAL_PREFIX) }?.toLongOrNull()
+
+/**
+ * Clé de cache d'une piste distante.
+ *
+ * Explicite plutôt que déduite de l'URL : celle-ci porte un ticket qui change à
+ * chaque ouverture, et ne coïnciderait donc jamais avec elle-même.
+ *
+ * Le **rendu** entier fait partie de la clé, format et débit : le serveur sert
+ * la même piste en plusieurs versions, et les confondre rendrait un Opus à
+ * 64 kbit/s à qui demande l'original. C'est d'ailleurs ainsi que le serveur
+ * nomme ses propres entrées de cache.
+ *
+ * Le client ne demande aujourd'hui que [DEFAULT_FORMAT], sans débit — le
+ * transcodage n'est pas branché. Mettre les deux dès maintenant évite qu'un
+ * ajout futur du format oublie le débit, et fasse se recouvrir deux versions.
+ *
+ * @param bitrate omis de la clé quand il ne décrit aucun rendu — absent, nul ou
+ *   négatif — pour que le cas courant reste lisible : `remote:<id>:raw`. Aucun
+ *   appelant ne passe zéro aujourd'hui, mais un réglage qui coderait ainsi
+ *   « qualité d'origine » ouvrirait sinon une seconde entrée de cache pour le
+ *   même rendu.
+ */
+internal fun cacheKeyOf(
+    trackId: String,
+    format: String = DEFAULT_FORMAT,
+    bitrate: Int? = null,
+): String = buildString {
+    append(REMOTE_PREFIX).append(trackId).append(':').append(format)
+    bitrate?.takeIf { it > 0 }?.let { append(':').append(it) }
+}
+
+/** Le défaut du serveur : le fichier tel quel, sans transcodage. */
+internal const val DEFAULT_FORMAT = "raw"
 
 /** Identifiant de piste serveur, ou `null` si la piste est locale. */
 internal fun trackIdOfRemoteUri(uri: android.net.Uri): String? =

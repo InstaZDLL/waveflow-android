@@ -69,6 +69,8 @@ dependencies {
     // Audio — Media3 / ExoPlayer + MediaSession
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.media3.datasource)
+    implementation(libs.androidx.media3.database)
 
     // Pochettes
     implementation(libs.coil.compose)
