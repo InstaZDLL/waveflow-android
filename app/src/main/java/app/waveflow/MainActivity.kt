@@ -57,6 +57,7 @@ import app.waveflow.ui.library.LibraryScreen
 import app.waveflow.ui.library.LibraryViewModel
 import app.waveflow.ui.navigation.Routes
 import app.waveflow.ui.navigation.TopLevelDestination
+import app.waveflow.ui.navigation.longArgOf
 import app.waveflow.ui.navigation.WaveFlowBottomBar
 import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.player.MiniPlayer
@@ -171,6 +172,14 @@ private fun WaveFlowRoot() {
         ?.getLong(Routes.ARG_PLAYLIST_ID)
         ?.let { playlistsState.playlist(it) }
 
+    // Les détails distants réemploient ces clés pour y mettre des UUID : sans le
+    // filtre par route, la barre de titre les lirait comme des entiers à chaque
+    // recomposition, et n'obtiendrait que des zéros.
+    val albumIdArg = backStackEntry?.arguments
+        ?.longArgOf(currentRoute, Routes.ALBUM_DETAIL, Routes.ARG_ALBUM_ID)
+    val artistIdArg = backStackEntry?.arguments
+        ?.longArgOf(currentRoute, Routes.ARTIST_DETAIL, Routes.ARG_ARTIST_ID)
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -187,8 +196,8 @@ private fun WaveFlowRoot() {
                             Text(
                                 currentScreenTitle(
                                     currentRoute = currentRoute,
-                                    albumId = backStackEntry?.arguments?.getLong(Routes.ARG_ALBUM_ID),
-                                    artistId = backStackEntry?.arguments?.getLong(Routes.ARG_ARTIST_ID),
+                                    albumId = albumIdArg,
+                                    artistId = artistIdArg,
                                     library = library,
                                     playlistName = openPlaylist?.name,
                                 ),

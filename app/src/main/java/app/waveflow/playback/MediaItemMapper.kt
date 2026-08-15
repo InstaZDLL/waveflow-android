@@ -46,6 +46,7 @@ fun RemoteSong.toMediaItem(): MediaItem =
                 .setTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
+                .setArtworkUri(artworkUri)
                 .build(),
         )
         .build()

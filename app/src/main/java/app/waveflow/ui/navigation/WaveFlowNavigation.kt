@@ -1,6 +1,7 @@
 package app.waveflow.ui.navigation
 
 import android.net.Uri
+import android.os.Bundle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
@@ -54,6 +55,27 @@ object Routes {
 
     fun serverArtistDetail(artistId: String): String = "$SERVER_ARTISTS/${Uri.encode(artistId)}"
 }
+
+/**
+ * L'identifiant entier porté par [key], à condition que la destination courante
+ * soit bien [route].
+ *
+ * Deux routes partagent la même clé d'argument sans partager son type :
+ * [Routes.ALBUM_DETAIL] porte un identifiant MediaStore, déclaré `LongType`, et
+ * [Routes.SERVER_ALBUM_DETAIL] un UUID, déclaré `StringType`. Lire le second
+ * comme le premier ne lève rien : `Bundle.getLong` attrape la
+ * `ClassCastException` et rend `0`, que rien ne distingue ensuite d'un
+ * identifiant véritable.
+ *
+ * Le filtre par route est donc ce qui sépare les deux, et il doit précéder la
+ * lecture plutôt que la suivre : c'est l'accès lui-même qui coûte.
+ *
+ * L'absence de la clé rend `null` elle aussi. `getLong` y répondrait encore
+ * `0`, et rien ne distingue ce zéro-là d'un autre : autant ne pas rouvrir la
+ * porte que le filtre vient de fermer.
+ */
+fun Bundle?.longArgOf(currentRoute: String?, route: String, key: String): Long? =
+    this?.takeIf { currentRoute == route && it.containsKey(key) }?.getLong(key)
 
 /**
  * Les sections atteignables depuis la barre du bas.
