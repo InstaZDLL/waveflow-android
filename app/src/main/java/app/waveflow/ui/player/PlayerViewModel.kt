@@ -9,8 +9,12 @@ import app.waveflow.WaveFlowApp
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
+import app.waveflow.playback.PlaybackFailure
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -43,6 +47,25 @@ class PlayerViewModel(
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
             initialValue = PlayerUiState(),
         )
+
+    /**
+     * Les pannes de lecture, à dire une fois chacune.
+     *
+     * Un événement, pas un état : le message se montre au moment où la lecture
+     * échoue, et n'a pas à réapparaître ensuite à chaque recomposition. Media3
+     * efface son erreur dès qu'on le prépare à nouveau, si bien qu'un second
+     * échec repasse par `null` et se dit de nouveau.
+     */
+    val errors: Flow<String> = playbackController.state
+        .map { it.failure }
+        .distinctUntilChanged()
+        .filterNotNull()
+        .map { failure ->
+            when (failure) {
+                PlaybackFailure.Unreachable -> "Serveur injoignable : lecture impossible."
+                PlaybackFailure.Unplayable -> "Ce morceau n'a pas pu être lu."
+            }
+        }
 
     fun connect() = playbackController.connect()
 

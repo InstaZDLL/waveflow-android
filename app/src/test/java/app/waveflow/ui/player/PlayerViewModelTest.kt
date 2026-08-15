@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.waveflow.playback.PlaybackFailure
 import app.waveflow.playback.PlaybackState
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.TrackSource
@@ -130,6 +131,87 @@ class PlayerViewModelTest {
         assertNull(state.track?.localSongId)
         assertEquals(true, state.isPlaying)
 
+        job.cancel()
+    }
+
+    @Test
+    fun `une lecture qui echoue se dit`() = runTest {
+        // Le défaut d'origine : le lecteur s'arrêtait sur une erreur sans que
+        // rien ne l'annonce, la piste restant affichée comme si elle allait
+        // démarrer.
+        val viewModel = PlayerViewModel(controller)
+        val messages = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { messages += it }
+        }
+
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unreachable))
+
+        assertEquals(listOf("Serveur injoignable : lecture impossible."), messages)
+        job.cancel()
+    }
+
+    @Test
+    fun `une piste illisible ne fait pas accuser le serveur`() = runTest {
+        val viewModel = PlayerViewModel(controller)
+        val messages = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { messages += it }
+        }
+
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unplayable))
+
+        assertEquals(listOf("Ce morceau n'a pas pu être lu."), messages)
+        job.cancel()
+    }
+
+    @Test
+    fun `une panne qui dure ne se repete pas`() = runTest {
+        // L'état est republié à chaque tic de position : sans quoi le message
+        // reviendrait deux fois par seconde tant que la panne dure.
+        val viewModel = PlayerViewModel(controller)
+        val messages = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { messages += it }
+        }
+
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unreachable))
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unreachable, positionMs = 500L))
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unreachable, positionMs = 1_000L))
+
+        assertEquals(1, messages.size)
+        job.cancel()
+    }
+
+    @Test
+    fun `un second echec apres reprise se dit de nouveau`() = runTest {
+        // Media3 oublie son erreur quand on le prépare à nouveau : la panne
+        // repasse par `null`, et le second échec doit se voir comme le premier.
+        val viewModel = PlayerViewModel(controller)
+        val messages = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { messages += it }
+        }
+
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unreachable))
+        controller.emit(PlaybackState(failure = null, isPlaying = true))
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unreachable))
+
+        assertEquals(2, messages.size)
+        job.cancel()
+    }
+
+    @Test
+    fun `un lecteur qui va bien ne dit rien`() = runTest {
+        val viewModel = PlayerViewModel(controller)
+        val messages = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { messages += it }
+        }
+
+        controller.emit(PlaybackState(isConnected = true, isPlaying = true))
+
+        assertTrue(messages.isEmpty())
         job.cancel()
     }
 
