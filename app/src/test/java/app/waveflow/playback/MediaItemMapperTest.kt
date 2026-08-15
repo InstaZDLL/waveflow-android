@@ -88,15 +88,45 @@ class MediaItemMapperTest {
 
     @Test
     fun `les metadonnees d'une piste distante suivent jusqu'au lecteur`() {
-        val track = remoteSong(id = "a", title = "Résonance", artist = "Bruit de Fond", album = "Écho")
-            .toMediaItem()
-            .toPlayingTrack()
+        val track = remoteSong(
+            id = "a",
+            title = "Résonance",
+            artist = "Bruit de Fond",
+            album = "Écho",
+            artworkUri = ARTWORK,
+        ).toMediaItem().toPlayingTrack()
 
         assertEquals("Résonance", track.title)
         assertEquals("Bruit de Fond", track.artist)
         assertEquals("Écho", track.album)
-        // Le catalogue v2 n'expose aucun point d'accès aux pochettes.
-        assertNull(track.artworkUri)
         assertTrue(track.source == TrackSource.Remote)
+    }
+
+    @Test
+    fun `une piste distante emporte sa pochette dans la metadonnee`() {
+        // Cette assertion a longtemps affirmé l'inverse, au motif que la v2
+        // n'exposait aucun point d'accès aux pochettes. Ce n'est plus vrai
+        // depuis `/api/v2/artwork`, mais l'assertion, elle, est restée : elle
+        // verrouillait l'omission au lieu de la signaler. La fixture par défaut
+        // rendant `null` de toute façon, elle passait des deux côtés du
+        // correctif — d'où une pochette obtenue par [ArtworkUrls] et posée ici.
+        //
+        // Tout ce qui lit la métadonnée de session en dépend, au-delà de nos
+        // propres écrans : la notification, l'écran de verrouillage, et demain
+        // Android Auto.
+        val track = remoteSong(id = "a", artworkUri = ARTWORK).toMediaItem().toPlayingTrack()
+
+        assertEquals(ARTWORK, track.artworkUri)
+    }
+
+    @Test
+    fun `une piste distante sans pochette n'en invente pas`() {
+        val track = remoteSong(id = "a", artworkUri = null).toMediaItem().toPlayingTrack()
+
+        assertNull(track.artworkUri)
+    }
+
+    private companion object {
+        val ARTWORK = "https://serveur.test/api/v2/artwork/1f2e3d".toUri()
     }
 }
