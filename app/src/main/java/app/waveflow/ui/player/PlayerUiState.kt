@@ -13,6 +13,7 @@ import app.waveflow.playback.RepeatMode
 data class PlayerUiState(
     val track: PlayingTrack? = null,
     val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,

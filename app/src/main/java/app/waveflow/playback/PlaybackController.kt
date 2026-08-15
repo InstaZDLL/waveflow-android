@@ -39,6 +39,9 @@ enum class PlaybackFailure {
  * @property current morceau courant, `null` si la file est vide. Décrit par ce
  *   que le lecteur en sait : il peut venir de l'appareil comme d'un serveur.
  * @property isPlaying lecture réellement en cours (pas seulement demandée).
+ * @property isBuffering le lecteur travaille sans encore produire de son. Pour
+ *   une piste distante, cela couvre l'obtention du ticket, qui précède toute
+ *   requête de diffusion — c'est là que se joue l'essentiel de l'attente.
  * @property positionMs position de lecture en millisecondes.
  * @property durationMs durée du morceau courant, 0 si inconnue.
  * @property shuffleEnabled lecture aléatoire active.
@@ -51,6 +54,7 @@ data class PlaybackState(
     val isConnected: Boolean = false,
     val current: PlayingTrack? = null,
     val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,

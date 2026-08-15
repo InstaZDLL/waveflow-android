@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -128,6 +131,7 @@ fun NowPlayingScreen(
 
             PlayerControls(
                 isPlaying = state.isPlaying,
+                isBuffering = state.isBuffering,
                 shuffleEnabled = state.shuffleEnabled,
                 repeatMode = state.repeatMode,
                 onTogglePlayPause = onTogglePlayPause,
@@ -253,6 +257,7 @@ private fun SeekBar(
 @Composable
 private fun PlayerControls(
     isPlaying: Boolean,
+    isBuffering: Boolean,
     shuffleEnabled: Boolean,
     repeatMode: RepeatMode,
     onTogglePlayPause: () -> Unit,
@@ -282,16 +287,28 @@ private fun PlayerControls(
             )
         }
 
+        // Le bouton reste en place et garde sa taille pendant l'attente : sa
+        // disparition ferait sauter toute la rangée de commandes.
         FilledIconButton(
             onClick = onTogglePlayPause,
+            enabled = !isBuffering,
             shape = CircleShape,
             modifier = Modifier.size(72.dp),
         ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Lecture",
-                modifier = Modifier.size(36.dp),
-            )
+            if (isBuffering) {
+                CircularProgressIndicator(
+                    strokeWidth = 3.dp,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .semantics { contentDescription = "Chargement du morceau" },
+                )
+            } else {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Lecture",
+                    modifier = Modifier.size(36.dp),
+                )
+            }
         }
 
         IconButton(onClick = onSkipNext) {

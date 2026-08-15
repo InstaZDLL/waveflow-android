@@ -172,6 +172,7 @@ class Media3PlaybackController(
             isConnected = true,
             current = player.currentMediaItem?.toPlayingTrack(),
             isPlaying = player.isPlaying,
+            isBuffering = player.playbackState == Player.STATE_BUFFERING,
             positionMs = player.currentPosition.coerceAtLeast(0L),
             durationMs = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0L) ?: 0L,
             shuffleEnabled = player.shuffleModeEnabled,

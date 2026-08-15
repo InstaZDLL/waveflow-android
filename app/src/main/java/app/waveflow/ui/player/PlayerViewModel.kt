@@ -37,6 +37,7 @@ class PlayerViewModel(
             PlayerUiState(
                 track = playback.current,
                 isPlaying = playback.isPlaying,
+                isBuffering = playback.isBuffering,
                 positionMs = playback.positionMs,
                 durationMs = playback.durationMs,
                 shuffleEnabled = playback.shuffleEnabled,
