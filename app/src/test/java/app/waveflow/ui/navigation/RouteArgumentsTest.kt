@@ -75,6 +75,18 @@ class RouteArgumentsTest {
     }
 
     @Test
+    fun `une cle absente ne vaut pas zero`() {
+        // Même sur la bonne route : `getLong` rendrait `0`, indiscernable d'un
+        // identifiant réel. C'est le zéro silencieux que le filtre par route
+        // chasse par ailleurs, et il entrerait ici par la porte de côté.
+        val args = Bundle().apply { putLong(Routes.ARG_PLAYLIST_ID, 7L) }
+
+        val albumId = args.longArgOf(Routes.ALBUM_DETAIL, Routes.ALBUM_DETAIL, Routes.ARG_ALBUM_ID)
+
+        assertNull(albumId)
+    }
+
+    @Test
     fun `sans arguments il n'y a rien a lire`() {
         val args: Bundle? = null
 

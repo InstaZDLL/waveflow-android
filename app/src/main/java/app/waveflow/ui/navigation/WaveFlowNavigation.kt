@@ -69,9 +69,13 @@ object Routes {
  *
  * Le filtre par route est donc ce qui sépare les deux, et il doit précéder la
  * lecture plutôt que la suivre : c'est l'accès lui-même qui coûte.
+ *
+ * L'absence de la clé rend `null` elle aussi. `getLong` y répondrait encore
+ * `0`, et rien ne distingue ce zéro-là d'un autre : autant ne pas rouvrir la
+ * porte que le filtre vient de fermer.
  */
 fun Bundle?.longArgOf(currentRoute: String?, route: String, key: String): Long? =
-    this?.takeIf { currentRoute == route }?.getLong(key)
+    this?.takeIf { currentRoute == route && it.containsKey(key) }?.getLong(key)
 
 /**
  * Les sections atteignables depuis la barre du bas.
