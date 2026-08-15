@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -55,6 +56,13 @@ class PlayerViewModel(
      * échoue, et n'a pas à réapparaître ensuite à chaque recomposition. Media3
      * efface son erreur dès qu'on le prépare à nouveau, si bien qu'un second
      * échec repasse par `null` et se dit de nouveau.
+     *
+     * Le flux est partagé, et sans rejeu. Dérivé par collecteur, il repartirait
+     * de la valeur courante du [StateFlow] amont, laquelle porte encore la
+     * panne tant que le lecteur n'a pas été repréparé : l'écran recréé après
+     * une rotation redirait alors une erreur déjà lue, et à chaque rotation.
+     * Le partage commence avec le ViewModel plutôt qu'au premier abonné, pour
+     * ne pas se rabattre sur cette même valeur courante à chaque réabonnement.
      */
     val errors: Flow<String> = playbackController.state
         .map { it.failure }
@@ -66,6 +74,7 @@ class PlayerViewModel(
                 PlaybackFailure.Unplayable -> "Ce morceau n'a pas pu être lu."
             }
         }
+        .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 0)
 
     fun connect() = playbackController.connect()
 

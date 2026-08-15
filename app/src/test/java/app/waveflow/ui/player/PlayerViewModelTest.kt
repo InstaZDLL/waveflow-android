@@ -202,6 +202,32 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `une panne deja annoncee ne se redit pas a un ecran recree`() = runTest {
+        // La rotation détruit l'activité et relance la collecte. La panne, elle,
+        // reste dans l'état du lecteur jusqu'à la prochaine préparation : un
+        // flux redérivé par abonné repartirait de cette valeur courante et
+        // redirait l'erreur, à chaque rotation.
+        val viewModel = PlayerViewModel(controller)
+        val avant = mutableListOf<String>()
+        val premier = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { avant += it }
+        }
+
+        controller.emit(PlaybackState(failure = PlaybackFailure.Unreachable))
+        premier.cancel()
+
+        val apres = mutableListOf<String>()
+        val second = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { apres += it }
+        }
+        advanceUntilIdle()
+
+        assertEquals("l'erreur est dite une fois au premier écran", 1, avant.size)
+        assertTrue("l'écran recréé ne la redit pas", apres.isEmpty())
+        second.cancel()
+    }
+
+    @Test
     fun `un lecteur qui va bien ne dit rien`() = runTest {
         val viewModel = PlayerViewModel(controller)
         val messages = mutableListOf<String>()
