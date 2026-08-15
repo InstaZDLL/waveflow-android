@@ -153,6 +153,12 @@ private fun WaveFlowRoot() {
         playlistsViewModel.errors.collect { snackbarHostState.showSnackbar(it) }
     }
 
+    // Une lecture qui échoue ne se voit nulle part ailleurs : le lecteur garde
+    // la piste affichée, à l'arrêt, sans rien dire de plus.
+    LaunchedEffect(Unit) {
+        playerViewModel.errors.collect { snackbarHostState.showSnackbar(it) }
+    }
+
     // Si la file se vide, il n'y a plus rien à afficher en plein écran.
     LaunchedEffect(hasTrack) {
         if (!hasTrack) playerExpanded = false

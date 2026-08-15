@@ -5,9 +5,11 @@ import android.content.Context
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import app.waveflow.data.remote.ServerException
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import com.google.common.util.concurrent.ListenableFuture
@@ -178,6 +180,7 @@ class Media3PlaybackController(
                 Player.REPEAT_MODE_ONE -> RepeatMode.One
                 else -> RepeatMode.Off
             },
+            failure = player.playerError?.toPlaybackFailure(),
         )
 
         if (player.isPlaying) startPositionUpdates() else stopPositionUpdates()
@@ -205,3 +208,43 @@ class Media3PlaybackController(
         const val POSITION_POLL_MS = 500L
     }
 }
+
+/**
+ * Traduit un échec Media3 en ce que l'écran saura dire.
+ *
+ * Deux chemins mènent à « injoignable », et il faut les deux.
+ *
+ * Le code d'erreur d'abord, quand la pile HTTP de Media3 a elle-même échoué.
+ * Les autres codes d'entrée-sortie restent volontairement dehors : un fichier
+ * local effacé rend `ERROR_CODE_IO_FILE_NOT_FOUND`, et accuser le serveur
+ * enverrait chercher la panne là où il n'y en a pas.
+ *
+ * La cause ensuite, qui est le cas réel d'une piste distante. Le ticket est
+ * résolu avant toute requête de diffusion, et son échec remonte enveloppé dans
+ * un `IOException` que Media3 ne peut que classer `ERROR_CODE_IO_UNSPECIFIED` —
+ * indiscernable, par son seul code, d'un fichier illisible. Le type que l'appli
+ * a posé elle-même en profondeur, lui, ne laisse aucun doute.
+ */
+internal fun PlaybackException.toPlaybackFailure(): PlaybackFailure =
+    if (errorCode in NETWORK_ERROR_CODES || hasUnreachableCause()) {
+        PlaybackFailure.Unreachable
+    } else {
+        PlaybackFailure.Unplayable
+    }
+
+/** Cherche un serveur injoignable sous les couches d'emballage successives. */
+private fun Throwable.hasUnreachableCause(): Boolean =
+    generateSequence(cause) { it.cause.takeIf { next -> next !== it } }
+        .take(MAX_CAUSE_DEPTH)
+        .any { it is ServerException.Unreachable }
+
+/** Garde-fou : une chaîne de causes circulaire ne doit pas figer le lecteur. */
+private const val MAX_CAUSE_DEPTH = 10
+
+/** Les codes qui désignent la liaison, et non le contenu. */
+private val NETWORK_ERROR_CODES = setOf(
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+)

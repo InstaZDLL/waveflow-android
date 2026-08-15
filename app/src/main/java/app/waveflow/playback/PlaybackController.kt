@@ -17,6 +17,21 @@ enum class RepeatMode {
 }
 
 /**
+ * Ce qui a empêché la lecture, quand elle s'est arrêtée sans reprendre.
+ *
+ * Media3 distingue une trentaine de codes d'erreur ; l'écran n'a besoin que de
+ * savoir s'il faut incriminer la liaison ou la piste, car ce n'est pas la même
+ * chose à dire ni le même geste à suggérer.
+ */
+enum class PlaybackFailure {
+    /** Le serveur n'a pas répondu : hors ligne, ou ticket impossible à obtenir. */
+    Unreachable,
+
+    /** La piste elle-même n'a pu être ni ouverte ni décodée. */
+    Unplayable,
+}
+
+/**
  * État de lecture observable, projeté depuis le lecteur Media3.
  *
  * @property isConnected `true` une fois la liaison au service établie ; tant
@@ -28,6 +43,9 @@ enum class RepeatMode {
  * @property durationMs durée du morceau courant, 0 si inconnue.
  * @property shuffleEnabled lecture aléatoire active.
  * @property repeatMode mode de répétition courant.
+ * @property failure panne en cours, `null` tant que le lecteur va bien. Elle
+ *   s'efface d'elle-même à la reprise : Media3 oublie son erreur dès qu'on le
+ *   prépare à nouveau.
  */
 data class PlaybackState(
     val isConnected: Boolean = false,
@@ -37,6 +55,7 @@ data class PlaybackState(
     val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.Off,
+    val failure: PlaybackFailure? = null,
 )
 
 /**
