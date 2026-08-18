@@ -1,0 +1,90 @@
+name: Build & test
+
+# Why this exists: on 2026-08-18 `main` stopped compiling. Two pull requests
+# were green on their own — one branched while the catalogue still declared
+# media3 1.5.1, the other a Dependabot bump to 1.11.0 — and their merge broke
+# `createTestOnlyControllerInfo`, whose signature had gained a parameter.
+# Nothing reported it: the test suite only ever ran on a developer machine.
+# A merge result nobody builds is a merge result nobody has checked.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to the same ref supersedes the previous run: only the latest state
+# matters, and a freed runner benefits the other pull requests.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Unit tests and debug build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # By default the token is written into `.git/config` as an auth
+          # header, where every later step can read it — the Gradle build and
+          # anything it resolves included. Nothing here talks to git after the
+          # checkout, so the credential has no reason to outlive it.
+          persist-credentials: false
+
+      # Temurin 21 rather than the JDK used locally: the project pins no
+      # toolchain, so Gradle compiles with whatever runtime it gets, and an LTS
+      # the runners always carry is the steadier floor. `compileOptions` targets
+      # Java 11 either way.
+      - name: Set up JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      # Robolectric fetches an `android-all-instrumented` jar per emulated SDK
+      # at *test* runtime, through Maven and not through Gradle — so the Gradle
+      # cache above never sees it. Around 200 MB, re-downloaded on every run
+      # without this.
+      - name: Cache Robolectric runtimes
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          # The jar is chosen by the Robolectric version and by the SDK the
+          # tests emulate — one lives in the version catalogue, the other in the
+          # module's `targetSdk`.
+          key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'app/build.gradle.kts') }}
+          restore-keys: robolectric-${{ runner.os }}-
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
+      # Separate from the tests, which already compile the main sources: what
+      # this adds is packaging — manifest merge, resources, dexing.
+      - name: Debug build
+        run: ./gradlew assembleDebug
+
+      # A failed job says a test fell; only the report says which one, and why.
+      #
+      # `ignore` rather than the default `warn`: a compilation failure produces
+      # no report at all, and that is a perfectly ordinary way for this job to
+      # go red. Warning about the missing directory would put a second, louder
+      # annotation next to the error that actually matters.
+      - name: Test reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
