@@ -62,7 +62,7 @@ class CacheViewModel(
                 null
             } catch (cancellation: CancellationException) {
                 throw cancellation
-            } catch (error: Throwable) {
+            } catch (error: Exception) {
                 // Un fichier verrouillé ou un index abîmé ne doit pas faire
                 // tomber l'écran. La mesure qui suit dira ce qui reste.
                 Log.w(TAG, "Vidage du cache incomplet", error)
@@ -85,7 +85,7 @@ class CacheViewModel(
         cache.usedBytes()
     } catch (cancellation: CancellationException) {
         throw cancellation
-    } catch (error: Throwable) {
+    } catch (error: Exception) {
         Log.w(TAG, "Taille du cache illisible", error)
         _state.value.usedBytes
     }
