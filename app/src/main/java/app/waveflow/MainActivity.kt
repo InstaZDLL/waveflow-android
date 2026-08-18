@@ -34,7 +34,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -60,7 +59,7 @@ import app.waveflow.ui.navigation.TopLevelDestination
 import app.waveflow.ui.navigation.longArgOf
 import app.waveflow.ui.navigation.WaveFlowBottomBar
 import app.waveflow.ui.permission.AudioPermissionGate
-import app.waveflow.ui.player.MiniPlayer
+import app.waveflow.ui.player.MiniPlayerHost
 import app.waveflow.ui.player.NowPlayingScreen
 import app.waveflow.ui.player.PlayerViewModel
 import app.waveflow.ui.playlists.AddToPlaylistSheet
@@ -92,9 +91,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-/** Hauteur réservée sous les listes pour que le mini-player ne masque rien. */
-private val MiniPlayerSpace = 76.dp
 
 private const val PLAYER_TRANSITION_MS = 300
 
@@ -170,7 +166,6 @@ private fun WaveFlowRoot() {
 
     BackHandler(enabled = playerExpanded) { playerExpanded = false }
 
-    val listBottomPadding = if (hasTrack) MiniPlayerSpace else 0.dp
     val isDetailRoute = currentRoute in DETAIL_ROUTES
     val openPlaylist = backStackEntry
         ?.takeIf { currentRoute == Routes.PLAYLIST_DETAIL }
@@ -310,11 +305,18 @@ private fun WaveFlowRoot() {
                 }
             }
 
-            Box(
+            MiniPlayerHost(
+                state = playerState,
+                // Inutile de le composer sous le lecteur plein écran, qui le
+                // recouvre entièrement.
+                showMiniPlayer = !playerExpanded,
+                onExpand = { playerExpanded = true },
+                onTogglePlayPause = playerViewModel::togglePlayPause,
+                onSkipNext = playerViewModel::skipNext,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-            ) {
+            ) { listBottomPadding ->
                 NavHost(
                     navController = navController,
                     startDestination = Routes.SONGS,
@@ -580,17 +582,6 @@ private fun WaveFlowRoot() {
                     }
                 }
 
-                // Inutile de le composer sous le lecteur plein écran, qui
-                // le recouvre entièrement.
-                if (!playerExpanded) {
-                    MiniPlayer(
-                        state = playerState,
-                        onExpand = { playerExpanded = true },
-                        onTogglePlayPause = playerViewModel::togglePlayPause,
-                        onSkipNext = playerViewModel::skipNext,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
             }
         }
 
