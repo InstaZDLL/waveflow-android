@@ -1,0 +1,120 @@
+package app.waveflow.ui.cache
+
+import app.waveflow.playback.PlaybackCache
+import app.waveflow.testing.MainDispatcherRule
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/**
+ * Le cache vu depuis les réglages.
+ *
+ * Ce qui compte ici n'est pas le vidage — c'est le cache qui le fait, et
+ * `RemoteMediaCacheTest` le prouve sur la vraie chaîne Media3 — mais ce que
+ * l'écran affiche quand il échoue, et qu'il ne se referme pas dessus.
+ */
+@RunWith(RobolectricTestRunner::class)
+class CacheViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    private class CacheFactice(
+        override val maxBytes: Long = 1_000L,
+        var occupe: Long = 0L,
+        var echoueAuVidage: Throwable? = null,
+        var echoueALaMesure: Throwable? = null,
+    ) : PlaybackCache {
+
+        var vidages = 0
+            private set
+
+        override suspend fun usedBytes(): Long {
+            echoueALaMesure?.let { throw it }
+            return occupe
+        }
+
+        override suspend fun clear() {
+            vidages++
+            echoueAuVidage?.let { throw it }
+            occupe = 0L
+        }
+    }
+
+    @Test
+    fun `avant toute mesure la taille reste inconnue`() {
+        // Et non pas zéro : l'écran doit pouvoir annoncer l'attente.
+        val vm = CacheViewModel(CacheFactice(occupe = 800L))
+
+        assertNull(vm.state.value.usedBytes)
+        assertEquals(1_000L, vm.state.value.maxBytes)
+    }
+
+    @Test
+    fun `la mesure publie la place occupee`() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = CacheViewModel(CacheFactice(occupe = 800L))
+
+        vm.refresh()
+
+        assertEquals(800L, vm.state.value.usedBytes)
+    }
+
+    @Test
+    fun `vider republie une taille a jour`() = runTest(mainDispatcherRule.dispatcher) {
+        val cache = CacheFactice(occupe = 800L)
+        val vm = CacheViewModel(cache)
+        vm.refresh()
+
+        vm.clear()
+
+        assertEquals(1, cache.vidages)
+        assertEquals(0L, vm.state.value.usedBytes)
+        assertFalse(vm.state.value.isClearing)
+        assertNull(vm.state.value.errorMessage)
+    }
+
+    @Test
+    fun `un vidage qui echoue se dit sans faire tomber l'ecran`() {
+        // Un fichier verrouillé, un index abîmé : l'écran doit le signaler et
+        // rester utilisable, pas propager l'exception.
+        val cache = CacheFactice(occupe = 800L, echoueAuVidage = IllegalStateException("index"))
+        val vm = CacheViewModel(cache)
+
+        vm.clear()
+
+        assertNotNull(vm.state.value.errorMessage)
+        assertFalse("l'écran doit se rendre à nouveau utilisable", vm.state.value.isClearing)
+        // La mesure qui suit dit ce qui reste vraiment.
+        assertEquals(800L, vm.state.value.usedBytes)
+    }
+
+    @Test
+    fun `une mesure illisible garde la derniere valeur connue`() {
+        // Afficher zéro ferait croire à un cache vide alors qu'il est plein.
+        val cache = CacheFactice(occupe = 800L)
+        val vm = CacheViewModel(cache)
+        vm.refresh()
+
+        cache.echoueALaMesure = IllegalStateException("index")
+        vm.refresh()
+
+        assertEquals(800L, vm.state.value.usedBytes)
+    }
+
+    @Test
+    fun `le message d'erreur se referme`() {
+        val vm = CacheViewModel(CacheFactice(echoueAuVidage = IllegalStateException("index")))
+        vm.clear()
+        assertNotNull(vm.state.value.errorMessage)
+
+        vm.dismissError()
+
+        assertNull(vm.state.value.errorMessage)
+    }
+}

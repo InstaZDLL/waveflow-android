@@ -20,6 +20,7 @@ import app.waveflow.data.remote.ServerImageAuthInterceptor
 import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
+import app.waveflow.playback.RemoteMediaCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -85,6 +86,16 @@ class AppContainer(app: Application) {
      * par le composant qui le demande (voir `PlayerViewModel.onCleared`).
      */
     fun createPlaybackController(): PlaybackController = Media3PlaybackController(appContext)
+
+    /**
+     * Cache des pistes distantes, unique pour le processus.
+     *
+     * Porté ici et non par le service : `SimpleCache` refuse d'ouvrir deux fois
+     * le même répertoire, et l'écran des réglages doit pouvoir en lire la taille
+     * et le vider pendant que le service tourne. Il vit donc aussi longtemps que
+     * le processus, ce qui suffit — le verrou tombe avec lui.
+     */
+    val remoteMediaCache: RemoteMediaCache by lazy { RemoteMediaCache(appContext) }
 
     /**
      * Un seul transport pour tous les appels serveur : un pool de connexions

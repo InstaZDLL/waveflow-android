@@ -27,7 +27,6 @@ import kotlinx.coroutines.cancel
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
-    private var mediaCache: RemoteMediaCache? = null
 
     /**
      * Portée des chargements de pochette : ils n'ont plus de destinataire une
@@ -43,8 +42,7 @@ class PlaybackService : MediaSessionService() {
         // où le lecteur en a besoin, et le cache s'intercale avant lui pour
         // qu'une piste déjà lue ne redemande ni ticket ni octets.
         val container = (application as WaveFlowApp).container
-        mediaCache = RemoteMediaCache(this)
-        val dataSourceFactory = mediaCache!!.dataSourceFactory(
+        val dataSourceFactory = container.remoteMediaCache.dataSourceFactory(
             RemoteStreamResolver(container.catalogRepository),
         )
 
@@ -93,10 +91,9 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         artworkScope.cancel()
-        // Le verrou du répertoire de cache subsisterait sans ça, et la
-        // prochaine ouverture échouerait.
-        mediaCache?.release()
-        mediaCache = null
+        // Le cache n'est pas relâché ici : il appartient au conteneur, qui le
+        // partage avec l'écran des réglages. Son verrou tombe avec le processus,
+        // et le service peut redémarrer sur la même instance.
         super.onDestroy()
     }
 }

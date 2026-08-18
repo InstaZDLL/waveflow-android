@@ -11,9 +11,11 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.test.core.app.ApplicationProvider
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -210,6 +212,39 @@ class RemoteMediaCacheTest {
         assertEquals("aucun ticket pour une piste locale", 0, ticketsDemandes)
         assertEquals("aucune requête réseau", 0, server.requestCount)
         fichier.delete()
+    }
+
+    @Test
+    fun `la place annoncee est celle qu'occupent les pistes mises en cache`() = runTest {
+        // Le chiffre que l'écran des réglages affiche : s'il ne suivait pas ce
+        // qui entre réellement, il n'aiderait personne à décider de vider.
+        val contenu = "des octets audio".toByteArray()
+        server.enqueue(MockResponse().setBody(String(contenu)))
+        assertEquals("un cache neuf n'occupe rien", 0L, mediaCache.usedBytes())
+
+        lire(mediaCache.dataSourceFactory(resolver).createDataSource(), specDe("piste-1"))
+
+        assertEquals(contenu.size.toLong(), mediaCache.usedBytes())
+    }
+
+    @Test
+    fun `vider le cache renvoie la piste au reseau`() = runTest {
+        // Le vidage se prouve par le comportement, pas par un compteur remis à
+        // zéro : la même piste doit repartir chercher ses octets et son ticket.
+        val contenu = "des octets audio"
+        repeat(2) { server.enqueue(MockResponse().setBody(contenu)) }
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        lire(factory.createDataSource(), specDe("piste-1"))
+        assertTrue("rien n'a été mis en cache", mediaCache.usedBytes() > 0L)
+
+        mediaCache.clear()
+
+        assertEquals(0L, mediaCache.usedBytes())
+        val relu = lire(factory.createDataSource(), specDe("piste-1"))
+        assertEquals(contenu, String(relu))
+        assertEquals("la seconde lecture doit repartir au réseau", 2, server.requestCount)
+        assertEquals("et redemander un ticket", 2, ticketsDemandes)
     }
 }
 

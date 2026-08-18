@@ -52,6 +52,7 @@ import app.waveflow.ui.browse.AlbumDetailScreen
 import app.waveflow.ui.browse.AlbumsScreen
 import app.waveflow.ui.browse.ArtistDetailScreen
 import app.waveflow.ui.browse.ArtistsScreen
+import app.waveflow.ui.cache.CacheViewModel
 import app.waveflow.ui.library.LibraryScreen
 import app.waveflow.ui.library.LibraryViewModel
 import app.waveflow.ui.navigation.Routes
@@ -113,6 +114,7 @@ private fun WaveFlowRoot() {
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val serverViewModel: ServerViewModel = viewModel(factory = ServerViewModel.Factory)
     val catalogViewModel: CatalogViewModel = viewModel(factory = CatalogViewModel.Factory)
+    val cacheViewModel: CacheViewModel = viewModel(factory = CacheViewModel.Factory)
 
     val library by libraryViewModel.library.collectAsStateWithLifecycle()
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
@@ -120,6 +122,7 @@ private fun WaveFlowRoot() {
     val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
     val searchResults by searchViewModel.results.collectAsStateWithLifecycle()
     val serverState by serverViewModel.state.collectAsStateWithLifecycle()
+    val cacheState by cacheViewModel.state.collectAsStateWithLifecycle()
     // Les états du catalogue sont collectés dans leurs destinations, et non
     // ici : chargés à la racine, chaque page reçue recomposerait le Scaffold,
     // le NavHost et tous les écrans.
@@ -445,12 +448,19 @@ private fun WaveFlowRoot() {
 
                     composable(Routes.SERVER_ACCOUNT) {
                         serverState.connected?.let { session ->
+                            // La taille bouge à chaque piste lue : elle se
+                            // relève à l'ouverture, pas une fois pour toutes.
+                            LaunchedEffect(Unit) { cacheViewModel.refresh() }
+
                             ServerAccountScreen(
                                 session = session,
+                                cache = cacheState,
                                 onDisconnect = {
                                     serverViewModel.disconnect()
                                     navController.popBackStack()
                                 },
+                                onClearCache = cacheViewModel::clear,
+                                onDismissCacheError = cacheViewModel::dismissError,
                                 bottomPadding = listBottomPadding,
                             )
                         }

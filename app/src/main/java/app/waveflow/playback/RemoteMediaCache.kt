@@ -9,6 +9,8 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -21,7 +23,7 @@ import java.io.File
  * Le répertoire est celui du cache applicatif : le système peut le vider quand
  * la place manque, ce qui est exactement le contrat qu'on veut ici.
  */
-class RemoteMediaCache(context: Context) {
+class RemoteMediaCache(context: Context) : PlaybackCache {
 
     private val appContext = context.applicationContext
 
@@ -62,7 +64,30 @@ class RemoteMediaCache(context: Context) {
         return DefaultDataSource.Factory(appContext, cached)
     }
 
-    /** À la destruction du service : sans quoi le verrou du répertoire subsiste. */
+    override val maxBytes: Long = MAX_BYTES
+
+    /**
+     * Place occupée, à l'octet près.
+     *
+     * Lue depuis l'index du cache et non par un parcours du répertoire : c'est
+     * le même chiffre que celui sur lequel l'éviction se déclenche.
+     */
+    override suspend fun usedBytes(): Long = withContext(Dispatchers.IO) { cache.cacheSpace }
+
+    /**
+     * Vide le cache de tout ce qu'il contient.
+     *
+     * Rien n'est perdu : chaque piste reste sur le serveur, et une lecture la
+     * retéléchargera. Une lecture en cours n'est pas interrompue — elle tient
+     * déjà ses fichiers ouverts, et les supprimer ne les lui retire pas.
+     */
+    override suspend fun clear() = withContext(Dispatchers.IO) {
+        // `keys` reflète l'index à l'instant de l'appel ; en prendre une copie
+        // évite de le parcourir pendant qu'on le modifie.
+        cache.keys.toList().forEach { cache.removeResource(it) }
+    }
+
+    /** À la fermeture : sans quoi le verrou du répertoire subsiste. */
     fun release() {
         cache.release()
     }
