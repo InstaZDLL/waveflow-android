@@ -30,6 +30,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # By default the token is written into `.git/config` as an auth
+          # header, where every later step can read it — the Gradle build and
+          # anything it resolves included. Nothing here talks to git after the
+          # checkout, so the credential has no reason to outlive it.
+          persist-credentials: false
 
       # Temurin 21 rather than the JDK used locally: the project pins no
       # toolchain, so Gradle compiles with whatever runtime it gets, and an LTS
