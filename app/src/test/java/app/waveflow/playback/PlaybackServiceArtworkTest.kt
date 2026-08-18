@@ -34,6 +34,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
+import java.util.concurrent.TimeUnit
 
 /**
  * La pochette que Media3 va chercher lui-même.
@@ -91,7 +92,10 @@ class PlaybackServiceArtworkTest {
         val bitmap = session.bitmapLoader.loadBitmapFromMetadata(metadata)!!.attendue()
 
         assertNotNull(bitmap)
-        assertEquals("Bearer $JETON", server.takeRequest().getHeader("Authorization"))
+        // Borné : sans échéance, un chargement qui ne partirait plus sur le
+        // réseau ferait attendre le test au lieu de le faire échouer.
+        val requete = server.takeRequest(TIMEOUT_S, TimeUnit.SECONDS)
+        assertEquals("Bearer $JETON", requete?.getHeader("Authorization"))
     }
 
     /** Le service tel qu'Android le crée, session comprise. */
@@ -156,7 +160,7 @@ class PlaybackServiceArtworkTest {
      * bloquant depuis le fil de test empêcherait justement cette reprise.
      */
     private fun ListenableFuture<Bitmap>.attendue(): Bitmap {
-        val echeance = System.nanoTime() + TIMEOUT_NS
+        val echeance = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_S)
         while (!isDone && System.nanoTime() < echeance) {
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(5)
@@ -167,7 +171,7 @@ class PlaybackServiceArtworkTest {
 
     private companion object {
         const val JETON = "wfa_stocke"
-        const val TIMEOUT_NS = 10_000_000_000L
+        const val TIMEOUT_S = 10L
 
         val PNG_1X1: ByteArray = java.util.Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",

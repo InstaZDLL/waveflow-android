@@ -73,7 +73,19 @@ class CoilBitmapLoader(
     /**
      * Fait le pont entre une coroutine et le [ListenableFuture] qu'attend Media3.
      *
-     * L'écoute posée sur le future propage l'annulation dans l'autre sens :
+     * Le contrat tient en une phrase : **le futur se termine toujours**. Media3
+     * attend la vignette avant de publier la notification, et un futur laissé
+     * en suspens la retiendrait indéfiniment.
+     *
+     * Deux chemins le mettent en défaut si on s'en remet au seul corps de la
+     * coroutine — d'où l'écoute posée sur la fin du job :
+     *
+     * - la portée est **déjà** annulée, le service ayant été détruit entre-temps.
+     *   `launch` rend alors un job mort dont le corps n'a jamais tourné ;
+     * - la coroutine est annulée pendant le chargement, avant que `block` ait
+     *   rendu quoi que ce soit.
+     *
+     * L'écoute posée sur le futur propage l'annulation dans l'autre sens :
      * Media3 abandonne un chargement dès que la piste courante change, et sans
      * ça la requête continuerait pour une pochette dont personne ne veut plus.
      */
@@ -84,11 +96,16 @@ class CoilBitmapLoader(
             try {
                 future.set(block())
             } catch (cancellation: CancellationException) {
-                future.cancel(/* mayInterruptIfRunning = */ false)
                 throw cancellation
             } catch (error: Throwable) {
                 future.setException(error)
             }
+        }
+
+        // Rien à faire si le corps a déjà tranché ; sinon c'est que la coroutine
+        // s'est arrêtée sans résultat, et le futur doit le refléter.
+        job.invokeOnCompletion {
+            if (!future.isDone) future.cancel(/* mayInterruptIfRunning = */ false)
         }
 
         future.addListener(

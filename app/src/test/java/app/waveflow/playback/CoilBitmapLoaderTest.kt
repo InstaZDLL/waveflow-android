@@ -16,8 +16,13 @@ import coil.request.ImageRequest
 import coil.request.ImageResult
 import coil.request.SuccessResult
 import coil.ComponentRegistry
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -34,8 +39,8 @@ import java.util.concurrent.TimeUnit
  * Le pont entre Media3 et le chargeur d'images de l'application.
  *
  * Ce que Media3 attend est un `ListenableFuture` : ni un chargement qui reste
- * en suspens sur une erreur, ni une bitmap que le système refusera de
- * redimensionner.
+ * en suspens sur une erreur ou une annulation, ni une bitmap que le système
+ * refusera de redimensionner.
  */
 @RunWith(RobolectricTestRunner::class)
 class CoilBitmapLoaderTest {
@@ -103,6 +108,49 @@ class CoilBitmapLoaderTest {
     }
 
     @Test
+    fun `une portee deja annulee termine le futur sans rien charger`() {
+        // `PlaybackService.onDestroy` annule la portée, et Media3 peut réclamer
+        // une vignette juste après. La coroutine ne tourne alors jamais : s'en
+        // remettre à son seul corps laisserait le futur en suspens pour de bon.
+        val imageLoader = RecordingImageLoader { error("aucun chargement ne devait partir") }
+        val porteeMorte = CoroutineScope(Dispatchers.Unconfined).also { it.cancel() }
+
+        val future = CoilBitmapLoader(context, imageLoader, porteeMorte)
+            .loadBitmap("https://exemple.test/api/v2/artwork/abc".toUri())
+
+        assertTrue("Le futur est resté en suspens", future.isDone)
+        assertNull(imageLoader.lastRequest)
+    }
+
+    @Test
+    fun `annuler le futur arrete le chargement en cours`() {
+        // Media3 abandonne un chargement dès que la piste courante change. Sans
+        // propagation, la requête continuerait pour une pochette dont plus
+        // personne ne veut.
+        val demarre = CompletableDeferred<Unit>()
+        val interrompu = CompletableDeferred<Unit>()
+        val imageLoader = RecordingImageLoader {
+            demarre.complete(Unit)
+            try {
+                awaitCancellation()
+            } finally {
+                interrompu.complete(Unit)
+            }
+        }
+
+        val future = CoilBitmapLoader(context, imageLoader, scope)
+            .loadBitmap("https://exemple.test/api/v2/artwork/abc".toUri())
+        assertTrue("Le chargement n'a jamais démarré", demarre.isCompleted)
+
+        future.cancel(/* mayInterruptIfRunning = */ false)
+
+        assertTrue(future.isCancelled)
+        runBlocking {
+            withTimeout(TimeUnit.SECONDS.toMillis(TIMEOUT_S)) { interrompu.await() }
+        }
+    }
+
+    @Test
     fun `une pochette embarquee est decodee sans rien demander au reseau`() {
         val imageLoader = RecordingImageLoader { error("aucun chargement ne devait partir") }
 
@@ -126,10 +174,11 @@ class CoilBitmapLoaderTest {
  * Chargeur d'images factice qui retient la dernière requête reçue.
  *
  * Coil n'expose aucun double : l'interface est petite, l'implémenter coûte
- * moins qu'un vrai chargeur qu'il faudrait ensuite museler.
+ * moins qu'un vrai chargeur qu'il faudrait ensuite museler. [result] est
+ * suspendable pour qu'un test puisse tenir un chargement ouvert et l'annuler.
  */
 private class RecordingImageLoader(
-    private val result: (ImageRequest) -> ImageResult,
+    private val result: suspend (ImageRequest) -> ImageResult,
 ) : ImageLoader {
 
     var lastRequest: ImageRequest? = null
