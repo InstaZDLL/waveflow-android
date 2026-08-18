@@ -5,9 +5,15 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import app.waveflow.WaveFlowApp
+import coil.imageLoader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 /**
  * Service de lecture porté par Media3.
@@ -22,6 +28,12 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private var mediaCache: RemoteMediaCache? = null
+
+    /**
+     * Portée des chargements de pochette : ils n'ont plus de destinataire une
+     * fois la session détruite.
+     */
+    private val artworkScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
         super.onCreate()
@@ -51,7 +63,16 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        mediaSession = MediaSession.Builder(this, player).build()
+        // Sans ce chargeur, Media3 irait chercher les pochettes avec son propre
+        // client HTTP, qui ne porte pas le jeton de session : `/api/v2/artwork/`
+        // lui répondait 401 et la notification restait sans vignette.
+        // `CacheBitmapLoader` reprend ce que Media3 fait par défaut — il évite
+        // de recharger la même image à chaque rafraîchissement.
+        val bitmapLoader = CacheBitmapLoader(CoilBitmapLoader(this, imageLoader, artworkScope))
+
+        mediaSession = MediaSession.Builder(this, player)
+            .setBitmapLoader(bitmapLoader)
+            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -71,6 +92,7 @@ class PlaybackService : MediaSessionService() {
             release()
         }
         mediaSession = null
+        artworkScope.cancel()
         // Le verrou du répertoire de cache subsisterait sans ça, et la
         // prochaine ouverture échouerait.
         mediaCache?.release()
