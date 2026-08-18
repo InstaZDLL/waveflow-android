@@ -13,6 +13,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -21,6 +22,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.shadows.ShadowLooper
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 /**
  * Le contrôleur, éprouvé sur la vraie chaîne Media3.
@@ -64,13 +66,20 @@ class Media3PlaybackControllerTest {
 
     @Test
     fun `les commandes sont ignorees avant la connexion`() {
-        // Les gardes `controller ?: return` ne sont pas décoratives : l'UI peut
-        // appeler une commande pendant que la liaison s'établit encore.
+        // Les gardes sur `controller` ne sont pas décoratives : l'UI peut
+        // appeler n'importe quelle commande pendant que la liaison s'établit
+        // encore. Elles y passent toutes, faute de quoi celle qu'on oublierait
+        // de garder ne se signalerait qu'à l'usage.
         val controleur = Media3PlaybackController(app).also { controller = it }
 
         controleur.play(listOf(song(1)), startIndex = 0)
+        controleur.playRemote(listOf(remoteSong("uuid-1")), startIndex = 0)
+        controleur.playShuffled(listOf(song(1), song(2)))
+        controleur.playRemoteShuffled(listOf(remoteSong("uuid-1"), remoteSong("uuid-2")))
         controleur.playPause()
         controleur.skipNext()
+        controleur.skipPrevious()
+        controleur.seekTo(1_000L)
         controleur.toggleShuffle()
         controleur.cycleRepeatMode()
 
@@ -93,7 +102,7 @@ class Media3PlaybackControllerTest {
         val controleur = controleurConnecte()
 
         controleur.play(listOf(song(1), song(2), song(3)), startIndex = 1)
-        reposer()
+        attendre("la file posée") { controleur.state.value.current != null }
 
         val courant = controleur.state.value.current
         assertNotNull(courant)
@@ -112,7 +121,7 @@ class Media3PlaybackControllerTest {
         val controleur = controleurConnecte()
 
         controleur.playRemote(listOf(remoteSong("uuid-1")), startIndex = 0)
-        reposer()
+        attendre("la file posée") { controleur.state.value.current != null }
 
         val courant = controleur.state.value.current
         assertNotNull(courant)
@@ -129,8 +138,12 @@ class Media3PlaybackControllerTest {
         val controleur = controleurConnecte()
 
         controleur.play(listOf(song(1)), startIndex = 0)
-        reposer()
+        attendre("la file posée") { controleur.state.value.current != null }
 
+        // Zéro est aussi la valeur d'un état neuf : sans cette première
+        // assertion, le test passerait alors même que la file n'aurait jamais
+        // été posée. C'est la piste chargée qui rend la seconde probante.
+        assertEquals("local:1", controleur.state.value.current?.mediaId)
         assertEquals(0L, controleur.state.value.durationMs)
     }
 
@@ -145,11 +158,10 @@ class Media3PlaybackControllerTest {
         val controleur = controleurConnecte()
 
         controleur.toggleShuffle()
-        reposer()
-        assertTrue("L'aléatoire n'a pas été activé", controleur.state.value.shuffleEnabled)
+        attendre("l'aléatoire actif") { controleur.state.value.shuffleEnabled }
 
         controleur.play(listOf(song(1), song(2)), startIndex = 0)
-        reposer()
+        attendre("la file posée") { controleur.state.value.current != null }
 
         assertFalse(controleur.state.value.shuffleEnabled)
         assertEquals("local:1", controleur.state.value.current?.mediaId)
@@ -160,7 +172,7 @@ class Media3PlaybackControllerTest {
         val controleur = controleurConnecte()
 
         controleur.playShuffled(listOf(song(1), song(2), song(3)))
-        reposer()
+        attendre("la file posée") { controleur.state.value.current != null }
 
         assertTrue(controleur.state.value.shuffleEnabled)
     }
@@ -170,10 +182,13 @@ class Media3PlaybackControllerTest {
         val controleur = controleurConnecte()
         assertEquals(RepeatMode.Off, controleur.state.value.repeatMode)
 
+        var precedent = RepeatMode.Off
         val parcours = List(3) {
             controleur.cycleRepeatMode()
-            reposer()
-            controleur.state.value.repeatMode
+            attendre("le mode de répétition change") {
+                controleur.state.value.repeatMode != precedent
+            }
+            controleur.state.value.repeatMode.also { mode -> precedent = mode }
         }
 
         assertEquals(listOf(RepeatMode.All, RepeatMode.One, RepeatMode.Off), parcours)
@@ -188,13 +203,18 @@ class Media3PlaybackControllerTest {
         // Pour une piste distante, cette attente couvre l'obtention du ticket,
         // qui précède toute requête de diffusion. C'est là que se joue
         // l'essentiel du délai ressenti.
+        //
+        // Le tampon est ici la condition d'attente et non une assertion : il
+        // n'apparaît pas au même instant que la file, et l'exiger d'un coup
+        // rendrait le test instable. Une projection muette fait donc échouer
+        // sur le délai, avec le libellé pour le dire.
         val controleur = controleurConnecte()
 
         controleur.playRemote(listOf(remoteSong("uuid-1")), startIndex = 0)
-        reposer()
+        attendre("le tampon avant le premier son") { controleur.state.value.isBuffering }
 
-        assertTrue(controleur.state.value.isBuffering)
         assertFalse(controleur.state.value.isPlaying)
+        assertNull(controleur.state.value.failure)
     }
 
     @Test
@@ -204,7 +224,9 @@ class Media3PlaybackControllerTest {
         val controleur = controleurConnecte()
 
         controleur.play(listOf(song(1)), startIndex = 0)
-        reposerJusquALaPanne()
+        attendre("la panne du lecteur", avancerHorloge = true) {
+            controleur.state.value.failure != null
+        }
 
         assertEquals(PlaybackFailure.Unplayable, controleur.state.value.failure)
         assertFalse(controleur.state.value.isBuffering)
@@ -218,8 +240,7 @@ class Media3PlaybackControllerTest {
     fun `relacher le controleur remet l'etat a zero`() {
         val controleur = controleurConnecte()
         controleur.play(listOf(song(1)), startIndex = 0)
-        reposer()
-        assertNotNull(controleur.state.value.current)
+        attendre("la file posée") { controleur.state.value.current != null }
 
         controleur.release()
 
@@ -246,52 +267,68 @@ class Media3PlaybackControllerTest {
         return Media3PlaybackController(app).also {
             controller = it
             it.connect()
-            reposer()
-            assertTrue("La liaison au service n'a pas abouti", it.state.value.isConnected)
+            attendre("la liaison au service") { it.state.value.isConnected }
         }
     }
 
     /**
-     * Écoule les messages en attente sans avancer l'horloge.
+     * Attend qu'une condition se réalise, en écoulant les messages entre deux
+     * essais.
      *
-     * Le lecteur atteint ainsi son état de départ — file posée, tampon en
-     * cours — sans que sa machine à états aille jusqu'à renoncer.
+     * Un nombre de tours fixe serait un pari sur la vitesse de la machine :
+     * trop court il rend le test instable, trop long il fait payer l'attente à
+     * chaque exécution. La condition dit quand s'arrêter, l'échéance quand
+     * renoncer — et le libellé dit ce qu'on attendait.
+     *
+     * @param avancerHorloge nécessaire pour que la machine à états du lecteur
+     *   aille jusqu'à renoncer : son chargement échoue sur un fil bien réel,
+     *   mais elle vit sur une boucle que Robolectric fige. Sans avancer le
+     *   temps, l'erreur ne remonte jamais.
      */
-    private fun reposer(tours: Int = 30) = repeat(tours) {
-        bouclesVivantes().forEach { boucle -> runCatching { shadowOf(boucle).idle() } }
-        Thread.sleep(IDLE_PAUSE_MS)
+    private fun attendre(
+        quoi: String,
+        avancerHorloge: Boolean = false,
+        condition: () -> Boolean,
+    ) {
+        val echeance = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_S)
+        while (true) {
+            // Écouler d'abord : les messages postés pendant la pause doivent
+            // être traités avant qu'on interroge l'état.
+            ecouler(avancerHorloge)
+            if (condition()) return
+            if (System.nanoTime() >= echeance) break
+            Thread.sleep(PAUSE_MS)
+        }
+        fail("Délai dépassé en attendant : $quoi")
     }
 
     /**
-     * Avance l'horloge de toutes les boucles jusqu'à ce que le lecteur renonce.
+     * Écoule les messages de toutes les boucles encore vivantes.
      *
-     * Le chargement échoue sur un fil bien réel, mais la machine à états du
-     * lecteur vit sur une boucle que Robolectric fige : sans avancer son
-     * horloge, l'erreur ne remonterait jamais.
+     * Toutes, et pas seulement la principale : ExoPlayer tient sa machine à
+     * états sur un `HandlerThread` à lui.
      */
-    private fun reposerJusquALaPanne(controleur: Media3PlaybackController? = controller) {
-        repeat(TOURS_MAX) {
-            bouclesVivantes().forEach { boucle ->
-                runCatching { shadowOf(boucle).idleFor(Duration.ofMillis(TICK_MS)) }
+    private fun ecouler(avancerHorloge: Boolean) {
+        ShadowLooper.getAllLoopers()
+            .filter { it.thread.isAlive }
+            .forEach { boucle ->
+                // `getAllLoopers` ramasse aussi les boucles des tests
+                // précédents, dont les fils s'arrêtent — « Looper is quitting ».
+                // Le filtre écarte le gros du lot, ce garde-fou couvre la
+                // course qui reste.
+                runCatching {
+                    if (avancerHorloge) {
+                        shadowOf(boucle).idleFor(Duration.ofMillis(TICK_MS))
+                    } else {
+                        shadowOf(boucle).idle()
+                    }
+                }
             }
-            Thread.sleep(IDLE_PAUSE_MS)
-            if (controleur?.state?.value?.failure != null) return
-        }
     }
-
-    /**
-     * Les boucles de messages qu'on peut encore faire tourner.
-     *
-     * `getAllLoopers` ramasse aussi celles des tests précédents : leurs fils
-     * s'arrêtent, et les solliciter lève « Looper is quitting ». Le filtre
-     * écarte le gros du lot, le `runCatching` couvre la course qui reste.
-     */
-    private fun bouclesVivantes() =
-        ShadowLooper.getAllLoopers().filter { it.thread.isAlive }
 
     private companion object {
-        const val IDLE_PAUSE_MS = 5L
+        const val TIMEOUT_S = 15L
+        const val PAUSE_MS = 5L
         const val TICK_MS = 200L
-        const val TOURS_MAX = 200
     }
 }
