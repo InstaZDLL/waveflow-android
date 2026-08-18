@@ -44,7 +44,11 @@ class CacheViewModel(
     /** À l'ouverture de l'écran : la taille bouge à chaque piste lue. */
     fun refresh() {
         viewModelScope.launch {
-            _state.update { it.copy(usedBytes = mesurer()) }
+            // Mesurer d'abord, publier ensuite. `update` rejoue sa lambda quand
+            // l'état a bougé entre-temps, et la mesure suspend le temps d'un
+            // accès disque : la laisser dedans la ferait repartir pour rien.
+            val mesure = mesurer()
+            _state.update { it.copy(usedBytes = mesure) }
         }
     }
 
@@ -65,8 +69,9 @@ class CacheViewModel(
                 "Le cache n'a pas pu être entièrement vidé."
             }
 
+            val mesure = mesurer()
             _state.update {
-                it.copy(usedBytes = mesurer(), isClearing = false, errorMessage = echec)
+                it.copy(usedBytes = mesure, isClearing = false, errorMessage = echec)
             }
         }
     }

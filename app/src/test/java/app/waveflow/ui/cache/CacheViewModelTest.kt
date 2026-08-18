@@ -2,6 +2,7 @@ package app.waveflow.ui.cache
 
 import app.waveflow.playback.PlaybackCache
 import app.waveflow.testing.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -35,7 +36,15 @@ class CacheViewModelTest {
         var vidages = 0
             private set
 
+        var mesures = 0
+            private set
+
+        /** Posée par un test, elle retient la mesure le temps voulu. */
+        var barriere: CompletableDeferred<Unit>? = null
+
         override suspend fun usedBytes(): Long {
+            mesures++
+            barriere?.await()
             echoueALaMesure?.let { throw it }
             return occupe
         }
@@ -104,6 +113,33 @@ class CacheViewModelTest {
         cache.echoueALaMesure = IllegalStateException("index")
         vm.refresh()
 
+        assertEquals(800L, vm.state.value.usedBytes)
+    }
+
+    @Test
+    fun `un etat qui bouge pendant la mesure ne la fait pas repartir`() {
+        // `MutableStateFlow.update` rejoue sa lambda quand l'état a changé
+        // entre-temps. La mesure suspend le temps d'un accès disque : la placer
+        // dans cette lambda la ferait repartir sur le disque pour rien.
+        //
+        // On rend la course déterministe — la mesure attend, l'état change,
+        // puis on la libère.
+        val cache = CacheFactice(occupe = 800L, echoueAuVidage = IllegalStateException("index"))
+        val vm = CacheViewModel(cache)
+        // Un échec d'abord, pour avoir un message à retirer ensuite : sans
+        // changement réel, l'état resterait égal et le CAS ne rejouerait rien.
+        vm.clear()
+        assertNotNull(vm.state.value.errorMessage)
+
+        val barriere = CompletableDeferred<Unit>()
+        cache.barriere = barriere
+        val avant = cache.mesures
+
+        vm.refresh()
+        vm.dismissError()
+        barriere.complete(Unit)
+
+        assertEquals("la mesure ne doit pas être rejouée", avant + 1, cache.mesures)
         assertEquals(800L, vm.state.value.usedBytes)
     }
 
