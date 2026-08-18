@@ -67,6 +67,11 @@ jobs:
         run: ./gradlew assembleDebug
 
       # A failed job says a test fell; only the report says which one, and why.
+      #
+      # `ignore` rather than the default `warn`: a compilation failure produces
+      # no report at all, and that is a perfectly ordinary way for this job to
+      # go red. Warning about the missing directory would put a second, louder
+      # annotation next to the error that actually matters.
       - name: Test reports
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -75,4 +80,5 @@ jobs:
           path: |
             app/build/reports/tests/
             app/build/test-results/
+          if-no-files-found: ignore
           retention-days: 7
