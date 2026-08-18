@@ -114,6 +114,10 @@ class PlaybackServiceArtworkTest {
             /* interfaceVersion = */ 0,
             /* trusted = */ true,
             /* connectionHints = */ Bundle.EMPTY,
+            // Apparu en media3 1.11 : la session sait désormais si le nom de
+            // paquet annoncé a été vérifié auprès du système. Vrai ici, par
+            // cohérence avec `trusted`.
+            /* isPackageNameVerified = */ true,
         )
 
     /**
