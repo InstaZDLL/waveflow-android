@@ -44,9 +44,17 @@ class CacheViewModelTest {
 
         override suspend fun usedBytes(): Long {
             mesures++
-            barriere?.await()
+            // La taille est relevée à l'appel, comme le ferait un vrai accès
+            // disque. C'est ce qui rend observable une mesure devenue périmée :
+            // elle rapporte ce qu'elle a vu, pas ce que le cache contient au
+            // moment où elle revient.
+            val instantane = occupe
+            // La barrière ne retient que la mesure suivante, pas toutes.
+            val porte = barriere
+            barriere = null
+            porte?.await()
             echoueALaMesure?.let { throw it }
-            return occupe
+            return instantane
         }
 
         override suspend fun clear() {
@@ -141,6 +149,29 @@ class CacheViewModelTest {
 
         assertEquals("la mesure ne doit pas être rejouée", avant + 1, cache.mesures)
         assertEquals(800L, vm.state.value.usedBytes)
+    }
+
+    @Test
+    fun `une mesure commencee avant le vidage ne le contredit pas`() {
+        // L'écran se rouvre — donc une mesure part — et l'utilisateur vide dans
+        // la foulée. La mesure a relevé 800 avant le vidage ; si elle publie
+        // après lui, l'écran réaffiche une place que le vidage a libérée.
+        //
+        // La course est rendue déterministe : la mesure attend, le vidage
+        // s'intercale, puis on la libère.
+        val cache = CacheFactice(occupe = 800L)
+        val vm = CacheViewModel(cache)
+
+        val barriere = CompletableDeferred<Unit>()
+        cache.barriere = barriere
+
+        vm.refresh()
+        vm.clear()
+        barriere.complete(Unit)
+
+        assertEquals(1, cache.vidages)
+        assertEquals("le vidage doit avoir le dernier mot", 0L, vm.state.value.usedBytes)
+        assertFalse(vm.state.value.isClearing)
     }
 
     @Test

@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Ce que l'écran sait du cache de lecture.
@@ -41,14 +43,27 @@ class CacheViewModel(
     private val _state = MutableStateFlow(CacheUiState(maxBytes = cache.maxBytes))
     val state: StateFlow<CacheUiState> = _state.asStateFlow()
 
+    /**
+     * Sérialise les accès au cache avec la publication qui en découle.
+     *
+     * Sans lui, une mesure prise avant un vidage peut être publiée après :
+     * l'écran annoncerait alors une place occupée que le vidage vient de
+     * libérer. Le verrou couvre l'accès au cache **et** la publication, car
+     * c'est leur écartement qui laisse passer la valeur périmée.
+     */
+    private val verrou = Mutex()
+
     /** À l'ouverture de l'écran : la taille bouge à chaque piste lue. */
     fun refresh() {
         viewModelScope.launch {
-            // Mesurer d'abord, publier ensuite. `update` rejoue sa lambda quand
-            // l'état a bougé entre-temps, et la mesure suspend le temps d'un
-            // accès disque : la laisser dedans la ferait repartir pour rien.
-            val mesure = mesurer()
-            _state.update { it.copy(usedBytes = mesure) }
+            verrou.withLock {
+                // Mesurer d'abord, publier ensuite. `update` rejoue sa lambda
+                // quand l'état a bougé entre-temps, et la mesure suspend le
+                // temps d'un accès disque : la laisser dedans la ferait
+                // repartir pour rien.
+                val mesure = mesurer()
+                _state.update { it.copy(usedBytes = mesure) }
+            }
         }
     }
 
@@ -57,21 +72,23 @@ class CacheViewModel(
         _state.update { it.copy(isClearing = true, errorMessage = null) }
 
         viewModelScope.launch {
-            val echec = try {
-                cache.clear()
-                null
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Exception) {
-                // Un fichier verrouillé ou un index abîmé ne doit pas faire
-                // tomber l'écran. La mesure qui suit dira ce qui reste.
-                Log.w(TAG, "Vidage du cache incomplet", error)
-                "Le cache n'a pas pu être entièrement vidé."
-            }
+            verrou.withLock {
+                val echec = try {
+                    cache.clear()
+                    null
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Exception) {
+                    // Un fichier verrouillé ou un index abîmé ne doit pas faire
+                    // tomber l'écran. La mesure qui suit dira ce qui reste.
+                    Log.w(TAG, "Vidage du cache incomplet", error)
+                    "Le cache n'a pas pu être entièrement vidé."
+                }
 
-            val mesure = mesurer()
-            _state.update {
-                it.copy(usedBytes = mesure, isClearing = false, errorMessage = echec)
+                val mesure = mesurer()
+                _state.update {
+                    it.copy(usedBytes = mesure, isClearing = false, errorMessage = echec)
+                }
             }
         }
     }
