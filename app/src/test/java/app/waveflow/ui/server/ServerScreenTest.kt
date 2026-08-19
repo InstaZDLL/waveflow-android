@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import app.waveflow.model.ServerSession
+import app.waveflow.ui.cache.CacheUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -29,6 +30,7 @@ class ServerScreenTest {
 
     private val connexions = mutableListOf<Triple<String, String, String>>()
     private var deconnexions = 0
+    private var vidages = 0
 
     private val session = ServerSession.Connected(
         serverUrl = "https://musique.test",
@@ -50,9 +52,15 @@ class ServerScreenTest {
     }
 
     /** Écran de compte : atteint depuis la barre du haut, une fois connecté. */
-    private fun afficherCompte() {
+    private fun afficherCompte(cache: CacheUiState = CacheUiState(usedBytes = 0L)) {
         compose.setContent {
-            ServerAccountScreen(session = session, onDisconnect = { deconnexions++ })
+            ServerAccountScreen(
+                session = session,
+                cache = cache,
+                onDisconnect = { deconnexions++ },
+                onClearCache = { vidages++ },
+                onDismissCacheError = {},
+            )
         }
     }
 
@@ -150,5 +158,42 @@ class ServerScreenTest {
 
         assertEquals(1, deconnexions)
         assertTrue(connexions.isEmpty())
+    }
+
+    @Test
+    fun `tant que la taille n'est pas connue l'ecran le dit`() {
+        // Zéro serait un mensonge : le cache peut être plein et la mesure en
+        // cours. L'attente s'annonce, et le bouton reste inactif.
+        afficherCompte(cache = CacheUiState(usedBytes = null))
+
+        compose.onNodeWithText("Calcul de la place occupée…").assertIsDisplayed()
+        compose.onNodeWithText("Vider le cache").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `un cache vide ne propose pas de le vider`() {
+        afficherCompte(cache = CacheUiState(usedBytes = 0L, maxBytes = 1_024L))
+
+        assertEquals(0, compose.occurrencesDe("Calcul de la place occupée"))
+        compose.onNodeWithText("Vider le cache").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `vider le cache demande confirmation avant d'agir`() {
+        // Vider coûte du réseau à la prochaine écoute : le geste ne doit pas
+        // partir d'un seul appui.
+        afficherCompte(cache = CacheUiState(usedBytes = 5_000L, maxBytes = 1_024L * 1_024L))
+
+        compose.onNodeWithText("Vider le cache").performClick()
+        assertEquals("le vidage ne doit pas partir tout seul", 0, vidages)
+
+        compose.onNodeWithText("Vider le cache ?").assertIsDisplayed()
+        compose.onNodeWithText("Annuler").performClick()
+        assertEquals("annuler ne vide rien", 0, vidages)
+
+        compose.onNodeWithText("Vider le cache").performClick()
+        compose.onNodeWithText("Vider").performClick()
+
+        assertEquals(1, vidages)
     }
 }

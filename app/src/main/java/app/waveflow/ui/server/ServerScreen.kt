@@ -45,6 +45,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
+import app.waveflow.ui.cache.CacheSection
+import app.waveflow.ui.cache.CacheUiState
 
 /**
  * Ouverture d'une session serveur.
@@ -67,16 +69,32 @@ fun ServerSignInScreen(
     }
 }
 
-/** Le compte connecté, et la sortie. */
+/**
+ * Le compte connecté, la sortie, et le cache des pistes qu'il a servies.
+ *
+ * Le cache trouve sa place ici plutôt que dans des réglages généraux, qui
+ * n'existent pas : il ne contient que des pistes du serveur.
+ */
 @Composable
 fun ServerAccountScreen(
     session: ServerSession.Connected,
+    cache: CacheUiState,
     onDisconnect: () -> Unit,
+    onClearCache: () -> Unit,
+    onDismissCacheError: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
 ) {
     ScrollableColumn(modifier = modifier, bottomPadding = bottomPadding) {
         ConnectedAccount(session = session, onDisconnect = onDisconnect)
+
+        Spacer(Modifier.height(24.dp))
+
+        CacheSection(
+            state = cache,
+            onClear = onClearCache,
+            onDismissError = onDismissCacheError,
+        )
     }
 }
 
