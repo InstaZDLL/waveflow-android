@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import androidx.core.net.toUri
 import app.waveflow.model.Song
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -104,6 +105,6 @@ class MediaStoreMusicRepository(
         // URI de base des pochettes d'album (chemin historique mais toujours
         // fonctionnel sur les versions ciblées ; Coil affiche un placeholder si
         // rien ne résout).
-        val ALBUM_ART_BASE: Uri = Uri.parse("content://media/external/audio/albumart")
+        val ALBUM_ART_BASE: Uri = "content://media/external/audio/albumart".toUri()
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,8 +21,6 @@ import app.waveflow.model.Artist
 import app.waveflow.model.SearchResults
 import app.waveflow.model.Song
 import app.waveflow.ui.albumCountLabel
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.MediaRow
 import app.waveflow.ui.components.SongRow

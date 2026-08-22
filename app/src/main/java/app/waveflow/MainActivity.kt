@@ -57,8 +57,8 @@ import app.waveflow.ui.library.LibraryScreen
 import app.waveflow.ui.library.LibraryViewModel
 import app.waveflow.ui.navigation.Routes
 import app.waveflow.ui.navigation.TopLevelDestination
-import app.waveflow.ui.navigation.longArgOf
 import app.waveflow.ui.navigation.WaveFlowBottomBar
+import app.waveflow.ui.navigation.longArgOf
 import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.player.MiniPlayerHost
 import app.waveflow.ui.player.NowPlayingScreen
@@ -591,7 +591,6 @@ private fun WaveFlowRoot() {
                         )
                     }
                 }
-
             }
         }
 

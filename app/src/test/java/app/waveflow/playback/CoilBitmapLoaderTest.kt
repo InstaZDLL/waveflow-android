@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import androidx.core.net.toUri
 import androidx.test.core.app.ApplicationProvider
+import coil.ComponentRegistry
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.disk.DiskCache
@@ -15,7 +16,6 @@ import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.ImageResult
 import coil.request.SuccessResult
-import coil.ComponentRegistry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

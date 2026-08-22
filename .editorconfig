@@ -1,0 +1,52 @@
+# Style de code du dépôt. Lu par les éditeurs, et surtout par ktlint, qui y
+# prend toute sa configuration — il n'a pas d'autre fichier de réglages.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+# Le code tient déjà sous 120 : une seule ligne dépassait au moment de poser
+# cette règle. Inutile d'ouvrir plus grand.
+max_line_length = 120
+
+# `intellij_idea` plutôt que `ktlint_official` : c'est le style que produit
+# déjà Android Studio, donc l'IDE et la vérification disent la même chose.
+# `ktlint_official` imposait 6 500 lignes de remaniement — dont le dépliage de
+# `val x = scope.launch {` sur deux lignes — pour aucun gain de lisibilité.
+ktlint_code_style = intellij_idea
+
+# Les signatures multi-lignes sont un choix du dépôt, pas un accident : un
+# paramètre par ligne avec virgule finale donne des diffs qui ne montrent que
+# le paramètre ajouté. Ces deux règles les replieraient sur une seule ligne.
+ktlint_standard_function-signature = disabled
+ktlint_standard_class-signature = disabled
+
+# Les `/* nom = */ valeur` documentent les appels aux API Java (Media3, OkHttp),
+# où les paramètres nommés de Kotlin ne sont pas disponibles. La règle les
+# interdit sur la ligne de l'argument, c'est-à-dire au seul endroit utile.
+ktlint_standard_comment-wrapping = disabled
+
+# Aérer les branches d'un `when` par une ligne vide se défend sur un `when`
+# long ; sur les nôtres, à deux ou trois branches, cela n'ajoutait que 9 lignes
+# vides pour aucune lisibilité gagnée.
+ktlint_standard_blank-line-between-when-conditions = disabled
+
+# Un composable s'écrit en PascalCase — c'est la convention Compose, pas une
+# fonction mal nommée.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+# Deux espaces en fin de ligne valent un retour à la ligne en Markdown.
+trim_trailing_whitespace = false
+
+[*.bat]
+end_of_line = crlf

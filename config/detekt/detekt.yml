@@ -1,0 +1,60 @@
+# Écarts du dépôt par rapport à la configuration livrée avec Detekt.
+# `buildUponDefaultConfig` reste actif : toute règle absente d'ici garde sa
+# valeur par défaut.
+#
+# L'essentiel de ce fichier tient à un seul fait : la configuration par défaut
+# de Detekt vise du Kotlin de serveur, où une fonction est en camelCase, prend
+# peu de paramètres et reste courte. Un composable Compose ne respecte aucune
+# de ces trois attentes, et c'est voulu — d'où les `ignoreAnnotated`.
+
+complexity:
+  LongMethod:
+    # Un composable décrit une arborescence : sa longueur suit celle de l'écran,
+    # et la découper en morceaux qui ne servent qu'une fois n'aide personne.
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    # Le state hoisting veut qu'un composable reçoive son état et ses rappels
+    # un par un ; c'est la pratique recommandée, pas un défaut de conception.
+    ignoreAnnotated: ['Composable']
+    # Un constructeur de faux objet expose un paramètre par variation que les
+    # tests ont besoin de régler ; c'est ce qui leur permet de ne nommer que
+    # celle qui compte.
+    excludes: ['**/test/**']
+  TooManyFunctions:
+    # Un fichier d'écran rassemble le composable public et ses fragments privés.
+    # Les compter comme l'API d'une classe n'a pas de sens.
+    ignoreAnnotated: ['Composable']
+    ignorePrivate: true
+    excludes: ['**/test/**']
+
+naming:
+  FunctionNaming:
+    # `@Composable fun NowPlayingScreen()` : le PascalCase est la convention
+    # Compose, alignée sur le fait qu'un composable se lit comme un type.
+    ignoreAnnotated: ['Composable']
+
+style:
+  MagicNumber:
+    # Les dimensions, poids et opacités d'une mise en page se lisent mieux à
+    # leur point d'usage que derrière une constante nommée `SIXTEEN`.
+    ignoreAnnotated: ['Composable']
+    # `val Emerald = Color(0xFF10B981)` : la déclaration *est* le nom donné au
+    # nombre. Exiger une constante de plus ne ferait qu'ajouter un niveau.
+    ignorePropertyDeclaration: true
+    # `in 400..499` désigne une famille de codes HTTP, pas deux nombres à
+    # baptiser séparément.
+    ignoreRanges: true
+  ReturnCount:
+    # Trois sorties plutôt que deux : les gardes en début de fonction sont
+    # idiomatiques en Kotlin, et les remplacer par un `if` imbriqué se paie en
+    # lisibilité.
+    max: 3
+
+exceptions:
+  TooGenericExceptionCaught:
+    # Choix assumé du dépôt, et non un oubli : un ViewModel qui laisse filer
+    # une exception fait tomber la collecte du flux et fige l'écran. Les onze
+    # sites concernés attrapent `Exception` — jamais `Error` — pour convertir
+    # la panne en message affichable. Les instructions de revue du dépôt
+    # demandent d'ailleurs explicitement cette capture.
+    active: false

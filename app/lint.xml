@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!--
+      Media3 marque `@UnstableApi` presque tout ce qui dépasse de son API de
+      base : le cache de lecture, le résolveur de source, le `BitmapLoader`, le
+      `MediaSessionService` lui-même. L'application est bâtie sur ces points
+      d'extension — il n'y a pas d'API stable qui ferait le même travail — et
+      le dépôt suit les montées de version de media3 au fur et à mesure.
+
+      L'opt-in se déclare ici plutôt que fichier par fichier parce que
+      `@UnstableApi` est une annotation Java : `kotlin.OptIn` ne la satisfait
+      pas, et `androidx.annotation.OptIn` ne s'applique pas à un fichier
+      entier. Ce serait donc une annotation par déclaration, pour redire
+      trente-six fois la même chose.
+    -->
+    <issue id="UnsafeOptInUsageError">
+        <option
+            name="opt-in"
+            value="androidx.media3.common.util.UnstableApi" />
+    </issue>
+</lint>
