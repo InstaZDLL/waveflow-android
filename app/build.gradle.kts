@@ -44,6 +44,22 @@ android {
     buildFeatures {
         compose = true
     }
+    lint {
+        // Le lint Android voit ce que ktlint et Detekt ne peuvent pas voir :
+        // niveaux d'API, ressources, manifeste, accessibilité. Il échoue sur
+        // les erreurs — c'est son réglage par défaut — et laisse les
+        // avertissements visibles sans bloquer.
+        //
+        // Les montées de version sont le travail de Dependabot, qui ouvre une
+        // demande par dépendance ; les répéter à chaque build ne produirait
+        // qu'un bruit dont on apprendrait à ne plus rien lire.
+        disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion")
+        // `targetSdk` reste volontairement en deçà de `compileSdk` : rien ici
+        // n'opte pour les nouveaux comportements d'exécution (voir plus haut).
+        disable += "OldTargetApi"
+        // La CI n'ouvre pas le rapport HTML ; le texte, lui, arrive au journal.
+        textReport = true
+    }
     testOptions {
         unitTests {
             // Robolectric a besoin des ressources et du manifest fusionnés.

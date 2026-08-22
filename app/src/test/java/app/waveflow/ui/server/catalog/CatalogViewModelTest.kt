@@ -3,13 +3,13 @@ package app.waveflow.ui.server.catalog
 import app.waveflow.data.remote.CATALOG_PAGE_SIZE
 import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.ServerException
+import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.ServerSession
 import app.waveflow.testing.FakeServerApi
 import app.waveflow.testing.FakeSessionStore
 import app.waveflow.testing.MainDispatcherRule
 import app.waveflow.testing.PagingCatalogApi
-import app.waveflow.data.remote.ServerSessionRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow

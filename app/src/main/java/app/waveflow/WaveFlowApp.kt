@@ -8,9 +8,6 @@ import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
 import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
-import coil.ImageLoader
-import coil.ImageLoaderFactory
-import okhttp3.OkHttpClient
 import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.DataStoreSessionStore
 import app.waveflow.data.remote.HttpCatalogApi
@@ -21,10 +18,13 @@ import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.RemoteMediaCache
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 /**
  * Point d'entrée de l'application.

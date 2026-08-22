@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun WaveFlowRoot()</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$private fun currentScreenTitle( currentRoute: String?, albumId: Long?, artistId: Long?, library: Library, playlistName: String?, ): String</ID>
+    <ID>CyclomaticComplexMethod:PlaylistDetailScreen.kt$@Composable fun PlaylistDetailScreen( playlist: Playlist?, songs: List&lt;Song&gt;, nowPlayingId: Long?, onSongClick: (Song) -&gt; Unit, onRemoveSong: (Song) -&gt; Unit, onReorder: (order: List&lt;Song&gt;, onFailure: () -&gt; Unit) -&gt; Unit, onPlay: () -&gt; Unit, onShuffle: () -&gt; Unit, modifier: Modifier = Modifier, bottomPadding: Dp = 0.dp, )</ID>
+    <ID>LongParameterList:ServerHttp.kt$ServerHttp$( serverUrl: String, path: String, accessToken: String?, pathSegment: String? = null, query: Map&lt;String, String&gt; = emptyMap(), method: Request.Builder.() -&gt; Request.Builder, )</ID>
+    <ID>MagicNumber:DurationFormat.kt$1_000L</ID>
+    <ID>MagicNumber:DurationFormat.kt$3_600L</ID>
+    <ID>MagicNumber:DurationFormat.kt$60L</ID>
+    <ID>MagicNumber:ServerHttp.kt$ServerHttp$401</ID>
+    <ID>MagicNumber:ServerHttp.kt$ServerHttp$403</ID>
+    <ID>MatchingDeclarationName:Search.kt$SearchResults</ID>
+    <ID>ReturnCount:ServerImageAuthInterceptor.kt$ServerImageAuthInterceptor$override fun intercept(chain: Interceptor.Chain): Response</ID>
+    <ID>ReturnCount:SessionStore.kt$DataStoreSessionStore$private fun Preferences.toSession(): ServerSession</ID>
+    <ID>TooManyFunctions:Media3PlaybackController.kt$Media3PlaybackController : PlaybackController</ID>
+    <ID>TooManyFunctions:PlaybackController.kt$PlaybackController</ID>
+    <ID>TooManyFunctions:PlayerViewModel.kt$PlayerViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:PlaylistDao.kt$PlaylistDao</ID>
+  </CurrentIssues>
+</SmellBaseline>

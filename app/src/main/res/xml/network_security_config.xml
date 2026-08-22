@@ -10,6 +10,8 @@
   adresse `https://` dès que le serveur sort de son réseau — l'écran de
   connexion préfixe d'ailleurs en HTTPS quand le schéma est omis.
 -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration" />
 </network-security-config>

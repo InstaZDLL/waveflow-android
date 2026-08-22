@@ -7,14 +7,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Tab
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -195,7 +195,6 @@ private fun ArtistsTab(
     }
 }
 
-
 /**
  * Résultats d'une recherche sur le serveur.
  *
@@ -245,31 +244,31 @@ private fun RemoteSearchResultsList(
                 contentPadding = PaddingValues(bottom = bottomPadding),
                 modifier = Modifier.fillMaxSize(),
             ) {
-            items(state.results.songs, key = { "song-${it.id}" }) { song ->
-                MediaRow(
-                    artworkUri = song.artworkUri,
-                    title = song.title,
-                    subtitle = song.artist.orUnknownArtist(),
-                    onClick = { onSongClick(song) },
-                )
-            }
-            items(state.results.albums, key = { "album-${it.id}" }) { album ->
-                MediaRow(
-                    artworkUri = album.artworkUri,
-                    title = album.title,
-                    subtitle = album.artist.orUnknownArtist(),
-                    onClick = { onAlbumClick(album) },
-                )
-            }
-            items(state.results.artists, key = { "artist-${it.id}" }) { artist ->
-                MediaRow(
-                    artworkUri = artist.artworkUri,
-                    title = artist.name,
-                    subtitle = artist.albumCount?.let(::albumCountLabel).orEmpty(),
-                    onClick = { onArtistClick(artist) },
-                    artworkShape = CircleShape,
-                )
-            }
+                items(state.results.songs, key = { "song-${it.id}" }) { song ->
+                    MediaRow(
+                        artworkUri = song.artworkUri,
+                        title = song.title,
+                        subtitle = song.artist.orUnknownArtist(),
+                        onClick = { onSongClick(song) },
+                    )
+                }
+                items(state.results.albums, key = { "album-${it.id}" }) { album ->
+                    MediaRow(
+                        artworkUri = album.artworkUri,
+                        title = album.title,
+                        subtitle = album.artist.orUnknownArtist(),
+                        onClick = { onAlbumClick(album) },
+                    )
+                }
+                items(state.results.artists, key = { "artist-${it.id}" }) { artist ->
+                    MediaRow(
+                        artworkUri = artist.artworkUri,
+                        title = artist.name,
+                        subtitle = artist.albumCount?.let(::albumCountLabel).orEmpty(),
+                        onClick = { onArtistClick(artist) },
+                        artworkShape = CircleShape,
+                    )
+                }
             }
         }
     }

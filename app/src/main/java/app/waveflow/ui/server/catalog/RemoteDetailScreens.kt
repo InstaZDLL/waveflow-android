@@ -18,8 +18,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteSong
-import app.waveflow.playback.mediaId
 import app.waveflow.model.orUnknownArtist
+import app.waveflow.playback.mediaId
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.browse.DetailHeader
 import app.waveflow.ui.components.CenteredMessage
