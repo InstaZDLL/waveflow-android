@@ -2,7 +2,7 @@ package app.waveflow.model
 
 import java.text.Normalizer
 
-/**
+/*
  * Recherche dans la bibliothèque déjà chargée.
  *
  * Tout se fait en mémoire, contre le [Library] du store partagé : aucune

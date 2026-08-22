@@ -1,9 +1,9 @@
 package app.waveflow.data.remote
 
+import app.waveflow.model.ServerSession
 import app.waveflow.testing.FakeCatalogApi
 import app.waveflow.testing.FakeServerApi
 import app.waveflow.testing.FakeSessionStore
-import app.waveflow.model.ServerSession
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals

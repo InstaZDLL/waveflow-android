@@ -273,7 +273,8 @@ private fun PlayerControls(
     ) {
         ToggleControl(
             icon = Icons.Filled.Shuffle,
-            contentDescription = if (shuffleEnabled) "Désactiver la lecture aléatoire" else "Activer la lecture aléatoire",
+            contentDescription =
+            if (shuffleEnabled) "Désactiver la lecture aléatoire" else "Activer la lecture aléatoire",
             active = shuffleEnabled,
             onClick = onToggleShuffle,
         )
