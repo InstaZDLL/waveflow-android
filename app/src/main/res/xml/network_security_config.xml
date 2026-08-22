@@ -10,8 +10,12 @@
   adresse `https://` dès que le serveur sort de son réseau — l'écran de
   connexion préfixe d'ailleurs en HTTPS quand le schéma est omis.
 -->
-<network-security-config xmlns:tools="http://schemas.android.com/tools">
-    <base-config
-        cleartextTrafficPermitted="true"
-        tools:ignore="InsecureBaseConfiguration" />
+<network-security-config>
+    <!--
+      L'avertissement `InsecureBaseConfiguration` du lint n'est pas supprimé.
+      Il ne bloque pas, et le laisser visible garde présente une décision qui
+      devra être reprise le jour où le serveur imposera HTTPS — contrairement
+      à l'export du service de lecture, qui, lui, ne sera jamais reconsidéré.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>
