@@ -94,6 +94,28 @@ class CatalogRepositoryTest {
     }
 
     @Test
+    fun `un rejeu ne part pas vers un autre serveur que le premier essai`() = runTest {
+        // Le jeton est refusé et, pendant l'appel, l'utilisateur se reconnecte
+        // ailleurs. La paire adresse-jeton reste cohérente, donc rien ne fuit —
+        // mais les identifiants n'ont de sens que pour le serveur qui les a
+        // émis : rejouer sur le nouveau rendrait une erreur, ou pire une
+        // ressource étrangère portant le même identifiant.
+        val catalog = FakeCatalogApi(failuresBeforeSuccess = 1)
+        val sessions = connectedSessionRepository()
+        catalog.pendantLAppel = {
+            // Une seule fois : c'est la bascule qu'on veut, pas une boucle.
+            catalog.pendantLAppel = null
+            sessions.connect("https://ailleurs.test", "autre", "secret")
+        }
+        val repository = CatalogRepository(catalog, sessions)
+
+        val error = runCatching { repository.album("alb-1") }.exceptionOrNull()
+
+        assertTrue("le refus initial doit remonter", error is ServerException.Unauthorized)
+        assertEquals("rien ne doit être rejoué ailleurs", 1, catalog.calls)
+    }
+
+    @Test
     fun `une panne reseau n'est pas prise pour un jeton perime`() = runTest {
         val catalog = FakeCatalogApi(failure = ServerException.Unreachable("coupure"))
         val serverApi = FakeServerApi()

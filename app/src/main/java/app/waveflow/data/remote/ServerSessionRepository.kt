@@ -10,6 +10,19 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
+ * Une adresse de serveur et un jeton d'accès **de la même session**.
+ *
+ * Les deux ne valent qu'ensemble : un jeton n'a de sens que pour le serveur qui
+ * l'a émis, et l'envoyer ailleurs reviendrait à le confier à un tiers. Les lire
+ * en deux temps laisserait la session changer entre les deux — d'où cette
+ * paire, rendue en une seule prise du verrou.
+ */
+data class AuthorizedCall(
+    val serverUrl: String,
+    val accessToken: String,
+)
+
+/**
  * La session serveur, et les seuls chemins qui la font changer.
  *
  * Porté au niveau application : les jetons ne survivraient pas à la recréation
@@ -78,23 +91,30 @@ class ServerSessionRepository(
     }
 
     /**
-     * Un jeton d'accès utilisable, renouvelé si son échéance approche.
+     * De quoi appeler le serveur connecté : son adresse et un jeton d'accès
+     * utilisable, renouvelé si son échéance approche.
      *
      * Renvoie `null` quand il n'y a pas de session, ou quand le renouvellement
      * a été refusé — auquel cas la session est effacée et l'utilisateur devra
      * ressaisir son mot de passe.
      *
+     * Les deux sont rendus ensemble à dessein : un appelant qui lirait
+     * l'adresse d'un côté et le jeton de l'autre pourrait les prendre à deux
+     * sessions différentes, et adresser à l'un le jeton de l'autre.
+     *
      * @throws ServerException.Unreachable si le serveur ne répond pas ; la
      *   session est conservée, l'appelant réessaiera.
      */
-    suspend fun validAccessToken(): String? = mutex.withLock {
+    suspend fun authorize(): AuthorizedCall? = mutex.withLock {
         val current = _session.value as? ServerSession.Connected ?: return@withLock null
-        if (now() < current.accessExpiresAtMs - EXPIRY_MARGIN_MS) return@withLock current.accessToken
+        if (now() < current.accessExpiresAtMs - EXPIRY_MARGIN_MS) {
+            return@withLock AuthorizedCall(current.serverUrl, current.accessToken)
+        }
 
         try {
             val tokens = api.refresh(current.serverUrl, current.refreshToken)
             persist(tokens.toSession(current.serverUrl))
-            tokens.accessToken
+            AuthorizedCall(current.serverUrl, tokens.accessToken)
         } catch (refused: ServerException.Unauthorized) {
             // Le jeton de rafraîchissement est mort : révoqué ailleurs, ou
             // périmé. Rien à réessayer, il faut une nouvelle connexion.
@@ -105,14 +125,19 @@ class ServerSessionRepository(
     }
 
     /**
-     * Marque le jeton d'accès comme périmé.
+     * Marque [refused] comme périmé, si c'est bien le jeton courant.
      *
      * Utile quand le serveur en refuse un que l'horloge locale croit encore
      * bon — révoqué depuis un autre appareil, par exemple. Le prochain
-     * [validAccessToken] renouvellera au lieu de resservir le même.
+     * [authorize] renouvellera au lieu de resservir le même.
+     *
+     * Le jeton refusé est exigé parce qu'un autre appelant a pu renouveler
+     * entre le refus et cet appel : périmer aveuglément jetterait un jeton neuf
+     * et déclencherait un renouvellement pour rien.
      */
-    suspend fun expireAccessToken() = mutex.withLock {
+    suspend fun expireAccessToken(refused: String) = mutex.withLock {
         val current = _session.value as? ServerSession.Connected ?: return@withLock
+        if (current.accessToken != refused) return@withLock
         persist(current.copy(accessExpiresAtMs = 0L))
     }
 

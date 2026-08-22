@@ -7,8 +7,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -140,6 +142,46 @@ class ServerImageAuthInterceptorTest {
     }
 
     @Test
+    fun `un jeton obtenu apres un changement de serveur ne part pas a l'ancien`() = runTest {
+        // La fenêtre : l'intercepteur attend la réponse de l'ancien serveur —
+        // il ne tient alors aucun verrou — et l'utilisateur se reconnecte
+        // ailleurs pendant ce temps. Le jeton qu'il obtiendra ensuite est celui
+        // du nouveau serveur ; le rejeu l'enverrait à l'ancien, qui n'a rien à
+        // en connaître.
+        //
+        // La bascule est déclenchée depuis la réponse elle-même, ce qui la
+        // place exactement dans la fenêtre plutôt que d'espérer l'y croiser.
+        val autre = MockWebServer()
+        autre.start()
+
+        try {
+            val sessions = sessions()
+            var bascule = false
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (!bascule) {
+                        bascule = true
+                        val ailleurs = autre.url("/").toString().trimEnd('/')
+                        runBlocking { sessions.connect(ailleurs, "autre", "secret") }
+                    }
+                    return MockResponse().setResponseCode(401)
+                }
+            }
+
+            fetch(clientWith(sessions), "${url()}/api/v2/artwork/1daf991a")
+
+            assertEquals("Bearer wfa_stocke", server.takeRequest().getHeader("Authorization"))
+            assertNull(
+                "le jeton du nouveau serveur ne doit pas partir à l'ancien",
+                server.takeRequest().getHeader("Authorization"),
+            )
+            assertEquals("le nouveau serveur n'a rien demandé", 0, autre.requestCount)
+        } finally {
+            autre.shutdown()
+        }
+    }
+
+    @Test
     fun `un second refus n'est pas rejoue indefiniment`() = runTest {
         server.enqueue(MockResponse().setResponseCode(401))
         server.enqueue(MockResponse().setResponseCode(401))
@@ -164,6 +206,6 @@ class ServerImageAuthInterceptorTest {
 
         fetch(clientWith(sessions), "${url()}/api/v2/artwork/1daf991a")
 
-        assertEquals("wfa_stocke", runBlocking { sessions.validAccessToken() })
+        assertEquals("wfa_stocke", runBlocking { sessions.authorize()?.accessToken })
     }
 }

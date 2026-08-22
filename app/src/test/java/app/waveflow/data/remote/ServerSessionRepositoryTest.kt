@@ -114,7 +114,11 @@ class ServerSessionRepositoryTest {
         val repository = repository(api = api, store = FakeSessionStore(stored = connectedSession()))
         repository.restore()
 
-        assertEquals("wfa_stocke", repository.validAccessToken())
+        val autorise = repository.authorize()
+        assertEquals("wfa_stocke", autorise?.accessToken)
+        // L'adresse compte autant que le jeton : c'est leur appariement qui
+        // empêche d'adresser à un serveur le jeton d'un autre.
+        assertEquals("https://musique.test", autorise?.serverUrl)
         assertEquals(0, api.refreshCalls)
     }
 
@@ -128,7 +132,10 @@ class ServerSessionRepositoryTest {
         )
         repository.restore()
 
-        assertEquals("wfa_1", repository.validAccessToken())
+        val autorise = repository.authorize()
+        assertEquals("wfa_1", autorise?.accessToken)
+        // Le renouvellement ne change pas de serveur.
+        assertEquals("https://musique.test", autorise?.serverUrl)
         assertEquals(1, api.refreshCalls)
     }
 
@@ -140,7 +147,7 @@ class ServerSessionRepositoryTest {
         val repository = repository(store = store)
         repository.restore()
 
-        repository.validAccessToken()
+        repository.authorize()
 
         val session = repository.session.value as ServerSession.Connected
         assertEquals("wfr_1", session.refreshToken)
@@ -157,11 +164,11 @@ class ServerSessionRepositoryTest {
         )
         repository.restore()
 
-        repository.validAccessToken()
+        repository.authorize()
         assertEquals("wfr_stocke", api.lastRefreshToken)
 
         maintenant += 900_000L
-        repository.validAccessToken()
+        repository.authorize()
         assertEquals("wfr_1", api.lastRefreshToken)
     }
 
@@ -179,8 +186,8 @@ class ServerSessionRepositoryTest {
         )
         repository.restore()
 
-        val premier = async { repository.validAccessToken() }
-        val second = async { repository.validAccessToken() }
+        val premier = async { repository.authorize()?.accessToken }
+        val second = async { repository.authorize()?.accessToken }
         runCurrent()
 
         portail.complete(Unit)
@@ -198,7 +205,7 @@ class ServerSessionRepositoryTest {
         val repository = repository(api = api, store = store)
         repository.restore()
 
-        assertNull(repository.validAccessToken())
+        assertNull(repository.authorize()?.accessToken)
         assertEquals(ServerSession.Disconnected, repository.session.value)
         assertTrue("la session doit aussi être effacée du disque", store.cleared)
     }
@@ -214,7 +221,7 @@ class ServerSessionRepositoryTest {
         )
         repository.restore()
 
-        val error = runCatching { repository.validAccessToken() }.exceptionOrNull()
+        val error = runCatching { repository.authorize()?.accessToken }.exceptionOrNull()
 
         assertTrue(error is ServerException.Unreachable)
         assertTrue(repository.session.value is ServerSession.Connected)
@@ -222,7 +229,41 @@ class ServerSessionRepositoryTest {
 
     @Test
     fun `sans session il n'y a pas de jeton`() = runTest {
-        assertNull(repository().validAccessToken())
+        assertNull(repository().authorize()?.accessToken)
+    }
+
+    @Test
+    fun `perimer le jeton refuse force un renouvellement`() = runTest {
+        // Le serveur refuse un jeton que l'horloge locale croit encore bon.
+        // Sans le périmer, l'essai suivant reservirait le même.
+        val api = FakeServerApi()
+        val repository = repository(api = api, store = FakeSessionStore(stored = connectedSession()))
+        repository.restore()
+
+        repository.expireAccessToken("wfa_stocke")
+
+        assertEquals("wfa_1", repository.authorize()?.accessToken)
+        assertEquals(1, api.refreshCalls)
+    }
+
+    @Test
+    fun `perimer un jeton deja remplace laisse le neuf en place`() = runTest {
+        // Deux appels essuient un refus en même temps et le premier renouvelle.
+        // Si le second périmait à l'aveugle, il jetterait un jeton neuf et
+        // provoquerait un renouvellement de plus — le serveur faisant tourner
+        // son jeton de rafraîchissement pour rien.
+        val api = FakeServerApi()
+        val repository = repository(
+            api = api,
+            store = FakeSessionStore(stored = connectedSession(expiresAtMs = maintenant)),
+        )
+        repository.restore()
+        assertEquals("wfa_1", repository.authorize()?.accessToken)
+
+        repository.expireAccessToken("wfa_stocke")
+
+        assertEquals("wfa_1", repository.authorize()?.accessToken)
+        assertEquals("un seul renouvellement", 1, api.refreshCalls)
     }
 
     @Test
