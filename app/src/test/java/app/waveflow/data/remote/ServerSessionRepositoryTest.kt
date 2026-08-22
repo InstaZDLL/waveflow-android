@@ -114,7 +114,11 @@ class ServerSessionRepositoryTest {
         val repository = repository(api = api, store = FakeSessionStore(stored = connectedSession()))
         repository.restore()
 
-        assertEquals("wfa_stocke", repository.authorize()?.accessToken)
+        val autorise = repository.authorize()
+        assertEquals("wfa_stocke", autorise?.accessToken)
+        // L'adresse compte autant que le jeton : c'est leur appariement qui
+        // empêche d'adresser à un serveur le jeton d'un autre.
+        assertEquals("https://musique.test", autorise?.serverUrl)
         assertEquals(0, api.refreshCalls)
     }
 
@@ -128,7 +132,10 @@ class ServerSessionRepositoryTest {
         )
         repository.restore()
 
-        assertEquals("wfa_1", repository.authorize()?.accessToken)
+        val autorise = repository.authorize()
+        assertEquals("wfa_1", autorise?.accessToken)
+        // Le renouvellement ne change pas de serveur.
+        assertEquals("https://musique.test", autorise?.serverUrl)
         assertEquals(1, api.refreshCalls)
     }
 
