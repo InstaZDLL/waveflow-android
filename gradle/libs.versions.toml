@@ -20,6 +20,7 @@ serialization = "1.11.0"
 datastore = "1.1.7"
 ktlintPlugin = "14.2.0"
 ktlint = "1.8.0"
+detekt = "1.23.8"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -85,5 +86,9 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 # l'outil qu'il exécute versionnent séparément : `ktlint` fixe le second,
 # sinon le style changerait au gré des mises à jour du premier.
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintPlugin" }
+
+# Analyse statique — l'équivalent d'un eslint : complexité, pièges de
+# construction, code mort. Distinct de ktlint, qui ne juge que la forme.
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
