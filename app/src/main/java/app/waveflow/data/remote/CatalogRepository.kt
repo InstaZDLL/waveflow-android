@@ -5,7 +5,6 @@ import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
 import app.waveflow.model.RemoteSearchResults
-import app.waveflow.model.ServerSession
 
 /**
  * Le catalogue distant, muni d'une session.
@@ -46,40 +45,29 @@ class CatalogRepository(
     /**
      * Exécute [call] avec un jeton valide, en réessayant une fois sur refus.
      *
-     * [ServerSessionRepository.validAccessToken] renouvelle déjà avant
-     * l'échéance, mais un jeton peut être révoqué depuis un autre appareil : il
-     * est alors valide selon l'horloge et refusé par le serveur. Le second essai
-     * repart d'un jeton fraîchement obtenu ; s'il échoue à son tour, c'est que
-     * la session est bel et bien fermée.
+     * [ServerSessionRepository.authorize] renouvelle déjà avant l'échéance,
+     * mais un jeton peut être révoqué depuis un autre appareil : il est alors
+     * valide selon l'horloge et refusé par le serveur. Le second essai repart
+     * d'un jeton fraîchement obtenu ; s'il échoue à son tour, c'est que la
+     * session est bel et bien fermée.
+     *
+     * L'adresse et le jeton viennent du même appel, donc de la même session :
+     * les demander séparément permettrait d'adresser à un serveur le jeton d'un
+     * autre, si l'utilisateur se reconnecte ailleurs entre les deux.
      */
     private suspend fun <T> authorized(call: suspend (String, String) -> T): T {
-        val first = token() ?: throw ServerException.Unauthorized(SESSION_CLOSED)
+        val first = sessionRepository.authorize()
+            ?: throw ServerException.Unauthorized(SESSION_CLOSED)
 
         return try {
-            call(first.first, first.second)
+            call(first.serverUrl, first.accessToken)
         } catch (refused: ServerException.Unauthorized) {
-            val renewed = renewedToken() ?: throw refused
-            call(renewed.first, renewed.second)
+            // Périmer d'abord : sans ça, le second essai réutiliserait le jeton
+            // que le serveur vient de refuser, l'échéance locale le croyant bon.
+            sessionRepository.expireAccessToken(first.accessToken)
+            val renewed = sessionRepository.authorize() ?: throw refused
+            call(renewed.serverUrl, renewed.accessToken)
         }
-    }
-
-    /** Adresse et jeton courants, ou `null` sans session. */
-    private suspend fun token(): Pair<String, String>? {
-        val accessToken = sessionRepository.validAccessToken() ?: return null
-        val url = (sessionRepository.session.value as? ServerSession.Connected)?.serverUrl
-            ?: return null
-        return url to accessToken
-    }
-
-    /**
-     * Force un renouvellement en périmant le jeton courant.
-     *
-     * Sans ça, le second essai réutiliserait celui que le serveur vient de
-     * refuser : l'échéance locale le croit encore bon.
-     */
-    private suspend fun renewedToken(): Pair<String, String>? {
-        sessionRepository.expireAccessToken()
-        return token()
     }
 
     private companion object {
