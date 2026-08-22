@@ -65,7 +65,14 @@ class CatalogRepository(
             // Périmer d'abord : sans ça, le second essai réutiliserait le jeton
             // que le serveur vient de refuser, l'échéance locale le croyant bon.
             sessionRepository.expireAccessToken(first.accessToken)
-            val renewed = sessionRepository.authorize() ?: throw refused
+            // Un renouvellement n'est utilisable que sur le serveur du premier
+            // essai : l'appel s'est déroulé sans verrou, et la session a pu
+            // basculer ailleurs entre-temps. Les identifiants n'ont de sens que
+            // pour celui qui les a émis — rejouer ailleurs rendrait une erreur,
+            // ou pire une ressource étrangère portant le même identifiant.
+            val renewed = sessionRepository.authorize()
+                ?.takeIf { it.serverUrl == first.serverUrl }
+                ?: throw refused
             call(renewed.serverUrl, renewed.accessToken)
         }
     }

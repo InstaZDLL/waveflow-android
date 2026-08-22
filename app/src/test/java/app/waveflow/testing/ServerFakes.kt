@@ -109,6 +109,14 @@ class FakeCatalogApi(
     var lastPage: Pair<Int, Int>? = null
         private set
 
+    /**
+     * Exécuté à chaque appel, avant l'échec éventuel.
+     *
+     * De quoi faire bouger la session pendant que le dépôt attend sa réponse :
+     * c'est la fenêtre où il ne tient aucun verrou.
+     */
+    var pendantLAppel: (suspend () -> Unit)? = null
+
     override suspend fun albums(
         serverUrl: String,
         accessToken: String,
@@ -173,12 +181,13 @@ class FakeCatalogApi(
         return "$serverUrl/api/v2/stream/ticket-$trackId"
     }
 
-    private fun record(serverUrl: String, accessToken: String, page: Pair<Int, Int>?) {
+    private suspend fun record(serverUrl: String, accessToken: String, page: Pair<Int, Int>?) {
         calls++
         lastServerUrl = serverUrl
         lastAccessToken = accessToken
         page?.let { lastPage = it }
 
+        pendantLAppel?.invoke()
         failure?.let { throw it }
         if (calls <= failuresBeforeSuccess) {
             throw ServerException.Unauthorized("jeton refusé")
