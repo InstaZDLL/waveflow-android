@@ -185,6 +185,19 @@ class BrowseTreeTest {
     }
 
     @Test
+    fun `resoudre une section de navigation ne verse pas la bibliotheque entiere`() {
+        // `resolve` distingue un nœud qui contient des pistes d'un nœud qui
+        // contient d'autres nœuds. Confondre les deux ferait de « Albums » un
+        // raccourci vers toute la bibliothèque, alors que l'hôte n'a demandé
+        // qu'à ouvrir une section.
+        val arbre = tree(songs = listOf(song(1, "Une"), song(2, "Deux")))
+
+        assertEquals(emptyList<Any>(), arbre.resolve("${BrowseTree.BROWSE_PREFIX}albums"))
+        assertEquals(emptyList<Any>(), arbre.resolve("${BrowseTree.BROWSE_PREFIX}artists"))
+        assertEquals(emptyList<Any>(), arbre.resolve(BrowseTree.ROOT_ID))
+    }
+
+    @Test
     fun `un identifiant inconnu ne rend rien plutot que d'echouer`() {
         val arbre = tree(songs = listOf(song(1, "Une")))
 

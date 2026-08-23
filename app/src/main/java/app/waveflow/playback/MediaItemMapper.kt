@@ -16,7 +16,7 @@ import app.waveflow.model.Song
  */
 fun Song.toMediaItem(): MediaItem =
     MediaItem.Builder()
-        .setMediaId("$LOCAL_PREFIX$id")
+        .setMediaId(mediaId)
         .setUri(uri)
         .setMediaMetadata(
             MediaMetadata.Builder()
@@ -71,9 +71,24 @@ fun MediaItem.toPlayingTrack(): PlayingTrack = PlayingTrack(
 val RemoteSong.mediaId: String
     get() = "$REMOTE_PREFIX$id"
 
+/** Identité de ce morceau local, sans passer par [toMediaItem]. */
+val Song.mediaId: String
+    get() = "$LOCAL_PREFIX$id"
+
 /** Identifiant MediaStore porté par ce [MediaItem], ou `null` s'il vient d'ailleurs. */
 val MediaItem.localSongId: Long?
-    get() = mediaId.removePrefix(LOCAL_PREFIX).takeIf { mediaId.startsWith(LOCAL_PREFIX) }?.toLongOrNull()
+    get() = localSongIdOf(mediaId)
+
+/**
+ * Identifiant MediaStore que porte ce `mediaId`, ou `null` s'il vient d'ailleurs.
+ *
+ * La même lecture que [MediaItem.localSongId], mais sur la chaîne seule : un
+ * hôte extérieur redemande une piste par son identifiant, sans le [MediaItem]
+ * qui l'accompagnait. Retrouver le morceau en reconstruisant un [MediaItem] par
+ * candidat coûterait un balayage de la bibliothèque là où un index suffit.
+ */
+internal fun localSongIdOf(mediaId: String): Long? =
+    mediaId.takeIf { it.startsWith(LOCAL_PREFIX) }?.removePrefix(LOCAL_PREFIX)?.toLongOrNull()
 
 /**
  * Clé de cache d'une piste distante.
