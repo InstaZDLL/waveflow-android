@@ -5,6 +5,7 @@ import app.waveflow.testing.FakeServerApi
 import app.waveflow.testing.FakeSessionStore
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.Dispatcher
@@ -14,6 +15,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -75,6 +77,18 @@ class ServerImageAuthInterceptorTest {
 
     private fun fetch(client: OkHttpClient, target: String) {
         client.newCall(Request.Builder().url(target).build()).execute().close()
+    }
+
+    @Test
+    fun `le client des pochettes borne l'appel entier`() {
+        // Les délais par défaut d'OkHttp portent sur chaque étape prise à part ;
+        // aucun ne borne l'appel. Une pochette qui n'arrive jamais retiendrait
+        // alors son fil de bout en bout. Le plafond est celui des appels d'API :
+        // les comparer garantit qu'un seul endroit continue d'en décider.
+        val client = ServerHttp.imageClient(Interceptor { it.proceed(it.request()) })
+
+        assertTrue("le plafond doit être posé", client.callTimeoutMillis > 0)
+        assertEquals(ServerHttp.defaultClient().callTimeoutMillis, client.callTimeoutMillis)
     }
 
     @Test
