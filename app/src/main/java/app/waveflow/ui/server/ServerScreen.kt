@@ -279,8 +279,8 @@ private fun ConnectedAccount(
 
     Spacer(Modifier.height(32.dp))
     Text(
-        text = "Le catalogue de ce serveur est consultable depuis l'onglet Serveur. " +
-            "La lecture à distance arrive dans une prochaine version.",
+        text = "Le catalogue de ce serveur est consultable depuis l'onglet Serveur, " +
+            "et ses pistes se lisent comme celles de l'appareil.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

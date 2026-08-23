@@ -11,6 +11,7 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -198,6 +199,19 @@ class ServerHttp(
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .callTimeout(CALL_TIMEOUT)
+            .build()
+
+        /**
+         * Le client des pochettes, muni du même plafond que les appels d'API.
+         *
+         * Coil construit son propre client : sans passer par ici, il repartirait
+         * sur les délais par étape d'OkHttp, dont aucun ne borne l'appel entier.
+         * Une pochette qui n'arrive jamais retiendrait alors son fil de bout en
+         * bout. Le plafond se décide à un seul endroit, celui-ci.
+         */
+        fun imageClient(auth: Interceptor): OkHttpClient = OkHttpClient.Builder()
+            .callTimeout(CALL_TIMEOUT)
+            .addInterceptor(auth)
             .build()
     }
 }
