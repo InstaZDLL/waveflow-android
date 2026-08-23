@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
 class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callback {
 
     /**
-     * Les nœuds qu'un navigateur regarde en ce moment.
+     * Les nœuds qu'un navigateur a demandé à suivre, au moins une fois.
      *
      * Media3 tient la liste des abonnés d'un nœud donné, mais ne sait pas dire
      * quels nœuds ont un abonné : il faut donc les retenir pour savoir qui
@@ -32,10 +32,16 @@ class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callbac
      * notifier tous les albums d'une bibliothèque reviendrait à la parcourir une
      * fois par album, quand un navigateur n'en regarde qu'un.
      *
+     * Une liste de candidats, et non l'état des abonnements : c'est la session
+     * qui dit lesquels valent encore, et elle seule peut le dire. Deux
+     * navigateurs peuvent suivre le même nœud, et compter les abonnements ici
+     * reviendrait à tenir en double une comptabilité qu'elle tient déjà — un
+     * désabonnement retirerait un nœud que l'autre regarde encore.
+     *
      * Concurrent parce que rien ne garantit que les abonnements et les mises à
      * jour de la bibliothèque arrivent du même fil.
      */
-    private val subscribed: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val watched: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     override fun onSubscribe(
         session: MediaLibrarySession,
@@ -43,19 +49,10 @@ class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callbac
         parentId: String,
         params: LibraryParams?,
     ): ListenableFuture<LibraryResult<Void>> {
-        subscribed += parentId
+        watched += parentId
         // Le comportement par défaut est conservé : c'est lui qui envoie au
         // navigateur le premier état du nœud, aussitôt après l'abonnement.
         return super.onSubscribe(session, browser, parentId, params)
-    }
-
-    override fun onUnsubscribe(
-        session: MediaLibrarySession,
-        browser: MediaSession.ControllerInfo,
-        parentId: String,
-    ): ListenableFuture<LibraryResult<Void>> {
-        subscribed -= parentId
-        return super.onUnsubscribe(session, browser, parentId)
     }
 
     /**
@@ -66,13 +63,14 @@ class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callbac
      * avant que la bibliothèque de l'appareil ne soit lue, et resterait donc
      * devant un arbre vide jusqu'à ce qu'on l'oblige à redemander.
      *
-     * Les nœuds que plus personne ne regarde sont oubliés au passage : un
-     * navigateur peut disparaître sans se désabonner, et la session est seule à
-     * le savoir.
+     * Les nœuds que plus personne ne regarde sont oubliés au passage. On le
+     * demande à la session plutôt que de le déduire des désabonnements : un
+     * navigateur peut disparaître sans se désabonner, et un nœud que deux
+     * navigateurs suivent reste suivi quand l'un des deux s'en va.
      */
     fun notifySubscribers(session: MediaLibrarySession) {
-        subscribed.removeAll { session.getSubscribedControllers(it).isEmpty() }
-        subscribed.forEach { parentId ->
+        watched.removeAll { session.getSubscribedControllers(it).isEmpty() }
+        watched.forEach { parentId ->
             session.notifyChildrenChanged(parentId, tree.children(parentId).size, /* params = */ null)
         }
     }
