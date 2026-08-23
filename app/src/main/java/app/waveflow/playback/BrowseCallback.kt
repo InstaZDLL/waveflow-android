@@ -1,0 +1,98 @@
+package app.waveflow.playback
+
+import androidx.media3.common.MediaItem
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionError
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
+
+/**
+ * Le pont entre [BrowseTree] et ce que Media3 attend d'une bibliothèque.
+ *
+ * Séparé du service pour être éprouvable sans en démarrer un : tout ce qui suit
+ * est de la traduction, et une traduction se vérifie.
+ *
+ * Toutes les réponses sont immédiates. L'arbre lit un instantané déjà en
+ * mémoire ; rien ici ne part sur le réseau ni sur le disque, et un hôte comme
+ * Android Auto n'attend pas.
+ */
+class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callback {
+
+    override fun onGetLibraryRoot(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<MediaItem>> =
+        Futures.immediateFuture(LibraryResult.ofItem(tree.root(), params))
+
+    override fun onGetChildren(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        parentId: String,
+        page: Int,
+        pageSize: Int,
+        params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+        val slice = tree.children(parentId).page(page, pageSize)
+
+        return Futures.immediateFuture(
+            LibraryResult.ofItemList(ImmutableList.copyOf(slice), params),
+        )
+    }
+
+    override fun onGetItem(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        mediaId: String,
+    ): ListenableFuture<LibraryResult<MediaItem>> {
+        val item = tree.item(mediaId)
+            ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
+
+        return Futures.immediateFuture(LibraryResult.ofItem(item, null))
+    }
+
+    /**
+     * Donne au lecteur des éléments qu'il sait ouvrir.
+     *
+     * Ceux que l'hôte renvoie viennent de [BrowseTree.children] : ils portent un
+     * `mediaId` et des métadonnées, mais **pas d'URI** — l'hôte les affiche, il
+     * ne les lit pas. Sans cette résolution, le lecteur recevrait des éléments
+     * sans source et ne jouerait rien.
+     *
+     * Un élément qui porte déjà une URI est laissé tel quel : il vient alors de
+     * l'application elle-même, qui construit ses files complètes.
+     */
+    override fun onAddMediaItems(
+        mediaSession: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        mediaItems: MutableList<MediaItem>,
+    ): ListenableFuture<MutableList<MediaItem>> {
+        val resolved = mediaItems.flatMap { item ->
+            if (item.localConfiguration != null) listOf(item) else tree.resolve(item.mediaId)
+        }
+
+        return Futures.immediateFuture(resolved.toMutableList())
+    }
+}
+
+/**
+ * La tranche que l'hôte réclame, bornée à ce qui existe.
+ *
+ * Une page hors bornes n'est pas une erreur : c'est la fin de la liste. Rendre
+ * un échec ferait apparaître un avertissement là où il n'y a simplement rien de
+ * plus à voir — et une tranche calculée sans borne lèverait, ce qui couperait
+ * la navigation au lieu de la terminer.
+ *
+ * Une taille de page nulle ou négative ne décrit aucune tranche : rien à rendre.
+ */
+internal fun <T> List<T>.page(page: Int, pageSize: Int): List<T> {
+    if (pageSize <= 0 || page < 0) return emptyList()
+
+    val from = (page.toLong() * pageSize).coerceAtMost(size.toLong()).toInt()
+    val to = (from.toLong() + pageSize).coerceAtMost(size.toLong()).toInt()
+    return subList(from, to)
+}

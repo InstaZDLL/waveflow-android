@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ce qu'Android Auto est autorisé à faire de l'application.
+
+  « media » et rien d'autre : WaveFlow ne propose ni messagerie ni notification
+  à lire au volant. Déclarer une catégorie non servie ferait apparaître
+  l'application là où elle n'a rien à offrir.
+-->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

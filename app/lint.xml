@@ -18,4 +18,17 @@
             name="opt-in"
             value="androidx.media3.common.util.UnstableApi" />
     </issue>
+
+    <!--
+      Déclarer l'application à Android Auto la rend éligible à « joue tel
+      album » : le lint réclame alors `MEDIA_PLAY_FROM_SEARCH`. Il a raison sur
+      le fond — la commande vocale est le mode d'interaction principal au
+      volant — mais la recherche est un chantier à part de l'arbre de
+      navigation, et déclarer un filtre d'intention qu'on ne sert pas ouvrirait
+      une porte sur une pièce vide : l'application s'ouvrirait sans jouer.
+
+      Rétrogradé plutôt que supprimé : la remontée reste visible à chaque build,
+      et disparaîtra d'elle-même quand la recherche arrivera.
+    -->
+    <issue id="MissingIntentFilterForMediaSearch" severity="warning" />
 </lint>

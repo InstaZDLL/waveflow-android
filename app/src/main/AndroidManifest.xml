@@ -41,13 +41,24 @@
             </intent-filter>
         </activity>
 
-        <!-- Service de lecture Media3 : audio background + contrôles lockscreen/notif -->
+        <!-- Déclare l'application à Android Auto. Sans cette entrée, Auto ne la
+             voit pas, quelle que soit la session qu'elle publie. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
+        <!-- Service de lecture Media3 : audio background + contrôles lockscreen/notif,
+             et arbre de navigation pour Android Auto (voir BrowseTree). -->
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="ExportedService">
             <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <!-- L'action héritée reste déclarée : c'est celle que cherchent
+                     Android Auto et les contrôleurs antérieurs à Media3. -->
+                <action android:name="android.media.browse.MediaBrowserService" />
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>

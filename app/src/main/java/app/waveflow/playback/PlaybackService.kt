@@ -6,33 +6,52 @@ import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CacheBitmapLoader
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
 import app.waveflow.WaveFlowApp
 import coil.imageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 /**
  * Service de lecture porté par Media3.
  *
- * Un [MediaSessionService] héberge un [ExoPlayer] + une [MediaSession] : Android
- * en tire automatiquement la notification média, les contrôles de l'écran de
- * verrouillage et la lecture en arrière-plan. L'UI se connecte via un
+ * Un [MediaLibraryService] héberge un [ExoPlayer] + une [MediaLibrarySession] :
+ * Android en tire automatiquement la notification média, les contrôles de
+ * l'écran de verrouillage et la lecture en arrière-plan. L'UI se connecte via un
  * `MediaController` (voir [PlaybackController]) — elle ne parle jamais
  * directement à l'ExoPlayer.
+ *
+ * C'est un [MediaLibraryService] et non un simple `MediaSessionService` parce
+ * qu'Android Auto ne se contente pas de commander la lecture : il veut parcourir
+ * la bibliothèque. Cette différence tient à l'arbre exposé par [BrowseTree] ;
+ * pour l'application, rien ne change — un `MediaLibrarySession` est une
+ * `MediaSession`.
  */
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
 
-    private var mediaSession: MediaSession? = null
+    private var mediaSession: MediaLibrarySession? = null
 
     /**
      * Portée des chargements de pochette : ils n'ont plus de destinataire une
      * fois la session détruite.
      */
     private val artworkScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * Ce que l'arbre de navigation donne à voir, tenu à jour en continu.
+     *
+     * `@Volatile` parce qu'il est écrit par la coroutine qui observe et lu par
+     * le fil d'où l'hôte pose ses questions. L'instantané est remplacé d'un
+     * bloc, jamais modifié en place : un lecteur voit donc toujours un état
+     * cohérent, fût-il d'un instant plus tôt.
+     */
+    @Volatile
+    private var browseSnapshot = BrowseSnapshot()
 
     override fun onCreate() {
         super.onCreate()
@@ -68,12 +87,42 @@ class PlaybackService : MediaSessionService() {
         // de recharger la même image à chaque rafraîchissement.
         val bitmapLoader = CacheBitmapLoader(CoilBitmapLoader(this, imageLoader, artworkScope))
 
-        mediaSession = MediaSession.Builder(this, player)
+        observeLibrary(container)
+
+        mediaSession = MediaLibrarySession.Builder(
+            this,
+            player,
+            BrowseCallback(BrowseTree { browseSnapshot }),
+        )
             .setBitmapLoader(bitmapLoader)
             .build()
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    /**
+     * Tient [browseSnapshot] à jour tant que le service vit.
+     *
+     * `load()` est demandé ici parce que le service peut démarrer sans que
+     * l'application ait été ouverte — Android Auto s'y connecte directement. Si
+     * la permission audio manque, la bibliothèque restera vide et l'arbre le
+     * sera aussi : c'est le seul comportement honnête, l'hôte n'ayant aucun
+     * moyen de la demander.
+     */
+    private fun observeLibrary(container: app.waveflow.AppContainer) {
+        container.libraryStore.load()
+
+        artworkScope.launch {
+            combine(
+                container.libraryStore.library,
+                container.playlistRepository.observePlaylists(),
+                container.playlistRepository.observeEntries(),
+            ) { library, playlists, entries ->
+                BrowseSnapshot(library, playlists, entries)
+            }.collect { browseSnapshot = it }
+        }
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
+        mediaSession
 
     // Si l'app est balayée depuis les récents alors que rien ne joue, on arrête
     // le service pour ne pas laisser une notification fantôme.
