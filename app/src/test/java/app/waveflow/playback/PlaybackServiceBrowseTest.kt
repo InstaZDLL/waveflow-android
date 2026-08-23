@@ -43,56 +43,99 @@ class PlaybackServiceBrowseTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
 
     private var service: ServiceController<PlaybackService>? = null
-    private var browser: MediaBrowser? = null
+    private val browsers = mutableListOf<MediaBrowser>()
 
     @After
     fun tearDown() {
-        browser?.release()
+        browsers.forEach(MediaBrowser::release)
         service?.destroy()
     }
 
     @Test
     fun `un navigateur abonne est prevenu quand l'arbre change`() {
-        val changements = mutableListOf<String>()
-        val navigateur = navigateurConnecte { parentId -> changements += parentId }
+        val recues = mutableListOf<Annonce>()
+        val navigateur = navigateurConnecte(recues)
 
-        navigateur.subscribe(BrowseTree.ROOT_ID, null).attendu("l'abonnement à la racine")
+        navigateur.abonneALaRacine(recues)
         // L'état de départ : la bibliothèque de l'appareil est vide et aucune
         // playlist n'existe, la section n'a donc pas lieu d'être.
         assertEquals(
             listOf("Albums", "Artistes", "Toutes les pistes"),
             titresDesEnfants(navigateur),
         )
-        changements.clear()
 
         creerPlaylist("Sur la route")
 
-        attendre("la notification du navigateur") { BrowseTree.ROOT_ID in changements }
+        attendre("la racine annoncée à quatre sections") { RACINE_AVEC_PLAYLISTS in recues }
         assertEquals(
             listOf("Albums", "Artistes", "Playlists", "Toutes les pistes"),
             titresDesEnfants(navigateur),
         )
     }
 
-    /** Le service tel qu'Android le crée, et un navigateur qui s'y lie. */
-    private fun navigateurConnecte(onChildrenChanged: (String) -> Unit): MediaBrowser {
-        val demarre = Robolectric.buildService(PlaybackService::class.java).create()
-        service = demarre
+    @Test
+    fun `le depart d'un navigateur ne prive pas l'autre des notifications`() {
+        // Android Auto n'est pas seul à parcourir la bibliothèque : l'Assistant
+        // ou une autre application peuvent suivre le même nœud. Tenir soi-même
+        // le compte des abonnés reviendrait à retirer un nœud que quelqu'un
+        // regarde encore, et à le laisser sur un arbre figé.
+        val partant = mutableListOf<Annonce>()
+        val restant = mutableListOf<Annonce>()
+        val navigateurPartant = navigateurConnecte(partant)
+        val navigateurRestant = navigateurConnecte(restant)
 
-        // Robolectric ne démarre pas de vrai service sur `bindService` : on lui
-        // donne le `Binder` que le service rend lui-même. Les deux actions parce
-        // que le navigateur choisit la sienne d'après ce que le manifeste
-        // déclare, et que le manifeste les déclare toutes les deux.
+        navigateurPartant.abonneALaRacine(partant)
+        navigateurRestant.abonneALaRacine(restant)
+        navigateurPartant.unsubscribe(BrowseTree.ROOT_ID).attendu("le désabonnement du premier")
+
+        creerPlaylist("Sur la route")
+
+        attendre("la racine annoncée à quatre sections au navigateur resté") {
+            RACINE_AVEC_PLAYLISTS in restant
+        }
+        assertEquals(
+            listOf("Albums", "Artistes", "Playlists", "Toutes les pistes"),
+            titresDesEnfants(navigateurRestant),
+        )
+    }
+
+    /**
+     * S'abonne à la racine et attend l'état initial que la session envoie.
+     *
+     * Le futur de `subscribe` dit que l'abonnement est pris, pas que le premier
+     * `onChildrenChanged` est passé. Sans cette attente, celui-ci pourrait
+     * arriver après coup et se faire prendre pour la notification du changement
+     * qu'on cherche à prouver.
+     */
+    private fun MediaBrowser.abonneALaRacine(recues: MutableList<Annonce>) {
+        subscribe(BrowseTree.ROOT_ID, null).attendu("l'abonnement à la racine")
+        attendre("l'état initial de la racine") { recues.any { it.parentId == BrowseTree.ROOT_ID } }
+        recues.clear()
+    }
+
+    /** Le service tel qu'Android le crée, et un navigateur qui s'y lie. */
+    private fun navigateurConnecte(recues: MutableList<Annonce>): MediaBrowser {
         val composant = ComponentName(app, PlaybackService::class.java)
-        listOf(MediaLibraryService.SERVICE_INTERFACE, MediaSessionService.SERVICE_INTERFACE)
-            .forEach { action ->
-                val intent = Intent(action).setComponent(composant)
-                shadowOf(app).setComponentNameAndServiceForBindServiceForIntent(
-                    intent,
-                    composant,
-                    demarre.get().onBind(intent),
-                )
-            }
+
+        // Un seul service pour tous les navigateurs, comme sur l'appareil.
+        if (service == null) {
+            val demarre = Robolectric.buildService(PlaybackService::class.java).create()
+            service = demarre
+
+            // Robolectric ne démarre pas de vrai service sur `bindService` : on
+            // lui donne le `Binder` que le service rend lui-même. Les deux
+            // actions parce que le navigateur choisit la sienne d'après ce que
+            // le manifeste déclare, et qu'il les déclare toutes les deux.
+            listOf(MediaLibraryService.SERVICE_INTERFACE, MediaSessionService.SERVICE_INTERFACE)
+                .forEach { action ->
+                    val intent = Intent(action).setComponent(composant)
+                    shadowOf(app).setComponentNameAndServiceForBindServiceForIntent(
+                        intent,
+                        composant,
+                        demarre.get().onBind(intent),
+                    )
+                }
+        }
 
         val ecouteur = object : MediaBrowser.Listener {
             override fun onChildrenChanged(
@@ -100,14 +143,16 @@ class PlaybackServiceBrowseTest {
                 parentId: String,
                 itemCount: Int,
                 params: MediaLibraryService.LibraryParams?,
-            ) = onChildrenChanged(parentId)
+            ) {
+                recues += Annonce(parentId, itemCount)
+            }
         }
 
         return MediaBrowser.Builder(app, SessionToken(app, composant))
             .setListener(ecouteur)
             .buildAsync()
             .attendu("la liaison au service")
-            .also { browser = it }
+            .also { browsers += it }
     }
 
     private fun titresDesEnfants(navigateur: MediaBrowser): List<String> =
@@ -163,7 +208,20 @@ class PlaybackServiceBrowseTest {
             .forEach { boucle -> runCatching { shadowOf(boucle).idle() } }
     }
 
+    /**
+     * Ce qu'un navigateur apprend d'un nœud qui a changé.
+     *
+     * Le compte fait partie de ce qu'on éprouve, et pas seulement l'arrivée
+     * d'une annonce : le service en émet plusieurs pendant que la
+     * bibliothèque et les playlists se chargent, et n'importe laquelle serait
+     * sinon prise pour celle qu'on attend.
+     */
+    private data class Annonce(val parentId: String, val itemCount: Int)
+
     private companion object {
+        /** La racine une fois qu'une playlist existe : la quatrième section. */
+        val RACINE_AVEC_PLAYLISTS = Annonce(BrowseTree.ROOT_ID, 4)
+
         const val TIMEOUT_S = 15L
         const val PAUSE_MS = 5L
     }
