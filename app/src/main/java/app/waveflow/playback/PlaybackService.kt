@@ -53,6 +53,15 @@ class PlaybackService : MediaLibraryService() {
     @Volatile
     private var browseSnapshot = BrowseSnapshot()
 
+    /**
+     * Ce que la session répond aux hôtes qui parcourent la bibliothèque.
+     *
+     * Tenu ici, et non construit au vol dans le constructeur de la session,
+     * parce qu'il faut pouvoir lui redemander de prévenir ses abonnés à chaque
+     * fois que [browseSnapshot] change.
+     */
+    private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot })
+
     override fun onCreate() {
         super.onCreate()
 
@@ -87,15 +96,13 @@ class PlaybackService : MediaLibraryService() {
         // de recharger la même image à chaque rafraîchissement.
         val bitmapLoader = CacheBitmapLoader(CoilBitmapLoader(this, imageLoader, artworkScope))
 
-        observeLibrary(container)
-
-        mediaSession = MediaLibrarySession.Builder(
-            this,
-            player,
-            BrowseCallback(BrowseTree { browseSnapshot }),
-        )
+        mediaSession = MediaLibrarySession.Builder(this, player, browseCallback)
             .setBitmapLoader(bitmapLoader)
             .build()
+
+        // Après la session, et pas avant : la première valeur du flux arrive
+        // sans délai, et elle a des abonnés à prévenir.
+        observeLibrary(container)
     }
 
     /**
@@ -117,7 +124,13 @@ class PlaybackService : MediaLibraryService() {
                 container.playlistRepository.observeEntries(),
             ) { library, playlists, entries ->
                 BrowseSnapshot(library, playlists, entries)
-            }.collect { browseSnapshot = it }
+            }.collect { snapshot ->
+                browseSnapshot = snapshot
+                // L'instantané seul ne suffit pas : un navigateur déjà connecté
+                // ne redemande rien de lui-même, il attend qu'on lui dise que
+                // ce qu'il affiche a changé.
+                mediaSession?.let(browseCallback::notifySubscribers)
+            }
         }
     }
 
