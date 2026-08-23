@@ -9,6 +9,7 @@ import androidx.media3.session.SessionError
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Le pont entre [BrowseTree] et ce que Media3 attend d'une bibliothèque.
@@ -21,6 +22,60 @@ import com.google.common.util.concurrent.ListenableFuture
  * Android Auto n'attend pas.
  */
 class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callback {
+
+    /**
+     * Les nœuds qu'un navigateur regarde en ce moment.
+     *
+     * Media3 tient la liste des abonnés d'un nœud donné, mais ne sait pas dire
+     * quels nœuds ont un abonné : il faut donc les retenir pour savoir qui
+     * prévenir quand la bibliothèque change. C'est aussi ce qui borne le coût —
+     * notifier tous les albums d'une bibliothèque reviendrait à la parcourir une
+     * fois par album, quand un navigateur n'en regarde qu'un.
+     *
+     * Concurrent parce que rien ne garantit que les abonnements et les mises à
+     * jour de la bibliothèque arrivent du même fil.
+     */
+    private val subscribed: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    override fun onSubscribe(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        parentId: String,
+        params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<Void>> {
+        subscribed += parentId
+        // Le comportement par défaut est conservé : c'est lui qui envoie au
+        // navigateur le premier état du nœud, aussitôt après l'abonnement.
+        return super.onSubscribe(session, browser, parentId, params)
+    }
+
+    override fun onUnsubscribe(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        parentId: String,
+    ): ListenableFuture<LibraryResult<Void>> {
+        subscribed -= parentId
+        return super.onUnsubscribe(session, browser, parentId)
+    }
+
+    /**
+     * Prévient les navigateurs que l'arbre a changé sous eux.
+     *
+     * Sans cet appel, un navigateur garde ce qu'il a lu la première fois. Le cas
+     * n'est pas marginal : Android Auto se connecte au démarrage de la voiture,
+     * avant que la bibliothèque de l'appareil ne soit lue, et resterait donc
+     * devant un arbre vide jusqu'à ce qu'on l'oblige à redemander.
+     *
+     * Les nœuds que plus personne ne regarde sont oubliés au passage : un
+     * navigateur peut disparaître sans se désabonner, et la session est seule à
+     * le savoir.
+     */
+    fun notifySubscribers(session: MediaLibrarySession) {
+        subscribed.removeAll { session.getSubscribedControllers(it).isEmpty() }
+        subscribed.forEach { parentId ->
+            session.notifyChildrenChanged(parentId, tree.children(parentId).size, /* params = */ null)
+        }
+    }
 
     override fun onGetLibraryRoot(
         session: MediaLibrarySession,
