@@ -42,16 +42,13 @@ class BrowseTree(private val snapshot: () -> BrowseSnapshot) {
     fun children(parentId: String): List<MediaItem> {
         val state = snapshot()
 
-        return when {
-            parentId == ROOT_ID -> rootSections(state)
-            parentId == ALBUMS_ID -> state.library.albums.map(::albumNode)
-            parentId == ARTISTS_ID -> state.library.artists.map(::artistNode)
-            parentId == PLAYLISTS_ID -> state.playlists.map(::playlistNode)
-            parentId == SONGS_ID -> state.library.songs.map { it.toBrowsableLeaf() }
-            parentId.startsWith(ALBUM_PREFIX) -> state.songsOfAlbum(parentId.idAfter(ALBUM_PREFIX))
-            parentId.startsWith(ARTIST_PREFIX) -> state.songsOfArtist(parentId.idAfter(ARTIST_PREFIX))
-            parentId.startsWith(PLAYLIST_PREFIX) ->
-                state.songsOfPlaylist(parentId.idAfter(PLAYLIST_PREFIX))
+        state.songsUnder(parentId)?.let { songs -> return songs.map { it.toBrowsableLeaf() } }
+
+        return when (parentId) {
+            ROOT_ID -> rootSections(state)
+            ALBUMS_ID -> state.library.albums.map(::albumNode)
+            ARTISTS_ID -> state.library.artists.map(::artistNode)
+            PLAYLISTS_ID -> state.playlists.map(::playlistNode)
             else -> emptyList()
         }
     }
@@ -84,7 +81,12 @@ class BrowseTree(private val snapshot: () -> BrowseSnapshot) {
 
         state.songOf(mediaId)?.let { return listOf(it.toMediaItem()) }
 
-        return children(mediaId).mapNotNull { state.songOf(it.mediaId)?.toMediaItem() }
+        // Les morceaux du nœud, pas les feuilles que [children] en tirerait :
+        // repasser par elles construirait un [MediaItem] par piste pour le
+        // jeter aussitôt, et il faudrait ensuite retrouver chaque morceau à
+        // partir de son identifiant. Cet appel est synchrone — Media3 attend
+        // la file avant de rendre la main à l'hôte.
+        return state.songsUnder(mediaId).orEmpty().map { it.toMediaItem() }
     }
 
     private fun rootSections(state: BrowseSnapshot): List<MediaItem> = buildList {
@@ -144,7 +146,7 @@ class BrowseTree(private val snapshot: () -> BrowseSnapshot) {
      * à [resolve] de la retrouver quand l'hôte la redemande pour la lire.
      */
     private fun Song.toBrowsableLeaf(): MediaItem = MediaItem.Builder()
-        .setMediaId(toMediaItem().mediaId)
+        .setMediaId(mediaId)
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(title)
@@ -158,11 +160,27 @@ class BrowseTree(private val snapshot: () -> BrowseSnapshot) {
         )
         .build()
 
-    private fun BrowseSnapshot.songsOfAlbum(id: Long?): List<MediaItem> =
-        library.songs.filter { it.albumId == id }.map { it.toBrowsableLeaf() }
+    /**
+     * Les morceaux que contient ce nœud, `null` s'il n'en contient pas.
+     *
+     * `null` et liste vide se distinguent : le premier dit « ce n'est pas un
+     * nœud de pistes » — la racine, la section des albums — le second « ce nœud
+     * en contient zéro ». [resolve] s'appuie sur cette différence, faute de quoi
+     * demander la section Albums mettrait toute la bibliothèque dans le lecteur.
+     */
+    private fun BrowseSnapshot.songsUnder(parentId: String): List<Song>? = when {
+        parentId == SONGS_ID -> library.songs
+        parentId.startsWith(ALBUM_PREFIX) -> songsOfAlbum(parentId.idAfter(ALBUM_PREFIX))
+        parentId.startsWith(ARTIST_PREFIX) -> songsOfArtist(parentId.idAfter(ARTIST_PREFIX))
+        parentId.startsWith(PLAYLIST_PREFIX) -> songsOfPlaylist(parentId.idAfter(PLAYLIST_PREFIX))
+        else -> null
+    }
 
-    private fun BrowseSnapshot.songsOfArtist(id: Long?): List<MediaItem> =
-        library.songs.filter { it.artistId == id }.map { it.toBrowsableLeaf() }
+    private fun BrowseSnapshot.songsOfAlbum(id: Long?): List<Song> =
+        library.songs.filter { it.albumId == id }
+
+    private fun BrowseSnapshot.songsOfArtist(id: Long?): List<Song> =
+        library.songs.filter { it.artistId == id }
 
     /**
      * Les pistes d'une playlist, dans l'ordre voulu.
@@ -170,15 +188,20 @@ class BrowseTree(private val snapshot: () -> BrowseSnapshot) {
      * Une entrée dont le fichier a disparu de l'appareil est ignorée : la
      * playlist garde la mémoire d'un morceau que le MediaStore ne connaît plus.
      */
-    private fun BrowseSnapshot.songsOfPlaylist(id: Long?): List<MediaItem> = playlistEntries
+    private fun BrowseSnapshot.songsOfPlaylist(id: Long?): List<Song> = playlistEntries
         .filter { it.playlistId == id }
         .sortedBy(PlaylistEntry::position)
         .mapNotNull { library.songsById[it.songId] }
-        .map { it.toBrowsableLeaf() }
 
-    /** Le morceau que désigne ce `mediaId` de feuille, `null` si c'en est un autre. */
+    /**
+     * Le morceau que désigne ce `mediaId` de feuille, `null` si c'en est un autre.
+     *
+     * Par l'index de la bibliothèque : l'hôte peut demander la résolution d'une
+     * section entière, et un balayage par identifiant y coûterait un parcours
+     * complet par piste.
+     */
     private fun BrowseSnapshot.songOf(mediaId: String): Song? =
-        library.songs.firstOrNull { it.toMediaItem().mediaId == mediaId }
+        localSongIdOf(mediaId)?.let { library.songsById[it] }
 
     private fun String.idAfter(prefix: String): Long? = removePrefix(prefix).toLongOrNull()
 
