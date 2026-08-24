@@ -87,7 +87,7 @@ class ServerHttp(
         return withContext(Dispatchers.IO) {
             try {
                 client.newCall(request).await().use {
-                    if (it.isSuccessful) it.body?.string().orEmpty() else throw it.toException()
+                    if (it.isSuccessful) it.body.string() else throw it.toException()
                 }
             } catch (broken: IOException) {
                 // Une coupure pendant la lecture du corps lève ici, et non dans
@@ -159,7 +159,7 @@ class ServerHttp(
         // Le serveur répond `{code, message}` sur ses erreurs métier, mais un
         // corps mal formé lui fait renvoyer du texte brut : lire le message
         // sans supposer du JSON.
-        val raw = body?.string().orEmpty()
+        val raw = body.string()
         val message = runCatching { json.decodeFromString<ErrorBody>(raw).message }
             .getOrNull()
             ?: raw.ifBlank { "Erreur $code" }
