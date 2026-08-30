@@ -6,8 +6,10 @@ import app.waveflow.data.LibraryStore
 import app.waveflow.data.MediaStoreMusicRepository
 import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
+import app.waveflow.data.PreferencesStore
 import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
+import app.waveflow.data.preferencesStoreOf
 import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.DataStoreSessionStore
 import app.waveflow.data.remote.HttpCatalogApi
@@ -68,6 +70,12 @@ class AppContainer(app: Application) {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val libraryStore = LibraryStore(musicRepository, applicationScope)
+
+    /**
+     * Les choix de l'utilisateur, hors de la session serveur : ils n'ont
+     * aucune raison de disparaître quand il se déconnecte.
+     */
+    val preferencesStore: PreferencesStore = preferencesStoreOf(app)
 
     // Room n'ouvre réellement le fichier qu'à la première requête, donc rien
     // de coûteux ne se passe ici.

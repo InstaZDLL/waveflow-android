@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,8 +46,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.waveflow.model.AppPreferences
 import app.waveflow.model.Library
 import app.waveflow.model.Song
+import app.waveflow.model.ThemeChoice
 import app.waveflow.ui.browse.AlbumDetailScreen
 import app.waveflow.ui.browse.AlbumsScreen
 import app.waveflow.ui.browse.ArtistDetailScreen
@@ -78,6 +80,8 @@ import app.waveflow.ui.server.catalog.CatalogViewModel
 import app.waveflow.ui.server.catalog.RemoteAlbumDetailScreen
 import app.waveflow.ui.server.catalog.RemoteArtistDetailScreen
 import app.waveflow.ui.server.catalog.ServerCatalogScreen
+import app.waveflow.ui.settings.SettingsScreen
+import app.waveflow.ui.settings.SettingsViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -86,8 +90,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            WaveFlowTheme {
-                WaveFlowRoot()
+            // Au-dessus du thème, et non dans un écran : le choix habille toute
+            // l'application, pas la page où on le fait.
+            val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
+            val preferences by settingsViewModel.preferences.collectAsStateWithLifecycle()
+
+            WaveFlowTheme(theme = preferences.theme) {
+                WaveFlowRoot(
+                    preferences = preferences,
+                    onThemeChange = settingsViewModel::setTheme,
+                )
             }
         }
     }
@@ -103,11 +115,15 @@ private val DETAIL_ROUTES = setOf(
     Routes.SERVER_ALBUM_DETAIL,
     Routes.SERVER_ARTIST_DETAIL,
     Routes.SERVER_ACCOUNT,
+    Routes.SETTINGS,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WaveFlowRoot() {
+private fun WaveFlowRoot(
+    preferences: AppPreferences,
+    onThemeChange: (ThemeChoice) -> Unit,
+) {
     val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory)
     val playerViewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory)
     val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.Factory)
@@ -248,15 +264,15 @@ private fun WaveFlowRoot() {
                                 }
                             }
 
-                            // Le compte n'a plus sa place dans l'onglet, que le
-                            // catalogue occupe : il s'ouvre depuis ici.
-                            if (currentRoute == Routes.SERVER && serverState.isConnected) {
-                                IconButton(
-                                    onClick = { navController.navigate(Routes.SERVER_ACCOUNT) },
-                                ) {
+                            // Les réglages s'ouvrent d'où qu'on vienne : ils
+                            // gouvernent l'application, ils n'appartiennent pas
+                            // à une section. Le compte du serveur s'y trouve
+                            // désormais, plutôt que dans l'en-tête d'un onglet.
+                            if (currentRoute != Routes.SETTINGS) {
+                                IconButton(onClick = { navController.navigate(Routes.SETTINGS) }) {
                                     Icon(
-                                        imageVector = Icons.Filled.AccountCircle,
-                                        contentDescription = "Compte du serveur",
+                                        imageVector = Icons.Filled.Settings,
+                                        contentDescription = "Réglages",
                                     )
                                 }
                             }
@@ -444,6 +460,29 @@ private fun WaveFlowRoot() {
                                 bottomPadding = listBottomPadding,
                             )
                         }
+                    }
+
+                    composable(Routes.SETTINGS) {
+                        SettingsScreen(
+                            preferences = preferences,
+                            isServerConnected = serverState.isConnected,
+                            serverSummary = serverState.connected?.serverUrl,
+                            appVersion = BuildConfig.VERSION_NAME,
+                            onThemeChange = onThemeChange,
+                            // Connecté, la ligne mène au compte ; sinon à
+                            // l'écran qui permet de s'y connecter. Une seule
+                            // ligne pour les deux : c'est le même sujet.
+                            onOpenServer = {
+                                navController.navigate(
+                                    if (serverState.isConnected) {
+                                        Routes.SERVER_ACCOUNT
+                                    } else {
+                                        Routes.SERVER
+                                    },
+                                )
+                            },
+                            bottomPadding = listBottomPadding,
+                        )
                     }
 
                     composable(Routes.SERVER_ACCOUNT) {
@@ -655,6 +694,7 @@ private fun currentScreenTitle(
     Routes.ARTISTS -> "Artistes"
     Routes.PLAYLISTS -> "Playlists"
     Routes.SERVER -> "Serveur"
+    Routes.SETTINGS -> "Réglages"
     Routes.SERVER_ACCOUNT -> "Compte"
     Routes.SERVER_ALBUM_DETAIL -> "Album"
     Routes.SERVER_ARTIST_DETAIL -> "Artiste"

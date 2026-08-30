@@ -2,7 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:MainActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun WaveFlowRoot()</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun WaveFlowRoot( preferences: AppPreferences, onThemeChange: (ThemeChoice) -&gt; Unit, )</ID>
     <ID>CyclomaticComplexMethod:MainActivity.kt$private fun currentScreenTitle( currentRoute: String?, albumId: Long?, artistId: Long?, library: Library, playlistName: String?, ): String</ID>
     <ID>CyclomaticComplexMethod:PlaylistDetailScreen.kt$@Composable fun PlaylistDetailScreen( playlist: Playlist?, songs: List&lt;Song&gt;, nowPlayingId: Long?, onSongClick: (Song) -&gt; Unit, onRemoveSong: (Song) -&gt; Unit, onReorder: (order: List&lt;Song&gt;, onFailure: () -&gt; Unit) -&gt; Unit, onPlay: () -&gt; Unit, onShuffle: () -&gt; Unit, modifier: Modifier = Modifier, bottomPadding: Dp = 0.dp, )</ID>
     <ID>LongParameterList:ServerHttp.kt$ServerHttp$( serverUrl: String, path: String, accessToken: String?, pathSegment: String? = null, query: Map&lt;String, String&gt; = emptyMap(), method: Request.Builder.() -&gt; Request.Builder, )</ID>
