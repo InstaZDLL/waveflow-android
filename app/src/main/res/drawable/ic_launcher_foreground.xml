@@ -1,30 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Le logo WaveFlow : cinq barres d'égaliseur symétriques, en dégradé émeraude.
+  Repris de `WaveFlow/assets/logo.svg` — mêmes proportions (140/80/40/80/140),
+  mêmes couleurs — puis ramené dans la zone sûre de l'icône adaptative.
+
+  Cette zone est un **disque** de 72 dp et non un carré : c'est la
+  demi-diagonale du logo qui doit rester sous 36, pas sa demi-largeur. Dimensionné
+  au carré, les deux barres extérieures tombaient hors du cercle et le premier
+  lanceur rond venu les aurait rognées. À l'échelle retenue (0,30) la
+  demi-diagonale vaut 34,7 dp : le logo tient, avec la marge qui va bien.
+
+  Les barres sont des capsules : dans l'original le rayon vaut la moitié de la
+  largeur, ce que des arcs de demi-cercle rendent exactement.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:endX="85.84757"
-                android:endY="92.4963"
-                android:startX="42.9492"
-                android:startY="49.59793"
-                android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
-        android:strokeWidth="1"
-        android:strokeColor="#00000000" />
+
+    <group>
+        <path android:pathData="M26.4,36.6 A3.6,3.6 0 0 1 33.6,36.6 L33.6,71.4 A3.6,3.6 0 0 1 26.4,71.4 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="26.4"
+                    android:startY="33"
+                    android:endX="81.6"
+                    android:endY="75"
+                    android:type="linear">
+                    <item android:offset="0" android:color="#34D399" />
+                    <item android:offset="0.5" android:color="#10B981" />
+                    <item android:offset="1" android:color="#059669" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M38.4,45.6 A3.6,3.6 0 0 1 45.6,45.6 L45.6,62.4 A3.6,3.6 0 0 1 38.4,62.4 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="26.4"
+                    android:startY="33"
+                    android:endX="81.6"
+                    android:endY="75"
+                    android:type="linear">
+                    <item android:offset="0" android:color="#34D399" />
+                    <item android:offset="0.5" android:color="#10B981" />
+                    <item android:offset="1" android:color="#059669" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M50.4,51.6 A3.6,3.6 0 0 1 57.6,51.6 L57.6,56.4 A3.6,3.6 0 0 1 50.4,56.4 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="26.4"
+                    android:startY="33"
+                    android:endX="81.6"
+                    android:endY="75"
+                    android:type="linear">
+                    <item android:offset="0" android:color="#34D399" />
+                    <item android:offset="0.5" android:color="#10B981" />
+                    <item android:offset="1" android:color="#059669" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M62.4,45.6 A3.6,3.6 0 0 1 69.6,45.6 L69.6,62.4 A3.6,3.6 0 0 1 62.4,62.4 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="26.4"
+                    android:startY="33"
+                    android:endX="81.6"
+                    android:endY="75"
+                    android:type="linear">
+                    <item android:offset="0" android:color="#34D399" />
+                    <item android:offset="0.5" android:color="#10B981" />
+                    <item android:offset="1" android:color="#059669" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M74.4,36.6 A3.6,3.6 0 0 1 81.6,36.6 L81.6,71.4 A3.6,3.6 0 0 1 74.4,71.4 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="26.4"
+                    android:startY="33"
+                    android:endX="81.6"
+                    android:endY="75"
+                    android:type="linear">
+                    <item android:offset="0" android:color="#34D399" />
+                    <item android:offset="0.5" android:color="#10B981" />
+                    <item android:offset="1" android:color="#059669" />
+                </gradient>
+            </aapt:attr>
+        </path>
+    </group>
 </vector>
