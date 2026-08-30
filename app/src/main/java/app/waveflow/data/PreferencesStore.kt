@@ -10,9 +10,11 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.ThemeChoice
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import java.io.IOException
 
 /**
@@ -50,18 +52,39 @@ class DataStorePreferencesStore(
     private val dataStore: DataStore<Preferences>,
 ) : PreferencesStore {
 
+    /**
+     * Ces préférences décorent l'application, elles ne la conditionnent pas :
+     * une lecture en échec doit rendre les valeurs par défaut, jamais empêcher
+     * de démarrer.
+     *
+     * On reprend au lieu de renoncer. Laisser l'erreur passer terminerait la
+     * collecte, et un flux terminé fige le partage en aval : l'utilisateur
+     * pourrait encore changer de thème sans que rien ne bouge à l'écran, sa
+     * préférence étant bien écrite mais jamais relue. Un fichier
+     * momentanément illisible se répare donc de lui-même ; un fichier
+     * durablement cassé laisse l'application sur ses valeurs par défaut après
+     * [MAX_TENTATIVES], sans boucler indéfiniment sur une cause qui ne
+     * disparaîtra pas.
+     */
     override val preferences: Flow<AppPreferences> = dataStore.data
-        // Un fichier illisible remonte en IOException. Ces préférences décorent
-        // l'application, elles ne la conditionnent pas : repartir sur les
-        // valeurs par défaut est préférable à ne pas démarrer.
-        .catch { error ->
+        .retryWhen { error, tentative ->
+            val reprendre = tentative < MAX_TENTATIVES
+            // Un fichier illisible remonte en IOException ; le reste n'est pas
+            // prévu et mérite d'être vu, mais ni l'un ni l'autre ne justifie
+            // d'emporter l'application.
             if (error is IOException) {
-                Log.w(TAG, "Préférences illisibles, on repart sur les valeurs par défaut", error)
-                emit(emptyPreferences())
+                Log.w(TAG, "Préférences illisibles, valeurs par défaut", error)
             } else {
-                throw error
+                Log.e(TAG, "Lecture des préférences en échec", error)
             }
+            emit(emptyPreferences())
+            if (reprendre) delay(DELAI_REPRISE_MS)
+            reprendre
         }
+        // Les tentatives épuisées, on tient sur les valeurs par défaut plutôt
+        // que de laisser remonter dans la portée du ViewModel, qui n'a pas de
+        // gestionnaire et ferait tomber l'application.
+        .catch { emit(emptyPreferences()) }
         .map { it.toAppPreferences() }
 
     override suspend fun setTheme(choice: ThemeChoice) {
@@ -85,6 +108,10 @@ class DataStorePreferencesStore(
         const val TAG = "PreferencesStore"
 
         val THEME = stringPreferencesKey("theme")
+
+        /** Trois reprises : de quoi passer un incident, pas une corruption. */
+        const val MAX_TENTATIVES = 3L
+        const val DELAI_REPRISE_MS = 200L
     }
 }
 
