@@ -3,17 +3,22 @@ package app.waveflow.playback
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import app.waveflow.WaveFlowApp
+import app.waveflow.data.PlayHistoryRepository
 import coil.imageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -100,9 +105,37 @@ class PlaybackService : MediaLibraryService() {
             .setBitmapLoader(bitmapLoader)
             .build()
 
+        player.addListener(historyListener(container.playHistoryRepository))
+
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
         observeLibrary(container)
+    }
+
+    /**
+     * Note ce qu'on écoute, mais pas ce qu'on saute.
+     *
+     * Compté ici et non dans l'application : le service joue aussi quand aucun
+     * écran n'est ouvert — en voiture, depuis la notification — et un historique
+     * qui manquerait ces écoutes-là décrirait mal ce qu'on écoute vraiment.
+     *
+     * L'écoute n'est enregistrée qu'après [DELAI_ECOUTE_MS] passés sur la même
+     * piste. Sans ce délai, parcourir un album de vingt titres en compterait
+     * vingt : un « récemment écouté » se remplirait alors de ce qu'on a
+     * précisément refusé d'entendre. Chaque changement annule l'attente en
+     * cours, si bien que seule la piste sur laquelle on s'est arrêté compte.
+     */
+    private fun historyListener(history: PlayHistoryRepository) = object : Player.Listener {
+        private var enAttente: Job? = null
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            enAttente?.cancel()
+            val mediaId = mediaItem?.mediaId ?: return
+            enAttente = artworkScope.launch {
+                delay(DELAI_ECOUTE_MS)
+                history.record(mediaId)
+            }
+        }
     }
 
     /**
@@ -157,5 +190,13 @@ class PlaybackService : MediaLibraryService() {
         // partage avec l'écran des réglages. Son verrou tombe avec le processus,
         // et le service peut redémarrer sur la même instance.
         super.onDestroy()
+    }
+
+    private companion object {
+        /**
+         * Vingt secondes : assez pour distinguer une écoute d'un survol, assez
+         * peu pour qu'une piste courte compte quand même.
+         */
+        const val DELAI_ECOUTE_MS = 20_000L
     }
 }

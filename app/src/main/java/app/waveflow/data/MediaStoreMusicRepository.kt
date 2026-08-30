@@ -57,6 +57,7 @@ class MediaStoreMusicRepository(
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.DATE_ADDED,
         )
 
         // Uniquement les vrais morceaux de musique (pas les sonneries/notifs).
@@ -74,6 +75,7 @@ class MediaStoreMusicRepository(
             val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val addedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
@@ -92,6 +94,9 @@ class MediaStoreMusicRepository(
                     albumId = albumId,
                     durationMs = cursor.getLong(durationCol),
                     artworkUri = ContentUris.withAppendedId(ALBUM_ART_BASE, albumId),
+                    // Le MediaStore date en secondes ; le reste de
+                    // l'application compte en millisecondes.
+                    addedAtMs = cursor.getLong(addedCol) * MILLIS_PAR_SECONDE,
                 )
             }
         }
@@ -106,5 +111,7 @@ class MediaStoreMusicRepository(
         // fonctionnel sur les versions ciblées ; Coil affiche un placeholder si
         // rien ne résout).
         val ALBUM_ART_BASE: Uri = "content://media/external/audio/albumart".toUri()
+
+        const val MILLIS_PAR_SECONDE = 1_000L
     }
 }

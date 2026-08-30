@@ -5,8 +5,10 @@ import android.os.Build
 import app.waveflow.data.LibraryStore
 import app.waveflow.data.MediaStoreMusicRepository
 import app.waveflow.data.MusicRepository
+import app.waveflow.data.PlayHistoryRepository
 import app.waveflow.data.PlaylistRepository
 import app.waveflow.data.PreferencesStore
+import app.waveflow.data.RoomPlayHistoryRepository
 import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
 import app.waveflow.data.preferencesStoreOf
@@ -82,6 +84,9 @@ class AppContainer(app: Application) {
     private val database = WaveFlowDatabase.build(app)
 
     val playlistRepository: PlaylistRepository = RoomPlaylistRepository(database.playlistDao())
+
+    val playHistoryRepository: PlayHistoryRepository =
+        RoomPlayHistoryRepository(database.playHistoryDao())
 
     private val appContext = app.applicationContext
 
