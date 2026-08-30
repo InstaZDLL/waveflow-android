@@ -43,6 +43,9 @@ android {
     }
     buildFeatures {
         compose = true
+        // Pour la version affichée dans Réglages ▸ À propos : c'est la seule
+        // source qui suit le `versionName` sans qu'on ait à la recopier.
+        buildConfig = true
     }
     lint {
         // Le lint Android voit ce que ktlint et Detekt ne peuvent pas voir :

@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import app.waveflow.model.ThemeChoice
 
 private val DarkColorScheme = darkColorScheme(
     primary = Emerald,
@@ -36,14 +37,25 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = OnLightVariant,
 )
 
+/**
+ * @param theme ce que l'utilisateur a choisi. La traduction en clair ou sombre
+ *   se fait ici et nulle part ailleurs : un appelant qui la referait pourrait
+ *   la faire autrement.
+ */
 @Composable
 fun WaveFlowTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    theme: ThemeChoice = ThemeChoice.System,
     // Désactivé par défaut : on garde l'identité émeraude WaveFlow plutôt que
     // les couleurs Material You du système. Activable si on veut le suivi thème.
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val darkTheme = when (theme) {
+        ThemeChoice.System -> isSystemInDarkTheme()
+        ThemeChoice.Light -> false
+        ThemeChoice.Dark -> true
+    }
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

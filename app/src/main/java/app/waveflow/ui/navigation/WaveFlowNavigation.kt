@@ -23,6 +23,14 @@ object Routes {
     const val PLAYLISTS = "playlists"
     const val SERVER = "server"
 
+    /**
+     * Les réglages, hors de la barre du bas.
+     *
+     * Ils s'ouvrent depuis l'en-tête, d'où qu'on vienne : ce n'est pas une
+     * section de la bibliothèque mais ce qui la gouverne.
+     */
+    const val SETTINGS = "reglages"
+
     const val ARG_ALBUM_ID = "albumId"
     const val ARG_ARTIST_ID = "artistId"
     const val ARG_PLAYLIST_ID = "playlistId"
