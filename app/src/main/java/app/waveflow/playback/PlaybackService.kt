@@ -1,6 +1,7 @@
 package app.waveflow.playback
 
 import android.content.Intent
+import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -15,10 +16,8 @@ import app.waveflow.data.PlayHistoryRepository
 import coil.imageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -119,21 +118,27 @@ class PlaybackService : MediaLibraryService() {
      * écran n'est ouvert — en voiture, depuis la notification — et un historique
      * qui manquerait ces écoutes-là décrirait mal ce qu'on écoute vraiment.
      *
-     * L'écoute n'est enregistrée qu'après [DELAI_ECOUTE_MS] passés sur la même
-     * piste. Sans ce délai, parcourir un album de vingt titres en compterait
-     * vingt : un « récemment écouté » se remplirait alors de ce qu'on a
-     * précisément refusé d'entendre. Chaque changement annule l'attente en
-     * cours, si bien que seule la piste sur laquelle on s'est arrêté compte.
+     * `elapsedRealtime` plutôt que l'heure courante : elle ne recule pas quand
+     * l'horloge du téléphone est remise à l'heure, ce qui rallongerait ou
+     * abrégerait une écoute en cours.
+     *
+     * Voir [ListeningCounter] pour ce qui distingue une écoute d'un survol.
      */
-    private fun historyListener(history: PlayHistoryRepository) = object : Player.Listener {
-        private var enAttente: Job? = null
+    private fun historyListener(history: PlayHistoryRepository): Player.Listener {
+        val compteur = ListeningCounter(
+            scope = artworkScope,
+            thresholdMs = DELAI_ECOUTE_MS,
+            nowMs = SystemClock::elapsedRealtime,
+            onListened = history::record,
+        )
 
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            enAttente?.cancel()
-            val mediaId = mediaItem?.mediaId ?: return
-            enAttente = artworkScope.launch {
-                delay(DELAI_ECOUTE_MS)
-                history.record(mediaId)
+        return object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                compteur.trackChanged(mediaItem?.mediaId)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                compteur.playingChanged(isPlaying)
             }
         }
     }
