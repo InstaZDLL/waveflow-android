@@ -47,7 +47,16 @@ object Routes {
 
     const val SERVER_ALBUM_DETAIL = "$SERVER_ALBUMS/{$ARG_ALBUM_ID}"
     const val SERVER_ARTIST_DETAIL = "$SERVER_ARTISTS/{$ARG_ARTIST_ID}"
-    const val SERVER_ACCOUNT = "$SERVER/compte"
+
+    /**
+     * Le compte, sous les réglages et non sous le serveur.
+     *
+     * Il s'ouvre depuis les réglages et il y appartient : connexion, jeton,
+     * cache. Le laisser sous `server/` le faisait réclamer par l'onglet Serveur
+     * de la bibliothèque — l'écran Compte affichait alors les sous-onglets et
+     * se disait dans la bibliothèque, où il n'est pas.
+     */
+    const val SERVER_ACCOUNT = "$SETTINGS/serveur"
 
     fun albumDetail(albumId: Long): String = "$ALBUMS/$albumId"
 
