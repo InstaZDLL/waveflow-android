@@ -22,6 +22,7 @@ fun List<Song>.toAlbums(): List<Album> =
                 artworkUri = songs.firstNotNullOfOrNull { it.artworkUri },
                 trackCount = songs.size,
                 durationMs = songs.sumOf { it.durationMs },
+                addedAtMs = songs.maxOf { it.addedAtMs },
             )
         }
         .sortedBy { it.title.lowercase() }

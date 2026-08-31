@@ -18,6 +18,16 @@ data class Album(
     val artworkUri: Uri?,
     val trackCount: Int,
     val durationMs: Long,
+    /**
+     * La plus récente des dates d'ajout de ses pistes.
+     *
+     * La plus récente et non la plus ancienne : ce que l'accueil appelle un
+     * ajout récent, c'est ce que l'utilisateur vient de mettre sur son
+     * appareil. Un album copié d'un coup a de toute façon des dates voisines ;
+     * un vieil album qu'on complète remonte, ce qui est encore ce qu'on
+     * attend d'une liste des derniers arrivés.
+     */
+    val addedAtMs: Long = 0L,
 ) {
     val displayArtist: String
         get() = artist.orUnknownArtist()

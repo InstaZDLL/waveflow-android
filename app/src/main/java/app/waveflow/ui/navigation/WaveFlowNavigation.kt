@@ -3,20 +3,22 @@ package app.waveflow.ui.navigation
 import android.net.Uri
 import android.os.Bundle
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.SecondaryScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 
 /** Routes de navigation. Les détails portent leur identifiant dans le chemin. */
 object Routes {
+    const val HOME = "accueil"
     const val SONGS = "songs"
     const val ALBUMS = "albums"
     const val ARTISTS = "artists"
@@ -86,28 +88,55 @@ fun Bundle?.longArgOf(currentRoute: String?, route: String, key: String): Long? 
     this?.takeIf { currentRoute == route && it.containsKey(key) }?.getLong(key)
 
 /**
- * Les sections atteignables depuis la barre du bas.
+ * Les deux destinations de la barre du bas.
  *
- * Serveur est en dernier et à part : les quatre premières décrivent la
- * bibliothèque de l'appareil, celle-ci une source distante.
+ * Deux et non cinq. Les quatre vues de la bibliothèque — titres, albums,
+ * artistes, playlists — ne sont pas des sections différentes mais des manières
+ * de regarder la même chose : elles passent en sous-onglets. Et le serveur
+ * cesse d'être une destination pour devenir une source parmi d'autres, à
+ * l'intérieur de la bibliothèque.
+ *
+ * La recherche et les réglages n'y figurent pas non plus : ils s'ouvrent depuis
+ * l'en-tête, d'où qu'on vienne.
  */
 enum class TopLevelDestination(
     val route: String,
     val label: String,
     val icon: ImageVector,
 ) {
-    Songs(Routes.SONGS, "Titres", Icons.Filled.MusicNote),
-    Albums(Routes.ALBUMS, "Albums", Icons.Filled.Album),
-    Artists(Routes.ARTISTS, "Artistes", Icons.Filled.Person),
-    Playlists(Routes.PLAYLISTS, "Playlists", Icons.AutoMirrored.Filled.QueueMusic),
-    Server(Routes.SERVER, "Serveur", Icons.Filled.Cloud),
+    Home(Routes.HOME, "Accueil", Icons.Filled.Home),
+    Library(Routes.SONGS, "Bibliothèque", Icons.AutoMirrored.Filled.LibraryBooks),
     ;
 
     /**
      * Vrai aussi pour les écrans de détail de la section : ouvrir un album
-     * garde l'onglet Albums sélectionné.
+     * garde la bibliothèque sélectionnée.
      */
-    fun owns(route: String?): Boolean = route == this.route || route?.startsWith("${this.route}/") == true
+    fun owns(route: String?): Boolean = when (this) {
+        Home -> route == Routes.HOME
+        Library -> LibraryTab.entries.any { it.owns(route) }
+    }
+}
+
+/**
+ * Les vues de la bibliothèque, et la source qui n'en est pas une.
+ *
+ * `Serveur` figure dans la même rangée faute de mieux : son catalogue se
+ * demande au réseau, page par page, quand les quatre autres lisent une
+ * bibliothèque déjà en mémoire. Les réunir sous un vrai filtre de source
+ * suppose de réconcilier ces deux façons de charger — c'est un travail à part,
+ * et le catalogue devait rester atteignable d'ici là.
+ */
+enum class LibraryTab(val route: String, val label: String) {
+    Songs(Routes.SONGS, "Titres"),
+    Albums(Routes.ALBUMS, "Albums"),
+    Artists(Routes.ARTISTS, "Artistes"),
+    Playlists(Routes.PLAYLISTS, "Playlists"),
+    Server(Routes.SERVER, "Serveur"),
+    ;
+
+    fun owns(route: String?): Boolean =
+        route == this.route || route?.startsWith("${this.route}/") == true
 }
 
 @Composable
@@ -122,6 +151,39 @@ fun WaveFlowBottomBar(
                 onClick = { onSelect(destination) },
                 icon = { Icon(destination.icon, contentDescription = null) },
                 label = { Text(destination.label) },
+            )
+        }
+    }
+}
+
+/**
+ * Les sous-onglets de la bibliothèque.
+ *
+ * Défilants plutôt que répartis : à cinq entrées, un partage égal donnerait des
+ * libellés tronqués sur un téléphone étroit ou à grande police.
+ *
+ * `Secondary` parce qu'ils le sont : la barre du bas dit où l'on est, ceux-ci
+ * seulement comment on regarde ce qu'on y trouve.
+ */
+@Composable
+fun LibraryTabs(
+    currentRoute: String?,
+    onSelect: (LibraryTab) -> Unit,
+) {
+    val selectionne = LibraryTab.entries.indexOfFirst { it.owns(currentRoute) }
+    if (selectionne < 0) return
+
+    SecondaryScrollableTabRow(
+        selectedTabIndex = selectionne,
+        edgePadding = 8.dp,
+        containerColor = MaterialTheme.colorScheme.surface,
+        divider = {},
+    ) {
+        LibraryTab.entries.forEach { onglet ->
+            Tab(
+                selected = onglet.owns(currentRoute),
+                onClick = { onSelect(onglet) },
+                text = { Text(onglet.label) },
             )
         }
     }
