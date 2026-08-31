@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -55,8 +56,11 @@ import app.waveflow.ui.browse.AlbumsScreen
 import app.waveflow.ui.browse.ArtistDetailScreen
 import app.waveflow.ui.browse.ArtistsScreen
 import app.waveflow.ui.cache.CacheViewModel
+import app.waveflow.ui.home.HomeScreen
+import app.waveflow.ui.home.HomeViewModel
 import app.waveflow.ui.library.LibraryScreen
 import app.waveflow.ui.library.LibraryViewModel
+import app.waveflow.ui.navigation.LibraryTabs
 import app.waveflow.ui.navigation.Routes
 import app.waveflow.ui.navigation.TopLevelDestination
 import app.waveflow.ui.navigation.WaveFlowBottomBar
@@ -205,96 +209,107 @@ private fun WaveFlowRoot(
             modifier = Modifier.fillMaxSize(),
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                TopAppBar(
-                    title = {
-                        if (searchActive) {
-                            SearchField(
-                                query = searchQuery,
-                                onQueryChange = searchViewModel::onQueryChange,
-                            )
-                        } else {
-                            Text(
-                                currentScreenTitle(
-                                    currentRoute = currentRoute,
-                                    albumId = albumIdArg,
-                                    artistId = artistIdArg,
-                                    library = library,
-                                    playlistName = openPlaylist?.name,
-                                ),
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        when {
-                            searchActive -> IconButton(onClick = { closeSearch() }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Fermer la recherche",
+                Column {
+                    TopAppBar(
+                        title = {
+                            if (searchActive) {
+                                SearchField(
+                                    query = searchQuery,
+                                    onQueryChange = searchViewModel::onQueryChange,
+                                )
+                            } else {
+                                Text(
+                                    currentScreenTitle(
+                                        currentRoute = currentRoute,
+                                        albumId = albumIdArg,
+                                        artistId = artistIdArg,
+                                        library = library,
+                                        playlistName = openPlaylist?.name,
+                                    ),
                                 )
                             }
-
-                            isDetailRoute -> IconButton(onClick = { navController.popBackStack() }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Retour",
-                                )
-                            }
-                        }
-                    },
-                    actions = {
-                        if (searchActive) {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = searchViewModel::clear) {
+                        },
+                        navigationIcon = {
+                            when {
+                                searchActive -> IconButton(onClick = { closeSearch() }) {
                                     Icon(
-                                        imageVector = Icons.Filled.Close,
-                                        contentDescription = "Effacer la recherche",
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Fermer la recherche",
+                                    )
+                                }
+
+                                isDetailRoute -> IconButton(onClick = { navController.popBackStack() }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Retour",
                                     )
                                 }
                             }
-                        } else {
-                            // Rien à chercher tant que la bibliothèque n'a rien
-                            // rendu — permission refusée, scan en cours,
-                            // appareil sans musique.
-                            if (library.songs.isNotEmpty()) {
-                                IconButton(onClick = { searchActive = true }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Search,
-                                        contentDescription = "Rechercher",
+                        },
+                        actions = {
+                            if (searchActive) {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = searchViewModel::clear) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = "Effacer la recherche",
+                                        )
+                                    }
+                                }
+                            } else {
+                                // Rien à chercher tant que la bibliothèque n'a rien
+                                // rendu — permission refusée, scan en cours,
+                                // appareil sans musique.
+                                if (library.songs.isNotEmpty()) {
+                                    IconButton(onClick = { searchActive = true }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Search,
+                                            contentDescription = "Rechercher",
+                                        )
+                                    }
+                                }
+
+                                // Les réglages s'ouvrent d'où qu'on vienne : ils
+                                // gouvernent l'application, ils n'appartiennent pas
+                                // à une section. Le compte du serveur s'y trouve
+                                // désormais, plutôt que dans l'en-tête d'un onglet.
+                                if (currentRoute != Routes.SETTINGS) {
+                                    IconButton(onClick = { navController.navigate(Routes.SETTINGS) }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Settings,
+                                            contentDescription = "Réglages",
+                                        )
+                                    }
+                                }
+
+                                openPlaylist?.let { playlist ->
+                                    PlaylistMenu(
+                                        playlist = playlist,
+                                        onRename = { playlistsViewModel.rename(playlist.id, it) },
+                                        onDelete = {
+                                            playlistsViewModel.delete(playlist.id)
+                                            navController.popBackStack()
+                                        },
                                     )
                                 }
                             }
+                        },
+                    )
 
-                            // Les réglages s'ouvrent d'où qu'on vienne : ils
-                            // gouvernent l'application, ils n'appartiennent pas
-                            // à une section. Le compte du serveur s'y trouve
-                            // désormais, plutôt que dans l'en-tête d'un onglet.
-                            if (currentRoute != Routes.SETTINGS) {
-                                IconButton(onClick = { navController.navigate(Routes.SETTINGS) }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Settings,
-                                        contentDescription = "Réglages",
-                                    )
-                                }
-                            }
-
-                            openPlaylist?.let { playlist ->
-                                PlaylistMenu(
-                                    playlist = playlist,
-                                    onRename = { playlistsViewModel.rename(playlist.id, it) },
-                                    onDelete = {
-                                        playlistsViewModel.delete(playlist.id)
-                                        navController.popBackStack()
-                                    },
-                                )
-                            }
-                        }
-                    },
-                )
+                    // Sous la barre du haut, et seulement dans la bibliothèque :
+                    // ces onglets disent comment on la regarde, pas où l'on est.
+                    if (!searchActive) {
+                        LibraryTabs(
+                            currentRoute = currentRoute,
+                            onSelect = { navController.switchTab(it.route) },
+                        )
+                    }
+                }
             },
             bottomBar = {
                 WaveFlowBottomBar(
                     currentRoute = currentRoute,
-                    onSelect = { navController.switchTab(it) },
+                    onSelect = { navController.switchTab(it.route) },
                 )
             },
         ) { innerPadding ->
@@ -338,9 +353,26 @@ private fun WaveFlowRoot(
             ) { listBottomPadding ->
                 NavHost(
                     navController = navController,
-                    startDestination = Routes.SONGS,
+                    startDestination = Routes.HOME,
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    composable(Routes.HOME) {
+                        gated {
+                            val homeViewModel: HomeViewModel =
+                                viewModel(factory = HomeViewModel.Factory)
+                            val homeState by homeViewModel.state.collectAsStateWithLifecycle()
+
+                            HomeScreen(
+                                state = homeState,
+                                onSongClick = { playerViewModel.playFrom(library.songs, it) },
+                                onAlbumClick = {
+                                    navController.navigate(Routes.albumDetail(it.id))
+                                },
+                                bottomPadding = listBottomPadding,
+                            )
+                        }
+                    }
+
                     composable(Routes.SONGS) {
                         gated {
                             LibraryScreen(
@@ -624,7 +656,7 @@ private fun WaveFlowRoot(
                                     val terme = searchQuery
                                     closeSearch()
                                     catalogViewModel.onSearchQueryChange(terme)
-                                    navController.switchTab(TopLevelDestination.Server)
+                                    navController.switchTab(Routes.SERVER)
                                 }
                             },
                         )
@@ -670,8 +702,8 @@ private fun WaveFlowRoot(
  * Bascule d'onglet : une seule entrée par section dans la pile, et l'état de
  * défilement de chaque onglet est conservé.
  */
-private fun NavHostController.switchTab(destination: TopLevelDestination) {
-    navigate(destination.route) {
+private fun NavHostController.switchTab(route: String) {
+    navigate(route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
@@ -690,6 +722,7 @@ private fun currentScreenTitle(
     library: Library,
     playlistName: String?,
 ): String = when (currentRoute) {
+    Routes.HOME -> "Accueil"
     Routes.ALBUMS -> "Albums"
     Routes.ARTISTS -> "Artistes"
     Routes.PLAYLISTS -> "Playlists"

@@ -30,6 +30,7 @@ fun song(
     album: String? = "Album $id",
     albumId: Long = id,
     durationMs: Long = 60_000L,
+    addedAtMs: Long = 0L,
 ): Song = Song(
     id = id,
     uri = Uri.parse("content://media/external/audio/media/$id"),
@@ -40,6 +41,7 @@ fun song(
     albumId = albumId,
     durationMs = durationMs,
     artworkUri = null,
+    addedAtMs = addedAtMs,
 )
 
 /** Fabrique de morceaux distants pour les tests. */
