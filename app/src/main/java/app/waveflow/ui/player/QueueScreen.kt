@@ -22,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.playback.PlayingTrack
@@ -112,7 +114,12 @@ private fun QueueRow(
             } else {
                 MaterialTheme.colorScheme.onSurface
             },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                // La couleur seule désignait le morceau en cours : elle ne dit
+                // rien à qui écoute l'écran plutôt qu'il ne le regarde, ni à qui
+                // distingue mal l'accent du texte ordinaire.
+                .semantics { if (isCurrent) stateDescription = EN_LECTURE },
         )
 
         QueueAction(
@@ -163,3 +170,5 @@ private fun QueueAction(
 }
 
 private val ACTION = 40.dp
+
+private const val EN_LECTURE = "En cours de lecture"
