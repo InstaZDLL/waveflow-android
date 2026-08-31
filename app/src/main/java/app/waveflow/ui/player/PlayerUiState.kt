@@ -18,7 +18,13 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.Off,
+    val queue: List<PlayingTrack> = emptyList(),
+    val queueIndex: Int = -1,
 ) {
+    /** Ce qui reste à jouer après le morceau courant. */
+    val upNextCount: Int
+        get() = (queue.size - queueIndex - 1).coerceAtLeast(0)
+
     /** Avancement dans le morceau, entre 0 et 1 (0 si la durée est inconnue). */
     val progress: Float
         get() = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f

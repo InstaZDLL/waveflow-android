@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -39,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,8 +76,15 @@ fun NowPlayingScreen(
     onSeek: (Long) -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
+    onPlayQueueItem: (Int) -> Unit,
+    onMoveQueueItem: (from: Int, to: Int) -> Unit,
+    onRemoveQueueItem: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Local et non remonté : voir la file est une façon de regarder le lecteur,
+    // pas un état de l'application. Refermer le lecteur la referme.
+    var queueShown by rememberSaveable { mutableStateOf(false) }
+
     // La file peut se vider pendant l'animation de fermeture : on continue
     // d'afficher le dernier morceau connu le temps que l'écran redescende,
     // plutôt que de le faire disparaître d'un coup.
@@ -101,20 +110,39 @@ fun NowPlayingScreen(
                 .windowInsetsPadding(WindowInsets.systemBars)
                 .padding(horizontal = 24.dp),
         ) {
-            PlayerHeader(track = track, onCollapse = onCollapse)
-
-            Spacer(Modifier.weight(1f))
-
-            Artwork(
-                artworkUri = track.artworkUri,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp)),
+            PlayerHeader(
+                track = track,
+                onCollapse = onCollapse,
+                queueShown = queueShown,
+                upNextCount = state.upNextCount,
+                onToggleQueue = { queueShown = !queueShown },
             )
 
-            Spacer(Modifier.weight(1f))
+            if (queueShown) {
+                // La file prend la place de la pochette et non celle de tout
+                // l'écran : on garde sous les yeux ce qui joue et de quoi
+                // l'arrêter pendant qu'on remanie la suite.
+                QueueScreen(
+                    state = state,
+                    onPlayAt = onPlayQueueItem,
+                    onMove = onMoveQueueItem,
+                    onRemove = onRemoveQueueItem,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+
+                Artwork(
+                    artworkUri = track.artworkUri,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp)),
+                )
+
+                Spacer(Modifier.weight(1f))
+            }
 
             TrackTitle(track = track)
 
@@ -147,7 +175,13 @@ fun NowPlayingScreen(
 }
 
 @Composable
-private fun PlayerHeader(track: PlayingTrack, onCollapse: () -> Unit) {
+private fun PlayerHeader(
+    track: PlayingTrack,
+    onCollapse: () -> Unit,
+    queueShown: Boolean,
+    upNextCount: Int,
+    onToggleQueue: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -164,7 +198,7 @@ private fun PlayerHeader(track: PlayingTrack, onCollapse: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "EN LECTURE",
+                text = if (queueShown) "FILE D'ATTENTE" else "EN LECTURE",
                 style = MaterialTheme.typography.labelSmall,
                 letterSpacing = 1.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -178,8 +212,25 @@ private fun PlayerHeader(track: PlayingTrack, onCollapse: () -> Unit) {
             )
         }
 
-        // Contrepoids du bouton de gauche pour garder le titre centré.
-        Spacer(Modifier.size(48.dp))
+        // Le contrepoids du bouton de gauche devient utile : il ouvre la file.
+        IconButton(onClick = onToggleQueue) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                contentDescription = if (queueShown) {
+                    "Revenir à la pochette"
+                } else {
+                    // Le nombre est dans la description plutôt qu'affiché : au
+                    // volant comme au lecteur d'écran, « trois morceaux
+                    // ensuite » vaut mieux qu'une pastille.
+                    "Voir la file — $upNextCount ${if (upNextCount > 1) "morceaux" else "morceau"} ensuite"
+                },
+                tint = if (queueShown) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
     }
 }
 
