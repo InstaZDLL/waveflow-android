@@ -1,7 +1,9 @@
 package app.waveflow.data
 
+import android.util.Log
 import app.waveflow.data.local.PlayHistoryDao
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
 /** Une piste et ce que l'écoute en a retenu. */
@@ -35,14 +37,34 @@ class RoomPlayHistoryRepository(
     override suspend fun record(mediaId: String) = dao.record(mediaId, now())
 
     override fun observeRecent(limit: Int): Flow<List<PlayHistoryEntry>> =
-        dao.observeRecent(limit).map { rows -> rows.map { it.toEntry() } }
+        dao.observeRecent(limit).enEntrees()
 
     override fun observeMostPlayed(limit: Int): Flow<List<PlayHistoryEntry>> =
-        dao.observeMostPlayed(limit).map { rows -> rows.map { it.toEntry() } }
+        dao.observeMostPlayed(limit).enEntrees()
+
+    /**
+     * Traduit les lignes, et ne laisse pas une lecture en échec traverser.
+     *
+     * Un flux Room propage l'erreur de sa requête. Combinée à un autre flux dans
+     * un ViewModel, elle emporte la collecte entière : l'écran perdrait aussi
+     * ce que l'historique n'a jamais fourni — les ajouts récents, qui viennent
+     * de la bibliothèque. Un historique illisible doit coûter l'historique, pas
+     * la page.
+     */
+    private fun Flow<List<app.waveflow.data.local.PlayHistoryEntity>>.enEntrees():
+        Flow<List<PlayHistoryEntry>> = map { rows -> rows.map { it.toEntry() } }
+        .catch { error ->
+            Log.w(TAG, "Historique d'écoute illisible", error)
+            emit(emptyList())
+        }
 
     private fun app.waveflow.data.local.PlayHistoryEntity.toEntry() = PlayHistoryEntry(
         mediaId = mediaId,
         lastPlayedAtMs = lastPlayedAtMs,
         playCount = playCount,
     )
+
+    private companion object {
+        const val TAG = "PlayHistory"
+    }
 }

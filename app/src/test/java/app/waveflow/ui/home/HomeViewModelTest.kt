@@ -3,6 +3,9 @@ package app.waveflow.ui.home
 import app.waveflow.data.LibraryStore
 import app.waveflow.data.PlayHistoryEntry
 import app.waveflow.data.PlayHistoryRepository
+import app.waveflow.data.RoomPlayHistoryRepository
+import app.waveflow.data.local.PlayHistoryDao
+import app.waveflow.data.local.PlayHistoryEntity
 import app.waveflow.model.Song
 import app.waveflow.testing.FakeMusicRepository
 import app.waveflow.testing.MainDispatcherRule
@@ -11,6 +14,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -111,6 +115,46 @@ class HomeViewModelTest {
 
             assertNull(vue.state.first { !it.isLoading }.resume)
         }
+
+    @Test
+    fun `un historique illisible coute l'historique, pas la page`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Un flux Room propage l'erreur de sa requête. Sans filet, elle
+            // emporterait la collecte entière : l'accueil perdrait aussi les
+            // ajouts récents, qui ne doivent pourtant rien à l'historique.
+            val magasin = LibraryStore(
+                FakeMusicRepository(flowOf(listOf(song(1, albumId = 10, addedAtMs = 100)))),
+                backgroundScope,
+            )
+            magasin.load()
+
+            val vue = HomeViewModel(
+                libraryStore = magasin,
+                history = object : PlayHistoryRepository {
+                    override suspend fun record(mediaId: String) = Unit
+                    override fun observeRecent(limit: Int): Flow<List<PlayHistoryEntry>> =
+                        RoomPlayHistoryRepository(DaoEnPanne()).observeRecent(limit)
+                    override fun observeMostPlayed(limit: Int): Flow<List<PlayHistoryEntry>> =
+                        flowOf(emptyList())
+                },
+            )
+            advanceUntilIdle()
+
+            val etat = vue.state.first { !it.isLoading }
+            assertNull(etat.resume)
+            assertEquals(listOf(10L), etat.recentlyAdded.map { it.id })
+        }
+
+    /** Un DAO dont la lecture échoue, comme une base devenue illisible. */
+    private class DaoEnPanne : PlayHistoryDao {
+        override suspend fun record(mediaId: String, playedAtMs: Long) = Unit
+        override suspend fun insertIfAbsent(mediaId: String, playedAtMs: Long) = Unit
+        override suspend fun countPlay(mediaId: String, playedAtMs: Long) = Unit
+        override fun observeRecent(limit: Int): Flow<List<PlayHistoryEntity>> =
+            flow { throw IllegalStateException("base illisible") }
+        override fun observeMostPlayed(limit: Int): Flow<List<PlayHistoryEntity>> =
+            flowOf(emptyList())
+    }
 
     @Test
     fun `les ajouts recents viennent du plus frais au plus ancien`() =
