@@ -647,6 +647,9 @@ private fun WaveFlowRoot(
                 onSeek = playerViewModel::seekTo,
                 onToggleShuffle = playerViewModel::toggleShuffle,
                 onCycleRepeat = playerViewModel::cycleRepeatMode,
+                onPlayQueueItem = playerViewModel::playQueueItem,
+                onMoveQueueItem = playerViewModel::moveQueueItem,
+                onRemoveQueueItem = playerViewModel::removeQueueItem,
             )
         }
     }

@@ -9,6 +9,7 @@ import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackState
+import app.waveflow.playback.PlayingTrack
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -147,6 +148,26 @@ class FakePlaybackController : PlaybackController {
     val playRemoteCalls = mutableListOf<Pair<List<RemoteSong>, Int>>()
     val playShuffledCalls = mutableListOf<List<Song>>()
     val playRemoteShuffledCalls = mutableListOf<List<RemoteSong>>()
+
+    /** Les gestes sur la file, dans l'ordre où l'écran les a demandés. */
+    val queueCalls = mutableListOf<String>()
+
+    override fun playQueueItem(index: Int) {
+        queueCalls += "play:$index"
+    }
+
+    override fun moveQueueItem(from: Int, to: Int) {
+        queueCalls += "move:$from->$to"
+    }
+
+    override fun removeQueueItem(index: Int) {
+        queueCalls += "remove:$index"
+    }
+
+    /** Pose une file, comme si le lecteur l'avait acceptée. */
+    fun setQueue(queue: List<PlayingTrack>, index: Int) {
+        _state.value = _state.value.copy(queue = queue, queueIndex = index)
+    }
 
     override fun connect() {
         connectCount++

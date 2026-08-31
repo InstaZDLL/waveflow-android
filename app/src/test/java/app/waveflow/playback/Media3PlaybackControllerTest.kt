@@ -252,6 +252,72 @@ class Media3PlaybackControllerTest {
     // ------------------------------------------------------------------
 
     /** Le service tel qu'Android le crée, et un contrôleur qui s'y est lié. */
+    // ------------------------------------------------------------------
+    // La file
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `la file expose ce qui a ete pose, dans l'ordre`() {
+        val controleur = controleurConnecte()
+
+        controleur.play(listOf(song(1), song(2), song(3)), startIndex = 1)
+        attendre("la file posée") { controleur.state.value.queue.size == 3 }
+
+        val etat = controleur.state.value
+        assertEquals(listOf("local:1", "local:2", "local:3"), etat.queue.map { it.mediaId })
+        assertEquals(1, etat.queueIndex)
+    }
+
+    @Test
+    fun `la lecture aleatoire ne remanie pas la file affichee`() {
+        // Elle change l'ordre de parcours, pas la liste. L'afficher mélangée
+        // ferait croire que la file a été remaniée, alors que couper le hasard
+        // la rendrait intacte.
+        val controleur = controleurConnecte()
+
+        controleur.play(listOf(song(1), song(2), song(3)), startIndex = 0)
+        attendre("la file posée") { controleur.state.value.queue.size == 3 }
+        controleur.toggleShuffle()
+        attendre("le hasard actif") { controleur.state.value.shuffleEnabled }
+
+        assertEquals(
+            listOf("local:1", "local:2", "local:3"),
+            controleur.state.value.queue.map { it.mediaId },
+        )
+    }
+
+    @Test
+    fun `retirer un morceau le fait sortir de la file`() {
+        val controleur = controleurConnecte()
+
+        controleur.play(listOf(song(1), song(2), song(3)), startIndex = 0)
+        attendre("la file posée") { controleur.state.value.queue.size == 3 }
+        controleur.removeQueueItem(1)
+
+        attendre("la file raccourcie") { controleur.state.value.queue.size == 2 }
+        assertEquals(
+            listOf("local:1", "local:3"),
+            controleur.state.value.queue.map { it.mediaId },
+        )
+    }
+
+    @Test
+    fun `deplacer un morceau change son rang sans toucher aux autres`() {
+        val controleur = controleurConnecte()
+
+        controleur.play(listOf(song(1), song(2), song(3)), startIndex = 0)
+        attendre("la file posée") { controleur.state.value.queue.size == 3 }
+        controleur.moveQueueItem(from = 2, to = 0)
+
+        attendre("le déplacement pris") {
+            controleur.state.value.queue.firstOrNull()?.mediaId == "local:3"
+        }
+        assertEquals(
+            listOf("local:3", "local:1", "local:2"),
+            controleur.state.value.queue.map { it.mediaId },
+        )
+    }
+
     private fun controleurConnecte(): Media3PlaybackController {
         val demarre = Robolectric.buildService(PlaybackService::class.java).create()
         service = demarre

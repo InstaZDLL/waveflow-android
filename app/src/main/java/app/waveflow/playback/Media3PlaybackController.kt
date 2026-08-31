@@ -52,7 +52,13 @@ class Media3PlaybackController(
     private val playerListener = object : Player.Listener {
         // Un seul point de synchronisation plutôt qu'un callback par champ :
         // on relit l'état complet du lecteur à chaque salve d'événements.
-        override fun onEvents(player: Player, events: Player.Events) = syncFrom(player)
+        override fun onEvents(player: Player, events: Player.Events) = syncFrom(
+            player = player,
+            // La file ne bouge qu'avec la timeline. Passer d'un morceau au
+            // suivant la relirait sinon en entier, à chaque piste, pour rendre
+            // exactement la même liste.
+            refreshQueue = events.contains(Player.EVENT_TIMELINE_CHANGED),
+        )
     }
 
     override fun connect() {
@@ -149,6 +155,34 @@ class Media3PlaybackController(
         ctrl.shuffleModeEnabled = !ctrl.shuffleModeEnabled
     }
 
+    override fun playQueueItem(index: Int) {
+        val ctrl = controller ?: return
+        if (index !in 0 until ctrl.mediaItemCount) return
+        ctrl.seekToDefaultPosition(index)
+        ctrl.play()
+    }
+
+    /**
+     * Les rangs viennent d'une liste que l'écran affichait : entre son rendu et
+     * le geste, la file a pu se vider ou raccourcir.
+     *
+     * Ces gardes sont défensives et **non éprouvées** : le `MediaController`
+     * d'aujourd'hui borne déjà les rangs qu'on lui passe, si bien que les
+     * retirer ne fait tomber aucun test. C'est l'interface `Player` qu'elles
+     * regardent, et celle-ci ne promet rien de tel.
+     */
+    override fun moveQueueItem(from: Int, to: Int) {
+        val ctrl = controller ?: return
+        if (from !in 0 until ctrl.mediaItemCount || to !in 0 until ctrl.mediaItemCount) return
+        ctrl.moveMediaItem(from, to)
+    }
+
+    override fun removeQueueItem(index: Int) {
+        val ctrl = controller ?: return
+        if (index !in 0 until ctrl.mediaItemCount) return
+        ctrl.removeMediaItem(index)
+    }
+
     override fun cycleRepeatMode() {
         val ctrl = controller ?: return
         ctrl.repeatMode = when (ctrl.repeatMode) {
@@ -167,7 +201,14 @@ class Media3PlaybackController(
         _state.value = PlaybackState()
     }
 
-    private fun syncFrom(player: Player) {
+    /**
+     * @param refreshQueue relire la file entière, ce qui coûte un parcours de
+     *   la timeline. Inutile quand seul le morceau courant a changé — le rang
+     *   suffit alors, et il se lit en temps constant.
+     */
+    private fun syncFrom(player: Player, refreshQueue: Boolean = true) {
+        val queue = if (refreshQueue) player.readQueue() else _state.value.queue
+
         _state.value = PlaybackState(
             isConnected = true,
             current = player.currentMediaItem?.toPlayingTrack(),
@@ -182,6 +223,8 @@ class Media3PlaybackController(
                 else -> RepeatMode.Off
             },
             failure = player.playerError?.toPlaybackFailure(),
+            queue = queue,
+            queueIndex = player.currentMediaItemIndex.takeIf { queue.isNotEmpty() } ?: -1,
         )
 
         if (player.isPlaying) startPositionUpdates() else stopPositionUpdates()
@@ -204,6 +247,16 @@ class Media3PlaybackController(
         positionJob?.cancel()
         positionJob = null
     }
+
+    /**
+     * La file dans l'ordre où elle a été posée.
+     *
+     * L'ordre de la timeline, et non celui du parcours aléatoire : c'est la
+     * liste que l'utilisateur a constituée, et celle qu'il retrouve en coupant
+     * la lecture aléatoire.
+     */
+    private fun Player.readQueue(): List<PlayingTrack> =
+        List(mediaItemCount) { getMediaItemAt(it).toPlayingTrack() }
 
     private companion object {
         const val POSITION_POLL_MS = 500L

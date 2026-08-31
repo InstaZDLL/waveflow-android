@@ -49,6 +49,11 @@ enum class PlaybackFailure {
  * @property failure panne en cours, `null` tant que le lecteur va bien. Elle
  *   s'efface d'elle-même à la reprise : Media3 oublie son erreur dès qu'on le
  *   prépare à nouveau.
+ * @property queue la file telle qu'elle a été posée, dans son ordre d'origine.
+ *   La lecture aléatoire ne la réordonne pas : elle change l'ordre de parcours,
+ *   pas la liste — c'est pourquoi la désactiver rend la suite intacte.
+ * @property queueIndex rang du morceau courant dans [queue], `-1` si la file
+ *   est vide.
  */
 data class PlaybackState(
     val isConnected: Boolean = false,
@@ -60,6 +65,8 @@ data class PlaybackState(
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.Off,
     val failure: PlaybackFailure? = null,
+    val queue: List<PlayingTrack> = emptyList(),
+    val queueIndex: Int = -1,
 )
 
 /**
@@ -109,6 +116,26 @@ interface PlaybackController {
 
     /** Fait tourner le mode de répétition : Off -> All -> One -> Off. */
     fun cycleRepeatMode()
+
+    /** Saute au rang [index] de la file et joue. */
+    fun playQueueItem(index: Int)
+
+    /**
+     * Déplace un morceau dans la file.
+     *
+     * Déplacer celui qui joue ne l'interrompt pas : Media3 suit la piste
+     * courante à travers le remaniement, et c'est ce qu'on attend en tirant une
+     * ligne pendant qu'elle sonne.
+     */
+    fun moveQueueItem(from: Int, to: Int)
+
+    /**
+     * Retire un morceau de la file.
+     *
+     * Retirer celui qui joue enchaîne sur le suivant plutôt que d'arrêter tout :
+     * l'utilisateur a écarté un morceau, pas demandé le silence.
+     */
+    fun removeQueueItem(index: Int)
 
     /** Libère le contrôleur ; le service, lui, continue de jouer. */
     fun release()

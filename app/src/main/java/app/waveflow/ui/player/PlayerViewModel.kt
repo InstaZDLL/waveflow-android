@@ -43,6 +43,8 @@ class PlayerViewModel(
                 durationMs = playback.durationMs,
                 shuffleEnabled = playback.shuffleEnabled,
                 repeatMode = playback.repeatMode,
+                queue = playback.queue,
+                queueIndex = playback.queueIndex,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -128,6 +130,12 @@ class PlayerViewModel(
     fun toggleShuffle() = playbackController.toggleShuffle()
 
     fun cycleRepeatMode() = playbackController.cycleRepeatMode()
+
+    fun playQueueItem(index: Int) = playbackController.playQueueItem(index)
+
+    fun moveQueueItem(from: Int, to: Int) = playbackController.moveQueueItem(from, to)
+
+    fun removeQueueItem(index: Int) = playbackController.removeQueueItem(index)
 
     override fun onCleared() {
         // Le service, lui, survit et continue la lecture en arrière-plan.
