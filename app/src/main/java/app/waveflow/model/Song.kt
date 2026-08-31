@@ -15,6 +15,10 @@ import android.net.Uri
  * @property albumId identifiant de l'album, utilisé pour regrouper.
  * @property durationMs durée en millisecondes (0 si inconnue).
  * @property artworkUri URI de la pochette d'album (peut ne rien résoudre), chargé par Coil.
+ * @property addedAtMs date d'apparition du fichier sur l'appareil. Le MediaStore
+ *   la compte en **secondes**, elle est ramenée ici en millisecondes comme tout
+ *   le reste de l'application. Vaut `0` sur les fichiers que le MediaStore ne
+ *   date pas, ce qui les range naturellement en fin de tri.
  */
 data class Song(
     val id: Long,
@@ -26,6 +30,7 @@ data class Song(
     val albumId: Long,
     val durationMs: Long,
     val artworkUri: Uri?,
+    val addedAtMs: Long = 0L,
 ) {
     val displayArtist: String
         get() = artist.orUnknownArtist()

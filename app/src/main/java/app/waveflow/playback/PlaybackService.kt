@@ -1,14 +1,18 @@
 package app.waveflow.playback
 
 import android.content.Intent
+import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import app.waveflow.WaveFlowApp
+import app.waveflow.data.PlayHistoryRepository
 import coil.imageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,9 +104,43 @@ class PlaybackService : MediaLibraryService() {
             .setBitmapLoader(bitmapLoader)
             .build()
 
+        player.addListener(historyListener(container.playHistoryRepository))
+
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
         observeLibrary(container)
+    }
+
+    /**
+     * Note ce qu'on écoute, mais pas ce qu'on saute.
+     *
+     * Compté ici et non dans l'application : le service joue aussi quand aucun
+     * écran n'est ouvert — en voiture, depuis la notification — et un historique
+     * qui manquerait ces écoutes-là décrirait mal ce qu'on écoute vraiment.
+     *
+     * `elapsedRealtime` plutôt que l'heure courante : elle ne recule pas quand
+     * l'horloge du téléphone est remise à l'heure, ce qui rallongerait ou
+     * abrégerait une écoute en cours.
+     *
+     * Voir [ListeningCounter] pour ce qui distingue une écoute d'un survol.
+     */
+    private fun historyListener(history: PlayHistoryRepository): Player.Listener {
+        val compteur = ListeningCounter(
+            scope = artworkScope,
+            thresholdMs = DELAI_ECOUTE_MS,
+            nowMs = SystemClock::elapsedRealtime,
+            onListened = history::record,
+        )
+
+        return object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                compteur.trackChanged(mediaItem?.mediaId)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                compteur.playingChanged(isPlaying)
+            }
+        }
     }
 
     /**
@@ -157,5 +195,13 @@ class PlaybackService : MediaLibraryService() {
         // partage avec l'écran des réglages. Son verrou tombe avec le processus,
         // et le service peut redémarrer sur la même instance.
         super.onDestroy()
+    }
+
+    private companion object {
+        /**
+         * Vingt secondes : assez pour distinguer une écoute d'un survol, assez
+         * peu pour qu'une piste courte compte quand même.
+         */
+        const val DELAI_ECOUTE_MS = 20_000L
     }
 }

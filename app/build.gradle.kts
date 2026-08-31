@@ -67,6 +67,11 @@ android {
         unitTests {
             // Robolectric a besoin des ressources et du manifest fusionnés.
             isIncludeAndroidResources = true
+
+            // Le test de migration lit les schémas que le compilateur Room
+            // exporte. Le chemin est passé en clair plutôt que déduit d'un
+            // répertoire de travail dont rien ne garantit lequel il est.
+            all { test -> test.systemProperty("waveflow.schemas", "$projectDir/schemas") }
         }
     }
 }
