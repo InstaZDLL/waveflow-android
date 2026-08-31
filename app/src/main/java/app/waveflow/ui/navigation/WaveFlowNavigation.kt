@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 /** Routes de navigation. Les détails portent leur identifiant dans le chemin. */
 object Routes {
     const val HOME = "accueil"
+    const val SEARCH = "recherche"
     const val SONGS = "songs"
     const val ALBUMS = "albums"
     const val ARTISTS = "artists"
@@ -97,16 +99,18 @@ fun Bundle?.longArgOf(currentRoute: String?, route: String, key: String): Long? 
     this?.takeIf { currentRoute == route && it.containsKey(key) }?.getLong(key)
 
 /**
- * Les deux destinations de la barre du bas.
+ * Les trois destinations de la barre du bas.
  *
- * Deux et non cinq. Les quatre vues de la bibliothèque — titres, albums,
+ * Trois et non cinq. Les quatre vues de la bibliothèque — titres, albums,
  * artistes, playlists — ne sont pas des sections différentes mais des manières
  * de regarder la même chose : elles passent en sous-onglets. Et le serveur
  * cesse d'être une destination pour devenir une source parmi d'autres, à
  * l'intérieur de la bibliothèque.
  *
- * La recherche et les réglages n'y figurent pas non plus : ils s'ouvrent depuis
- * l'en-tête, d'où qu'on vienne.
+ * La recherche, elle, en est une : chercher est une intention en soi, pas un
+ * mode passager d'un écran. Elle cesse donc d'être une loupe dans l'en-tête qui
+ * recouvrait la page d'un calque. Les réglages restent en revanche dans
+ * l'en-tête : on n'y va pas, on y passe.
  */
 enum class TopLevelDestination(
     val route: String,
@@ -115,6 +119,7 @@ enum class TopLevelDestination(
 ) {
     Home(Routes.HOME, "Accueil", Icons.Filled.Home),
     Library(Routes.SONGS, "Bibliothèque", Icons.AutoMirrored.Filled.LibraryBooks),
+    Search(Routes.SEARCH, "Recherche", Icons.Filled.Search),
     ;
 
     /**
@@ -123,6 +128,7 @@ enum class TopLevelDestination(
      */
     fun owns(route: String?): Boolean = when (this) {
         Home -> route == Routes.HOME
+        Search -> route == Routes.SEARCH
         Library -> LibraryTab.entries.any { it.owns(route) }
     }
 }

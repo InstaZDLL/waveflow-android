@@ -49,10 +49,15 @@ class LibraryTabTest {
     }
 
     @Test
-    fun `l'accueil ne se confond pas avec la bibliotheque`() {
+    fun `chaque destination ne reconnait que la sienne`() {
         assertTrue(TopLevelDestination.Home.owns(Routes.HOME))
+        assertTrue(TopLevelDestination.Search.owns(Routes.SEARCH))
         assertFalse(TopLevelDestination.Home.owns(Routes.SONGS))
         assertFalse(TopLevelDestination.Library.owns(Routes.HOME))
+        // La recherche n'appartient pas à la bibliothèque : chercher est une
+        // intention en soi, et l'onglet du bas doit le refléter.
+        assertFalse(TopLevelDestination.Library.owns(Routes.SEARCH))
+        assertFalse(TopLevelDestination.Search.owns(Routes.SONGS))
         // Les réglages n'appartiennent à personne : ils s'ouvrent de partout.
         assertFalse(TopLevelDestination.Home.owns(Routes.SETTINGS))
         assertFalse(TopLevelDestination.Library.owns(Routes.SETTINGS))

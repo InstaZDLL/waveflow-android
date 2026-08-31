@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -152,15 +151,12 @@ private fun WaveFlowRoot(
     val currentRoute = backStackEntry?.destination?.route
 
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
-    var searchActive by rememberSaveable { mutableStateOf(false) }
     var songToAdd by remember { mutableStateOf<Song?>(null) }
 
-    // Quitter la recherche n'a pas à laisser la requête derrière : la rouvrir
-    // doit repartir d'un champ vide.
-    fun closeSearch() {
-        searchActive = false
-        searchViewModel.clear()
-    }
+    // La recherche est une destination, plus un mode : c'est la route qui dit
+    // si l'on cherche, et non un drapeau qu'il faudrait tenir en accord avec
+    // elle.
+    val searchActive = currentRoute == Routes.SEARCH
 
     val nowPlayingId = playerState.track?.localSongId
     val hasTrack = playerState.track != null
@@ -182,10 +178,6 @@ private fun WaveFlowRoot(
     LaunchedEffect(hasTrack) {
         if (!hasTrack) playerExpanded = false
     }
-
-    // Le lecteur plein écran recouvre la recherche : tant qu'il est ouvert,
-    // c'est lui que le retour referme.
-    BackHandler(enabled = searchActive && !playerExpanded) { closeSearch() }
 
     BackHandler(enabled = playerExpanded) { playerExpanded = false }
 
@@ -231,13 +223,6 @@ private fun WaveFlowRoot(
                         },
                         navigationIcon = {
                             when {
-                                searchActive -> IconButton(onClick = { closeSearch() }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Fermer la recherche",
-                                    )
-                                }
-
                                 isDetailRoute -> IconButton(onClick = { navController.popBackStack() }) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -257,18 +242,6 @@ private fun WaveFlowRoot(
                                     }
                                 }
                             } else {
-                                // Rien à chercher tant que la bibliothèque n'a rien
-                                // rendu — permission refusée, scan en cours,
-                                // appareil sans musique.
-                                if (library.songs.isNotEmpty()) {
-                                    IconButton(onClick = { searchActive = true }) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Search,
-                                            contentDescription = "Rechercher",
-                                        )
-                                    }
-                                }
-
                                 // Les réglages s'ouvrent d'où qu'on vienne : ils
                                 // gouvernent l'application, ils n'appartiennent pas
                                 // à une section. Le compte du serveur s'y trouve
@@ -369,6 +342,39 @@ private fun WaveFlowRoot(
                                     navController.navigate(Routes.albumDetail(it.id))
                                 },
                                 bottomPadding = listBottomPadding,
+                            )
+                        }
+                    }
+
+                    composable(Routes.SEARCH) {
+                        gated {
+                            SearchScreen(
+                                query = searchQuery,
+                                results = searchResults,
+                                nowPlayingId = nowPlayingId,
+                                // La file de lecture est la liste affichée :
+                                // enchaîner sur les résultats suivants est le
+                                // comportement attendu.
+                                onSongClick = {
+                                    playerViewModel.playFrom(searchResults.songs, it)
+                                },
+                                onAlbumClick = {
+                                    navController.navigate(Routes.albumDetail(it.id))
+                                },
+                                onArtistClick = {
+                                    navController.navigate(Routes.artistDetail(it.id))
+                                },
+                                bottomPadding = listBottomPadding,
+                                onSongLongClick = { songToAdd = it },
+                                // Proposé seulement quand un serveur est
+                                // connecté : sinon le bouton mènerait à un écran
+                                // de connexion, que l'utilisateur n'a pas demandé.
+                                onSearchOnServer = serverState.connected?.let {
+                                    {
+                                        catalogViewModel.onSearchQueryChange(searchQuery)
+                                        navController.switchTab(Routes.SERVER)
+                                    }
+                                },
                             )
                         }
                     }
@@ -621,47 +627,6 @@ private fun WaveFlowRoot(
                         }
                     }
                 }
-
-                // Posée par-dessus le NavHost plutôt qu'à sa place : la
-                // pile de navigation reste intacte, et fermer la recherche
-                // rend l'écran exactement tel qu'il était.
-                if (searchActive) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.background,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        SearchScreen(
-                            query = searchQuery,
-                            results = searchResults,
-                            nowPlayingId = nowPlayingId,
-                            // La file de lecture est la liste affichée :
-                            // enchaîner sur les résultats suivants est le
-                            // comportement attendu.
-                            onSongClick = { playerViewModel.playFrom(searchResults.songs, it) },
-                            onAlbumClick = {
-                                closeSearch()
-                                navController.navigate(Routes.albumDetail(it.id))
-                            },
-                            onArtistClick = {
-                                closeSearch()
-                                navController.navigate(Routes.artistDetail(it.id))
-                            },
-                            bottomPadding = listBottomPadding,
-                            onSongLongClick = { songToAdd = it },
-                            // Proposé seulement quand un serveur est connecté :
-                            // sinon le bouton mènerait à un écran de connexion,
-                            // que l'utilisateur n'a pas demandé.
-                            onSearchOnServer = serverState.connected?.let {
-                                {
-                                    val terme = searchQuery
-                                    closeSearch()
-                                    catalogViewModel.onSearchQueryChange(terme)
-                                    navController.switchTab(Routes.SERVER)
-                                }
-                            },
-                        )
-                    }
-                }
             }
         }
 
@@ -723,6 +688,7 @@ private fun currentScreenTitle(
     playlistName: String?,
 ): String = when (currentRoute) {
     Routes.HOME -> "Accueil"
+    Routes.SEARCH -> "Recherche"
     Routes.ALBUMS -> "Albums"
     Routes.ARTISTS -> "Artistes"
     Routes.PLAYLISTS -> "Playlists"
