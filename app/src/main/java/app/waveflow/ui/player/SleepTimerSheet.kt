@@ -71,9 +71,13 @@ fun SleepTimerSheet(
             Spacer(Modifier.height(4.dp))
 
             Text(
+                // Sans minuterie, dire qu'il n'y en a pas : « la lecture
+                // s'arrêtera d'elle-même » décrivait ce qui *arriverait* en
+                // choisissant une durée, mais se lisait comme si une minuterie
+                // courait déjà.
                 text = restant
                     ?.let { "Arrêt dans ${formatRemaining(it)}" }
-                    ?: "La lecture s'arrêtera d'elle-même.",
+                    ?: "Aucune minuterie : la lecture continuera.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp),

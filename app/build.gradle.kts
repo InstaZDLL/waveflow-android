@@ -143,6 +143,12 @@ dependencies {
  *
  * `upToDateWhen { false }` parce que cette tâche ne produit rien : son travail
  * est d'imprimer, et une tâche sans sortie serait tenue pour à jour.
+ *
+ * Le chemin est écrit en clair plutôt que pris à `SingleArtifact.LINT_TEXT_REPORT`.
+ * Passer par l'artefact demanderait une classe de tâche et un `onVariants`, pour
+ * se prémunir d'un déplacement de fichier que rien n'annonce. À reprendre le
+ * jour où le chemin bougera — la tâche se taira alors sans rien casser, le
+ * fichier absent étant traité comme tel.
  */
 val afficherRapportLint = tasks.register("afficherRapportLint") {
     description = "Réimprime le rapport texte du lint dans le journal du build."

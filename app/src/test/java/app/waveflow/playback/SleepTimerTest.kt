@@ -118,6 +118,14 @@ class SleepTimerTest {
         assertEquals(emptyList<Unit>(), recues)
     }
 
+    // La course entre une expiration et un réarmement concurrent n'a pas de
+    // test, et n'en aura pas ici : elle demande deux fils, quand le scheduler de
+    // `runTest` est mono-fil. Un test écrit pour elle passait le retrait de la
+    // garde — `advanceTimeBy` n'exécute pas le `delay` avant le réarmement, si
+    // bien que l'ancienne coroutine ne se réveillait jamais et que la garde
+    // n'était pas sollicitée. Il a été retiré plutôt que de laisser croire la
+    // zone couverte. La protection est décrite dans `SleepTimer.verrou`.
+
     @Test
     fun `le temps restant ne devient jamais negatif`() = runTest {
         // Entre l'échéance et le réveil de la coroutine, il s'écoule un

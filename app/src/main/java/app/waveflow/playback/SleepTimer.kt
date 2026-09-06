@@ -53,8 +53,22 @@ class SleepTimer(
      * vient d'obéir à l'utilisateur. `replay = 0` parce qu'un abonné qui
      * arrive après coup n'a rien à rattraper — l'arrêt a déjà eu lieu.
      */
-    private val _expirations = MutableSharedFlow<Unit>()
+    private val _expirations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val expirations: SharedFlow<Unit> = _expirations.asSharedFlow()
+
+    /**
+     * Sérialise la transition d'expiration avec les réglages de l'utilisateur.
+     *
+     * Comparer le numéro puis agir ne suffit pas : c'est leur **écartement** qui
+     * laisse passer. Un réarmement glissé entre les deux verrait son échéance
+     * effacée par la minuterie qu'il vient de remplacer, et la lecture
+     * s'arrêterait alors qu'on demandait une heure de plus.
+     *
+     * L'émission tient dans le verrou parce que le tampon la rend
+     * non suspendante : `tryEmit` accepte toujours, la capacité couvrant
+     * l'expiration unique qu'une minuterie peut produire.
+     */
+    private val verrou = Any()
 
     private var job: Job? = null
 
@@ -82,27 +96,39 @@ class SleepTimer(
      * réglant une minuterie.
      */
     fun start(durationMs: Long) {
-        val mien = eteindre()
-        if (durationMs <= 0L) return
+        synchronized(verrou) {
+            val mien = eteindre()
+            if (durationMs <= 0L) return
 
-        _endsAtMs.value = nowMs() + durationMs
-        job = scope.launch {
-            delay(durationMs)
-            // Une minuterie périmée se tait : elle a été remplacée ou annulée
-            // pendant qu'elle attendait.
-            if (generation.get() != mien) return@launch
-
-            // Remis à zéro **avant** de prévenir : un abonné qui regarde l'état
-            // en réagissant doit voir une minuterie éteinte, pas une échéance
-            // déjà passée.
-            _endsAtMs.value = null
-            _expirations.emit(Unit)
+            _endsAtMs.value = nowMs() + durationMs
+            job = scope.launch {
+                delay(durationMs)
+                expirer(mien)
+            }
         }
+    }
+
+    /**
+     * Constate l'échéance, si cette minuterie est encore celle qui court.
+     *
+     * Tout tient dans le verrou : reconnaître son numéro, éteindre l'échéance et
+     * prévenir. Une minuterie périmée — remplacée ou annulée pendant qu'elle
+     * attendait — repart sans rien toucher.
+     *
+     * L'échéance est effacée **avant** que l'on prévienne : un abonné qui
+     * regarde l'état en réagissant doit voir une minuterie éteinte, pas une
+     * heure déjà passée.
+     */
+    private fun expirer(mien: Int) = synchronized(verrou) {
+        if (generation.get() != mien) return@synchronized
+
+        _endsAtMs.value = null
+        _expirations.tryEmit(Unit)
     }
 
     /** Éteint la minuterie sans arrêter la lecture. */
     fun cancel() {
-        eteindre()
+        synchronized(verrou) { eteindre() }
     }
 
     /**
@@ -111,6 +137,8 @@ class SleepTimer(
      * Rend ce numéro pour que [start] le confie à la minuterie qu'il arme :
      * c'est ce qui permet à celle-ci de reconnaître, en s'éveillant, si elle est
      * toujours la bonne.
+     *
+     * À n'appeler que sous [verrou].
      */
     private fun eteindre(): Int {
         job?.cancel()
