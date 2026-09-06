@@ -4,12 +4,13 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-06**, sur `main` = `1c203f6`.
+Dernière mise à jour : **2026-09-06**, sur `main` = `59db1fd`.
 
 ## État du dépôt
 
-- `main` = `1c203f6`, arbre propre, **aucune PR ouverte**, aucune branche en cours.
-- **346 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
+- `main` = `59db1fd`. Une PR ouverte : **la vitesse de lecture**, branche
+  `feat/vitesse-lecture`.
+- **364 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
 - **Aucun avertissement de compilation.** C'est une propriété qu'on tient, pas un
   hasard — voir le piège `textReport` plus bas avant d'en supprimer un.
 - Gradle 9.7.1, AGP 9.3.2, OkHttp 5.5.0, media3 1.11.0.
@@ -21,7 +22,8 @@ Six lots, dans cet ordre :
 
 1. Réglages / DataStore — **fait**
 2. Navigation + identité — **fait**
-3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **aux deux tiers**
+3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **il ne reste que
+   la boucle A-B**
 4. Transcodage (remonté du 6ᵉ rang : meilleur rapport travail/effet, le serveur
    est déjà prêt)
 5. Paroles
@@ -31,6 +33,30 @@ Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait de
 lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
+
+**La vitesse de lecture** (branche `feat/vitesse-lecture`).
+
+Elle vit dans les **préférences**, et c'est le **service** qui les observe pour
+l'appliquer au lecteur — comme il écoute déjà les expirations de la minuterie.
+Ni l'écran ni le `PlaybackController` n'y touchent. Deux raisons, et la seconde
+est la vraie : la vitesse se persiste, et une lecture démarrée sans écran ouvert
+— Android Auto, la notification — doit partir à la bonne vitesse. Un réglage
+posé par l'interface retomberait à ×1 précisément là où on ne peut pas le
+corriger.
+
+L'affichage suit le même chemin : `PlayerUiState.playbackSpeed` vient du flux
+des préférences, non de `PlaybackState`. C'est ce qui **désamorce le piège n° 1**
+plutôt que de le contourner — le flux des préférences émet au moment du choix, y
+compris en pause, où l'on règle justement sa vitesse. Le bouton de l'en-tête
+*est* son affichage : il porte le chiffre, pas une icône.
+
+Le bornage est double, à l'écriture **et** à la relecture. Le second protège
+l'application d'un fichier écrit par une version future aux bornes plus larges ;
+le premier protège le fichier lui-même. Ils s'éprouvent séparément — voir plus
+bas.
+
+**Ce qui n'a pas été fait :** le mini-player ne dit pas la vitesse. Elle n'est
+visible qu'une fois le lecteur déplié. À revoir si quelqu'un s'y perd.
 
 **PR #47 — la minuterie de veille.**
 
@@ -52,10 +78,16 @@ traiter à part.
 ### 1. `PlayerUiState` ne se reconstruit qu'aux tics de position
 
 **Donc plus du tout en pause.** La minuterie s'y est fait prendre : le décompte
-était câblé sur l'état figé et ne bougeait plus. La vitesse de lecture et les
-bornes A-B liront le même état — il faudra soit les publier sur un flux propre,
-soit les relire à l'affichage, comme `SleepTimerSheet` le fait avec un tic local
-qui ne vit que le temps où la feuille est ouverte.
+était câblé sur l'état figé et ne bougeait plus. Les bornes A-B liront le même
+état — il faudra soit les publier sur un flux propre, soit les relire à
+l'affichage, comme `SleepTimerSheet` le fait avec un tic local qui ne vit que le
+temps où la feuille est ouverte.
+
+**La vitesse ne s'y est pas laissé prendre**, et c'est la voie à reprendre : elle
+ne passe pas par `PlaybackState` du tout, mais par le flux des préférences, qui
+émet au moment du choix. Le piège se désamorce mieux qu'il ne se contourne — si
+quelque chose d'autre que le lecteur peut porter les bornes A-B, qu'il les
+porte.
 
 ### 2. « Vérifier puis agir » : la course qui revient
 
@@ -93,28 +125,21 @@ une erreur. Ne pas rouvrir.
 
 ## La suite : solder le lot 3
 
-Rien n'existe encore — ni `setPlaybackSpeed`, ni `PlaybackParameters`, aucune
-trace d'A-B dans `PlaybackController`.
+La vitesse est faite. Reste la boucle A-B — aucune trace dans
+`PlaybackController`.
 
-### a. La vitesse de lecture — à faire en premier
-
-La plus simple, et de loin. Media3 la fournit d'un appel ; elle se pose dans
-`PlaybackController` comme les autres commandes.
-
-Deux points de conception :
-
-- **Elle se persiste.** On ne veut pas retomber à ×1 à chaque relance quand on
-  écoute un podcast à ×1,5. Le `PreferencesStore` est là pour ça.
-- **Elle s'affiche.** Une vitesse active et invisible est un défaut qu'on cherche
-  pendant vingt minutes. Voir le piège n° 1 pour la publier correctement.
-
-### b. La boucle A-B — ensuite, nettement plus retorse
+### La boucle A-B — tout ce qui reste, et le plus retorse
 
 Media3 **n'a pas** de « répéter entre deux points ». Il faut échantillonner la
 position et rembobiner au passage de B, ce qui place le mécanisme **dans le
 service**, pas dans l'interface. Ce que Robolectric peut en prouver est déjà
 borné : `isPlaying` à `true` et l'échantillonnage de position restent hors de
 portée faute de codec.
+
+**L'en-tête du lecteur est plein.** Quatre boutons y tiennent déjà — réduire,
+vitesse, veille, file — et la colonne du titre s'en trouve serrée sur un écran
+étroit. L'A-B n'y entrera pas sans un menu de débordement qui regrouperait
+veille, vitesse et bornes. C'est le moment de le poser, pas après.
 
 ## En attente d'une décision de l'utilisateur
 
@@ -155,6 +180,9 @@ pagine sur le réseau. Le retirer de la barre sans cela l'aurait rendu
 - **Tout test de régression se valide par retrait** : on enlève le correctif et
   on vérifie que le bon test — et lui seul — tombe, avec `--rerun-tasks`. Un test
   qui passe des deux côtés est un test creux, et il y en a six formes connues.
+  *Sur une machine à court de mémoire, `--rerun-tasks` fait tomber le build ;
+  un retrait modifie de toute façon une source, ce qui invalide déjà la tâche de
+  test. Le drapeau ne protège que du cas où rien n'a changé.*
 - `./gradlew ktlintFormat` **avant chaque commit**.
 - **Français** pour l'interface, les messages de commit, la KDoc, les
   commentaires et les noms de tests (`build-and-test.yml` excepté).

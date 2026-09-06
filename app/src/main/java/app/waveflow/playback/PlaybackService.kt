@@ -13,12 +13,15 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.PlayHistoryRepository
+import app.waveflow.data.PreferencesStore
 import coil.imageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -106,6 +109,7 @@ class PlaybackService : MediaLibraryService() {
 
         player.addListener(historyListener(container.playHistoryRepository))
         observeSleepTimer(container.sleepTimer, player)
+        observePlaybackSpeed(container.preferencesStore, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
@@ -127,6 +131,28 @@ class PlaybackService : MediaLibraryService() {
     private fun observeSleepTimer(timer: SleepTimer, player: Player) {
         artworkScope.launch {
             timer.expirations.collect { player.pause() }
+        }
+    }
+
+    /**
+     * Applique la vitesse de lecture choisie, et la réapplique quand elle change.
+     *
+     * Observée ici plutôt que posée par l'écran de lecture : le service joue
+     * aussi quand aucun écran n'est ouvert — en voiture, depuis la notification
+     * — et une vitesse qui n'existerait qu'une fois le lecteur affiché
+     * retomberait à ×1 précisément dans ces cas-là. Le flux rend sa valeur
+     * courante dès l'abonnement, si bien que la lecture démarre à la bonne
+     * vitesse sans que personne ait à la redemander.
+     *
+     * `distinctUntilChanged` sur la seule vitesse : le flux porte toutes les
+     * préférences, et changer de thème n'a pas à traverser jusqu'au lecteur.
+     */
+    private fun observePlaybackSpeed(preferences: PreferencesStore, player: Player) {
+        artworkScope.launch {
+            preferences.preferences
+                .map { it.playbackSpeed }
+                .distinctUntilChanged()
+                .collect { player.setPlaybackSpeed(it) }
         }
     }
 

@@ -1,13 +1,10 @@
 package app.waveflow.ui.settings
 
-import app.waveflow.data.PreferencesStore
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.ThemeChoice
+import app.waveflow.testing.FakePreferencesStore
 import app.waveflow.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -26,16 +23,6 @@ class SettingsViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
-
-    private class FakePreferencesStore(initial: AppPreferences) : PreferencesStore {
-        private val flux = MutableStateFlow(initial)
-        override val preferences: Flow<AppPreferences> = flux
-        override suspend fun setTheme(choice: ThemeChoice) {
-            flux.update { it.copy(theme = choice) }
-        }
-
-        val theme: ThemeChoice get() = flux.value.theme
-    }
 
     @Test
     fun `le theme enregistre est pret sans que personne n'ait collecte`() =

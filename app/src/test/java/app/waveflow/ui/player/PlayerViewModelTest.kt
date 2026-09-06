@@ -4,12 +4,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.waveflow.data.PreferencesStore
+import app.waveflow.model.AppPreferences
+import app.waveflow.model.PlaybackSpeed
 import app.waveflow.playback.PlaybackFailure
 import app.waveflow.playback.PlaybackState
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.SleepTimer
 import app.waveflow.playback.TrackSource
 import app.waveflow.testing.FakePlaybackController
+import app.waveflow.testing.FakePreferencesStore
 import app.waveflow.testing.MainDispatcherRule
 import app.waveflow.testing.remoteSong
 import app.waveflow.testing.song
@@ -39,6 +43,7 @@ class PlayerViewModelTest {
     private val songs = listOf(song(id = 1L), song(id = 2L), song(id = 3L))
     private val remoteSongs = listOf(remoteSong("a"), remoteSong("b"), remoteSong("c"))
     private val controller = FakePlaybackController()
+    private val preferences = FakePreferencesStore()
 
     /**
      * Le ViewModel sous test, muni d'une minuterie qui suit l'horloge virtuelle.
@@ -47,9 +52,12 @@ class PlayerViewModelTest {
      * minuterie qui survivrait d'un test à l'autre porterait son échéance avec
      * elle.
      */
-    private fun TestScope.playerViewModel() = PlayerViewModel(
+    private fun TestScope.playerViewModel(
+        preferencesStore: PreferencesStore = preferences,
+    ) = PlayerViewModel(
         playbackController = controller,
         sleepTimer = SleepTimer(backgroundScope) { testScheduler.currentTime },
+        preferencesStore = preferencesStore,
     )
 
     @Test
@@ -306,5 +314,53 @@ class PlayerViewModelTest {
         assertNull(viewModel.sleepTimerRemainingMs())
 
         job.cancel()
+    }
+
+    @Test
+    fun `la vitesse enregistree habille l'etat des le depart`() = runTest {
+        // Sans cette remontée, l'écran s'ouvrirait sur « ×1 » pendant que le
+        // service joue déjà à ×1,5 : le bouton mentirait sur ce qu'on entend.
+        val viewModel = playerViewModel(
+            FakePreferencesStore(AppPreferences(playbackSpeed = 1.5f)),
+        )
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(1.5f, viewModel.state.value.playbackSpeed, 0f)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `changer la vitesse se voit alors que le lecteur n'emet plus rien`() = runTest {
+        // Le piège du lecteur : `PlaybackState` ne se reconstruit qu'aux tics de
+        // position, donc plus du tout en pause — et c'est justement en pause
+        // qu'on règle sa vitesse. Le contrôleur reste ici muet de bout en bout :
+        // si l'état tenait la vitesse de lui, rien ne bougerait.
+        val viewModel = playerViewModel()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(PlaybackSpeed.NORMALE, viewModel.state.value.playbackSpeed, 0f)
+
+        viewModel.setPlaybackSpeed(1.5f)
+        advanceUntilIdle()
+
+        assertEquals(1.5f, viewModel.state.value.playbackSpeed, 0f)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `la vitesse choisie passe par les preferences et non par le lecteur`() = runTest {
+        // C'est ce qui la fait tenir d'un lancement à l'autre, et s'appliquer
+        // aux lectures démarrées sans qu'aucun écran soit ouvert : le service
+        // observe la préférence, il n'attend pas d'ordre de l'interface.
+        val viewModel = playerViewModel()
+
+        viewModel.setPlaybackSpeed(1.75f)
+        advanceUntilIdle()
+
+        assertEquals(1.75f, preferences.playbackSpeed, 0f)
     }
 }

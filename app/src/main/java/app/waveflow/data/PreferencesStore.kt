@@ -6,9 +6,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.waveflow.model.AppPreferences
+import app.waveflow.model.PlaybackSpeed
 import app.waveflow.model.ThemeChoice
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -32,6 +34,16 @@ interface PreferencesStore {
     val preferences: Flow<AppPreferences>
 
     suspend fun setTheme(choice: ThemeChoice)
+
+    /**
+     * Change la vitesse de lecture.
+     *
+     * Écrite ici et non posée sur le lecteur : c'est le service qui observe la
+     * préférence et l'applique, si bien que le réglage tient même quand aucun
+     * écran n'est ouvert — la lecture démarrée depuis Android Auto ou la
+     * notification part à la bonne vitesse.
+     */
+    suspend fun setPlaybackSpeed(speed: Float)
 }
 
 /**
@@ -92,22 +104,39 @@ class DataStorePreferencesStore(
     }
 
     /**
-     * Un nom de thème inconnu vaut le défaut.
+     * La vitesse est bornée à l'écriture **et** à la relecture.
      *
-     * Le cas se présente si une version future en ajoute un puis qu'on
-     * redescend : l'ancienne lit une valeur qu'elle ne connaît pas, et lever y
-     * rendrait l'application inutilisable.
+     * Aux deux bouts et non à un seul : borner en écrivant protège le fichier
+     * de ce que l'appelant apporte, borner en lisant protège l'application de
+     * ce que le fichier contient déjà — une version future aux bornes plus
+     * larges, ou un fichier abîmé.
+     */
+    override suspend fun setPlaybackSpeed(speed: Float) {
+        dataStore.edit { it[PLAYBACK_SPEED] = PlaybackSpeed.borner(speed) }
+    }
+
+    /**
+     * Ce que le fichier ne sait pas dire vaut le défaut.
+     *
+     * Un nom de thème inconnu, une vitesse hors bornes : le cas se présente si
+     * une version future en ajoute puis qu'on redescend, l'ancienne lisant
+     * alors une valeur qu'elle ne connaît pas. Lever ici rendrait
+     * l'application inutilisable pour un réglage d'apparence.
      */
     private fun Preferences.toAppPreferences(): AppPreferences = AppPreferences(
         theme = this[THEME]
             ?.let { name -> ThemeChoice.entries.firstOrNull { it.name == name } }
             ?: AppPreferences().theme,
+        playbackSpeed = this[PLAYBACK_SPEED]
+            ?.let(PlaybackSpeed::borner)
+            ?: AppPreferences().playbackSpeed,
     )
 
     private companion object {
         const val TAG = "PreferencesStore"
 
         val THEME = stringPreferencesKey("theme")
+        val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
 
         /** Trois reprises : de quoi passer un incident, pas une corruption. */
         const val MAX_TENTATIVES = 3L

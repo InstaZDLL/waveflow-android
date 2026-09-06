@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
+import app.waveflow.data.PreferencesStore
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Tout ce qui touche à la lecture : état du lecteur et commandes.
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.stateIn
 class PlayerViewModel(
     private val playbackController: PlaybackController,
     private val sleepTimer: SleepTimer,
+    private val preferencesStore: PreferencesStore,
 ) : ViewModel() {
 
     // Plus de croisement avec la bibliothèque : le lecteur décrit lui-même sa
@@ -40,25 +43,35 @@ class PlayerViewModel(
     // La minuterie s'y joint plutôt que d'être un flux à part : son décompte
     // n'a de sens qu'à côté du reste, et les tics de position le rafraîchissent
     // sans qu'elle ait à entretenir une horloge pour l'affichage.
-    val state: StateFlow<PlayerUiState> =
-        combine(playbackController.state, sleepTimer.endsAtMs) { playback, endsAt ->
-            PlayerUiState(
-                track = playback.current,
-                isPlaying = playback.isPlaying,
-                isBuffering = playback.isBuffering,
-                positionMs = playback.positionMs,
-                durationMs = playback.durationMs,
-                shuffleEnabled = playback.shuffleEnabled,
-                repeatMode = playback.repeatMode,
-                queue = playback.queue,
-                queueIndex = playback.queueIndex,
-                sleepTimerActive = endsAt != null,
-            )
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-            initialValue = PlayerUiState(),
+    //
+    // La vitesse aussi, et c'est ce qui la rend visible : elle se règle
+    // volontiers en pause, quand le lecteur n'émet plus rien. Prise du flux des
+    // préférences, elle apporte son propre battement — l'état se reconstruit au
+    // moment du choix. Réduite à la seule vitesse pour qu'un changement de
+    // thème ne traverse pas jusqu'ici.
+    val state: StateFlow<PlayerUiState> = combine(
+        playbackController.state,
+        sleepTimer.endsAtMs,
+        preferencesStore.preferences.map { it.playbackSpeed }.distinctUntilChanged(),
+    ) { playback, endsAt, speed ->
+        PlayerUiState(
+            track = playback.current,
+            isPlaying = playback.isPlaying,
+            isBuffering = playback.isBuffering,
+            positionMs = playback.positionMs,
+            durationMs = playback.durationMs,
+            shuffleEnabled = playback.shuffleEnabled,
+            repeatMode = playback.repeatMode,
+            queue = playback.queue,
+            queueIndex = playback.queueIndex,
+            sleepTimerActive = endsAt != null,
+            playbackSpeed = speed,
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        initialValue = PlayerUiState(),
+    )
 
     /**
      * Les pannes de lecture, à dire une fois chacune.
@@ -152,10 +165,23 @@ class PlayerViewModel(
     fun cancelSleepTimer() = sleepTimer.cancel()
 
     /**
-     * Ce qu.il reste avant l.arrêt automatique, lu à l.instant de la demande.
+     * Change la vitesse de lecture.
      *
-     * Une fonction et non un champ de [PlayerUiState] : celui-ci n.est
-     * reconstruit qu.aux tics de position, donc plus du tout en pause, alors que
+     * Écrite dans les préférences et non posée sur le lecteur : c'est le
+     * service qui les observe et applique, ce qui la fait tenir d'une session à
+     * l'autre et jusque dans les lectures démarrées sans écran ouvert. Le
+     * chemin de retour passe par le même flux, si bien que l'affichage suit ce
+     * qui a réellement été enregistré plutôt que ce qui a été demandé.
+     */
+    fun setPlaybackSpeed(speed: Float) {
+        viewModelScope.launch { preferencesStore.setPlaybackSpeed(speed) }
+    }
+
+    /**
+     * Ce qu'il reste avant l'arrêt automatique, lu à l'instant de la demande.
+     *
+     * Une fonction et non un champ de [PlayerUiState] : celui-ci n'est
+     * reconstruit qu'aux tics de position, donc plus du tout en pause, alors que
      * la minuterie continue de courir.
      */
     fun sleepTimerRemainingMs(): Long? = sleepTimer.remainingMs()
@@ -175,6 +201,7 @@ class PlayerViewModel(
                 PlayerViewModel(
                     playbackController = app.container.createPlaybackController(),
                     sleepTimer = app.container.sleepTimer,
+                    preferencesStore = app.container.preferencesStore,
                 )
             }
         }
