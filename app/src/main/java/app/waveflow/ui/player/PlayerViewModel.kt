@@ -41,7 +41,7 @@ class PlayerViewModel(
     // n'a de sens qu'à côté du reste, et les tics de position le rafraîchissent
     // sans qu'elle ait à entretenir une horloge pour l'affichage.
     val state: StateFlow<PlayerUiState> =
-        combine(playbackController.state, sleepTimer.endsAtMs) { playback, _ ->
+        combine(playbackController.state, sleepTimer.endsAtMs) { playback, endsAt ->
             PlayerUiState(
                 track = playback.current,
                 isPlaying = playback.isPlaying,
@@ -52,7 +52,7 @@ class PlayerViewModel(
                 repeatMode = playback.repeatMode,
                 queue = playback.queue,
                 queueIndex = playback.queueIndex,
-                sleepTimerRemainingMs = sleepTimer.remainingMs(),
+                sleepTimerActive = endsAt != null,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -150,6 +150,15 @@ class PlayerViewModel(
 
     /** Éteint la minuterie sans toucher à la lecture en cours. */
     fun cancelSleepTimer() = sleepTimer.cancel()
+
+    /**
+     * Ce qu.il reste avant l.arrêt automatique, lu à l.instant de la demande.
+     *
+     * Une fonction et non un champ de [PlayerUiState] : celui-ci n.est
+     * reconstruit qu.aux tics de position, donc plus du tout en pause, alors que
+     * la minuterie continue de courir.
+     */
+    fun sleepTimerRemainingMs(): Long? = sleepTimer.remainingMs()
 
     override fun onCleared() {
         // Le service, lui, survit et continue la lecture en arrière-plan.

@@ -9,11 +9,11 @@ import app.waveflow.playback.RepeatMode
  * @property track morceau courant, `null` quand rien n'est chargé — dans ce cas
  *   le lecteur ne s'affiche pas du tout. Décrit par le lecteur lui-même et non
  *   résolu dans la bibliothèque : il peut venir d'un serveur.
- * @property sleepTimerRemainingMs ce qu'il reste avant l'arrêt automatique,
- *   `null` si aucune minuterie ne court. Relevé à chaque tic de position, donc
- *   rafraîchi tant que la lecture avance ; en pause il se fige, alors que la
- *   minuterie, elle, continue de courir — c'est une heure de coucher, pas un
- *   quota d'écoute.
+ * @property sleepTimerActive une minuterie de veille court. Un booléen et non le
+ *   temps restant : l'état n'est reconstruit qu'aux tics de position, donc plus
+ *   du tout quand la lecture est en pause, alors que la minuterie continue de
+ *   courir. Le décompte se demande à la minuterie au moment de l'afficher — ce
+ *   que fait la feuille de réglage, seul endroit où quelqu'un le lit.
  */
 data class PlayerUiState(
     val track: PlayingTrack? = null,
@@ -25,11 +25,8 @@ data class PlayerUiState(
     val repeatMode: RepeatMode = RepeatMode.Off,
     val queue: List<PlayingTrack> = emptyList(),
     val queueIndex: Int = -1,
-    val sleepTimerRemainingMs: Long? = null,
+    val sleepTimerActive: Boolean = false,
 ) {
-    /** Une minuterie court : l'écran l'indique sans avoir à lire le décompte. */
-    val sleepTimerActive: Boolean
-        get() = sleepTimerRemainingMs != null
 
     /** Ce qui reste à jouer après le morceau courant. */
     val upNextCount: Int

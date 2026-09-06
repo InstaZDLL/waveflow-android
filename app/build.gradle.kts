@@ -136,12 +136,19 @@ dependencies {
  * Le fichier est donc lu et réimprimé. Le chemin est résolu à la configuration,
  * hors du `doLast`, pour rester compatible avec le cache de configuration.
  *
- * Une seule tâche, nommée exactement : AGP en crée plusieurs qui commencent par
- * `lint` — `lintReportDebug`, `lintAnalyzeDebug` — et les prendre toutes
- * imprimait le rapport trois fois.
+ * Une tâche à part, et non un `doLast` sur `lintDebug` : les actions d'une tâche
+ * sont sautées si elle échoue, c'est-à-dire précisément quand le lint a trouvé
+ * une erreur et qu'on veut savoir laquelle. `finalizedBy` s'exécute dans les
+ * deux cas.
+ *
+ * `upToDateWhen { false }` parce que cette tâche ne produit rien : son travail
+ * est d'imprimer, et une tâche sans sortie serait tenue pour à jour.
  */
-tasks.matching { it.name == "lintDebug" }.configureEach {
+val afficherRapportLint = tasks.register("afficherRapportLint") {
+    description = "Réimprime le rapport texte du lint dans le journal du build."
     val rapport = layout.buildDirectory.file("reports/lint-results-debug.txt")
+    outputs.upToDateWhen { false }
+
     doLast {
         val fichier = rapport.get().asFile
         if (!fichier.exists()) return@doLast
@@ -154,3 +161,8 @@ tasks.matching { it.name == "lintDebug" }.configureEach {
         }
     }
 }
+
+// Nommée exactement : AGP crée plusieurs tâches qui commencent par `lint` —
+// `lintReportDebug`, `lintAnalyzeDebug` — et les prendre toutes imprimait le
+// rapport trois fois.
+tasks.matching { it.name == "lintDebug" }.configureEach { finalizedBy(afficherRapportLint) }

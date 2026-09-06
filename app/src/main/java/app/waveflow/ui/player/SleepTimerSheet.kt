@@ -13,8 +13,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -36,12 +42,24 @@ private val DUREES = listOf(5, 15, 30, 45, 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepTimerSheet(
-    remainingMs: Long?,
+    remainingMs: () -> Long?,
     onPick: (durationMs: Long) -> Unit,
     onCancelTimer: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Le décompte se relit ici, à la seconde, plutôt que de suivre l'état du
+    // lecteur : celui-ci n'émet plus quand la lecture est en pause, et la
+    // minuterie, elle, continue de courir. Le tic ne vit que le temps de la
+    // feuille — c'est le seul moment où quelqu'un lit vraiment le chiffre.
+    var restant by remember { mutableStateOf(remainingMs()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000L)
+            restant = remainingMs()
+        }
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
             Text(
@@ -53,7 +71,7 @@ fun SleepTimerSheet(
             Spacer(Modifier.height(4.dp))
 
             Text(
-                text = remainingMs
+                text = restant
                     ?.let { "Arrêt dans ${formatRemaining(it)}" }
                     ?: "La lecture s'arrêtera d'elle-même.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -72,7 +90,7 @@ fun SleepTimerSheet(
                 )
             }
 
-            if (remainingMs != null) {
+            if (restant != null) {
                 Spacer(Modifier.height(8.dp))
                 TextButton(
                     onClick = onCancelTimer,

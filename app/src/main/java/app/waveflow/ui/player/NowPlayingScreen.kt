@@ -82,6 +82,7 @@ fun NowPlayingScreen(
     onRemoveQueueItem: (Int) -> Unit,
     onStartSleepTimer: (Long) -> Unit,
     onCancelSleepTimer: () -> Unit,
+    onSleepTimerRemainingMs: () -> Long?,
     modifier: Modifier = Modifier,
 ) {
     // Local et non remonté : voir la file est une façon de regarder le lecteur,
@@ -122,7 +123,7 @@ fun NowPlayingScreen(
                 queueShown = queueShown,
                 upNextCount = state.upNextCount,
                 onToggleQueue = { queueShown = !queueShown },
-                sleepTimerRemainingMs = state.sleepTimerRemainingMs,
+                sleepTimerActive = state.sleepTimerActive,
                 onOpenSleepTimer = { sleepSheetShown = true },
             )
 
@@ -182,7 +183,7 @@ fun NowPlayingScreen(
 
         if (sleepSheetShown) {
             SleepTimerSheet(
-                remainingMs = state.sleepTimerRemainingMs,
+                remainingMs = onSleepTimerRemainingMs,
                 onPick = { duree ->
                     onStartSleepTimer(duree)
                     sleepSheetShown = false
@@ -204,7 +205,7 @@ private fun PlayerHeader(
     queueShown: Boolean,
     upNextCount: Int,
     onToggleQueue: () -> Unit,
-    sleepTimerRemainingMs: Long?,
+    sleepTimerActive: Boolean,
     onOpenSleepTimer: () -> Unit,
 ) {
     Row(
@@ -240,13 +241,17 @@ private fun PlayerHeader(
         IconButton(onClick = onOpenSleepTimer) {
             Icon(
                 imageVector = Icons.Filled.Bedtime,
-                // Le temps restant est dans la description plutôt qu'affiché :
-                // le décompte à la minute encombrerait un en-tête déjà chargé,
-                // et un lecteur d'écran a besoin du chiffre, pas d'une teinte.
-                contentDescription = sleepTimerRemainingMs
-                    ?.let { "Minuterie de veille — arrêt dans ${formatRemaining(it)}" }
-                    ?: "Minuterie de veille",
-                tint = if (sleepTimerRemainingMs != null) {
+                // L'état, pas le décompte : celui-ci ne se rafraîchit qu'au
+                // rythme des tics de position, donc plus du tout en pause, et
+                // annoncer « arrêt dans 30 minutes » un quart d'heure après
+                // vaudrait moins que de ne rien annoncer. Le chiffre à jour est
+                // dans la feuille, qui, elle, tique.
+                contentDescription = if (sleepTimerActive) {
+                    "Minuterie de veille active"
+                } else {
+                    "Minuterie de veille"
+                },
+                tint = if (sleepTimerActive) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant

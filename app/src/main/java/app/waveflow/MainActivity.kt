@@ -652,6 +652,7 @@ private fun WaveFlowRoot(
                 onRemoveQueueItem = playerViewModel::removeQueueItem,
                 onStartSleepTimer = playerViewModel::startSleepTimer,
                 onCancelSleepTimer = playerViewModel::cancelSleepTimer,
+                onSleepTimerRemainingMs = playerViewModel::sleepTimerRemainingMs,
             )
         }
     }

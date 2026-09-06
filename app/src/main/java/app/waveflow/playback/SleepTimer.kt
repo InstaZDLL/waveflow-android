@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * L'heure à laquelle la lecture doit s'arrêter d'elle-même.
@@ -58,6 +59,22 @@ class SleepTimer(
     private var job: Job? = null
 
     /**
+     * Numéro de la minuterie courante.
+     *
+     * `Job.cancel()` ne suffit pas : entre le réveil du `delay` et les lignes
+     * qui suivent, la coroutine est déjà repartie et l'annulation ne la
+     * rattrape plus. Elle effacerait alors l'échéance qu'un réarmement vient de
+     * poser, perdrait la référence du nouveau `Job` — devenu inannulable — et
+     * mettrait la lecture en pause alors qu'on vient de demander une heure de
+     * plus. Chaque minuterie porte donc son numéro et ne touche à l'état que si
+     * c'est encore le sien.
+     *
+     * Atomique parce que le numéro s'incrémente depuis le fil qui règle la
+     * minuterie et se lit depuis celui où le `delay` s'achève.
+     */
+    private val generation = AtomicInteger(0)
+
+    /**
      * Arme la minuterie pour [durationMs], en remplaçant celle qui courait.
      *
      * Une durée nulle ou négative ne décrit aucune attente : elle annule, plutôt
@@ -65,26 +82,41 @@ class SleepTimer(
      * réglant une minuterie.
      */
     fun start(durationMs: Long) {
-        cancel()
+        val mien = eteindre()
         if (durationMs <= 0L) return
 
         _endsAtMs.value = nowMs() + durationMs
         job = scope.launch {
             delay(durationMs)
+            // Une minuterie périmée se tait : elle a été remplacée ou annulée
+            // pendant qu'elle attendait.
+            if (generation.get() != mien) return@launch
+
             // Remis à zéro **avant** de prévenir : un abonné qui regarde l'état
             // en réagissant doit voir une minuterie éteinte, pas une échéance
             // déjà passée.
             _endsAtMs.value = null
-            job = null
             _expirations.emit(Unit)
         }
     }
 
     /** Éteint la minuterie sans arrêter la lecture. */
     fun cancel() {
+        eteindre()
+    }
+
+    /**
+     * Éteint ce qui court et ouvre un nouveau numéro.
+     *
+     * Rend ce numéro pour que [start] le confie à la minuterie qu'il arme :
+     * c'est ce qui permet à celle-ci de reconnaître, en s'éveillant, si elle est
+     * toujours la bonne.
+     */
+    private fun eteindre(): Int {
         job?.cancel()
         job = null
         _endsAtMs.value = null
+        return generation.incrementAndGet()
     }
 
     /**

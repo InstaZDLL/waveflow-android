@@ -18,8 +18,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -281,10 +283,10 @@ class PlayerViewModelTest {
         advanceUntilIdle()
 
         viewModel.startSleepTimer(30 * 60_000L)
-        advanceUntilIdle()
+        runCurrent()
 
         assertTrue(viewModel.state.value.sleepTimerActive)
-        assertEquals(30 * 60_000L, viewModel.state.value.sleepTimerRemainingMs)
+        assertEquals(30 * 60_000L, viewModel.sleepTimerRemainingMs())
 
         job.cancel()
     }
@@ -296,11 +298,12 @@ class PlayerViewModelTest {
         advanceUntilIdle()
 
         viewModel.startSleepTimer(30 * 60_000L)
-        advanceUntilIdle()
+        runCurrent()
         viewModel.cancelSleepTimer()
-        advanceUntilIdle()
+        runCurrent()
 
-        assertNull(viewModel.state.value.sleepTimerRemainingMs)
+        assertFalse(viewModel.state.value.sleepTimerActive)
+        assertNull(viewModel.sleepTimerRemainingMs())
 
         job.cancel()
     }
