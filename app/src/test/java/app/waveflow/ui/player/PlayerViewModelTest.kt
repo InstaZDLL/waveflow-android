@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.playback.PlaybackFailure
 import app.waveflow.playback.PlaybackState
 import app.waveflow.playback.PlayingTrack
+import app.waveflow.playback.SleepTimer
 import app.waveflow.playback.TrackSource
 import app.waveflow.testing.FakePlaybackController
 import app.waveflow.testing.MainDispatcherRule
@@ -14,10 +15,13 @@ import app.waveflow.testing.remoteSong
 import app.waveflow.testing.song
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -36,9 +40,21 @@ class PlayerViewModelTest {
     private val remoteSongs = listOf(remoteSong("a"), remoteSong("b"), remoteSong("c"))
     private val controller = FakePlaybackController()
 
+    /**
+     * Le ViewModel sous test, muni d'une minuterie qui suit l'horloge virtuelle.
+     *
+     * Elle est construite par test : sa portée est celle de `runTest`, et une
+     * minuterie qui survivrait d'un test à l'autre porterait son échéance avec
+     * elle.
+     */
+    private fun TestScope.playerViewModel() = PlayerViewModel(
+        playbackController = controller,
+        sleepTimer = SleepTimer(backgroundScope) { testScheduler.currentTime },
+    )
+
     @Test
     fun `jouer un morceau met la file demandee et non toute la bibliotheque`() = runTest {
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
 
         val albumQueue = songs.take(2)
         viewModel.playFrom(albumQueue, songs[1])
@@ -48,7 +64,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `jouer un morceau absent de la file ne declenche rien`() = runTest {
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
 
         viewModel.playFrom(songs.take(2), song(id = 99L))
 
@@ -57,7 +73,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `playFirst sur une file vide ne declenche rien`() = runTest {
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
 
         viewModel.playFirst(emptyList())
 
@@ -68,7 +84,7 @@ class PlayerViewModelTest {
     fun `jouer un morceau distant passe par la file distante`() = runTest {
         // Chemin distinct : les deux catalogues ne partagent ni type ni
         // identifiant, et la file distante remplace la locale.
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
 
         viewModel.playRemoteFrom(remoteSongs, remoteSongs[2])
 
@@ -78,7 +94,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `jouer un morceau distant absent de la file ne declenche rien`() = runTest {
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
 
         viewModel.playRemoteFrom(remoteSongs, remoteSong("inconnu"))
 
@@ -87,7 +103,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `l'aleatoire distant passe par la file distante`() = runTest {
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
 
         viewModel.playRemoteShuffled(remoteSongs)
 
@@ -102,7 +118,7 @@ class PlayerViewModelTest {
     fun `l'etat reprend la piste telle que le lecteur la decrit`() = runTest {
         // Plus de résolution dans la bibliothèque : une piste du serveur n'y
         // figure pas, et la chercher ne rendrait rien à afficher.
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
 
         val job = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.state.collect {}
@@ -139,7 +155,7 @@ class PlayerViewModelTest {
         // Le défaut d'origine : le lecteur s'arrêtait sur une erreur sans que
         // rien ne l'annonce, la piste restant affichée comme si elle allait
         // démarrer.
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
         val messages = mutableListOf<String>()
         val job = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.errors.collect { messages += it }
@@ -153,7 +169,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `une piste illisible ne fait pas accuser le serveur`() = runTest {
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
         val messages = mutableListOf<String>()
         val job = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.errors.collect { messages += it }
@@ -169,7 +185,7 @@ class PlayerViewModelTest {
     fun `une panne qui dure ne se repete pas`() = runTest {
         // L'état est republié à chaque tic de position : sans quoi le message
         // reviendrait deux fois par seconde tant que la panne dure.
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
         val messages = mutableListOf<String>()
         val job = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.errors.collect { messages += it }
@@ -187,7 +203,7 @@ class PlayerViewModelTest {
     fun `un second echec apres reprise se dit de nouveau`() = runTest {
         // Media3 oublie son erreur quand on le prépare à nouveau : la panne
         // repasse par `null`, et le second échec doit se voir comme le premier.
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
         val messages = mutableListOf<String>()
         val job = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.errors.collect { messages += it }
@@ -207,7 +223,7 @@ class PlayerViewModelTest {
         // reste dans l'état du lecteur jusqu'à la prochaine préparation : un
         // flux redérivé par abonné repartirait de cette valeur courante et
         // redirait l'erreur, à chaque rotation.
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
         val avant = mutableListOf<String>()
         val premier = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.errors.collect { avant += it }
@@ -229,7 +245,7 @@ class PlayerViewModelTest {
 
     @Test
     fun `un lecteur qui va bien ne dit rien`() = runTest {
-        val viewModel = PlayerViewModel(controller)
+        val viewModel = playerViewModel()
         val messages = mutableListOf<String>()
         val job = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.errors.collect { messages += it }
@@ -248,7 +264,7 @@ class PlayerViewModelTest {
         val viewModelStore = ViewModelStore()
         val provider = ViewModelProvider(
             viewModelStore,
-            viewModelFactory { initializer { PlayerViewModel(controller) } },
+            viewModelFactory { initializer { playerViewModel() } },
         )
         provider[PlayerViewModel::class.java]
         advanceUntilIdle()
@@ -256,5 +272,39 @@ class PlayerViewModelTest {
         viewModelStore.clear()
 
         assertTrue("une liaison vivante empêcherait le service de s'arrêter", controller.released)
+    }
+
+    @Test
+    fun `la minuterie armee apparait dans l'etat du lecteur`() = runTest {
+        // L'écran allume son icône à partir de là : sans cette remontée, la
+        // minuterie tournerait sans que rien ne le dise.
+        val viewModel = playerViewModel()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.state.collect {} }
+        advanceUntilIdle()
+
+        viewModel.startSleepTimer(30 * 60_000L)
+        runCurrent()
+
+        assertTrue(viewModel.state.value.sleepTimerActive)
+        assertEquals(30 * 60_000L, viewModel.sleepTimerRemainingMs())
+
+        job.cancel()
+    }
+
+    @Test
+    fun `annuler la minuterie l'efface de l'etat`() = runTest {
+        val viewModel = playerViewModel()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.state.collect {} }
+        advanceUntilIdle()
+
+        viewModel.startSleepTimer(30 * 60_000L)
+        runCurrent()
+        viewModel.cancelSleepTimer()
+        runCurrent()
+
+        assertFalse(viewModel.state.value.sleepTimerActive)
+        assertNull(viewModel.sleepTimerRemainingMs())
+
+        job.cancel()
     }
 }

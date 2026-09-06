@@ -2,6 +2,7 @@ package app.waveflow
 
 import android.app.Application
 import android.os.Build
+import android.os.SystemClock
 import app.waveflow.data.LibraryStore
 import app.waveflow.data.MediaStoreMusicRepository
 import app.waveflow.data.MusicRepository
@@ -22,6 +23,7 @@ import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.RemoteMediaCache
+import app.waveflow.playback.SleepTimer
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import kotlinx.coroutines.CoroutineScope
@@ -96,6 +98,15 @@ class AppContainer(app: Application) {
      * par le composant qui le demande (voir `PlayerViewModel.onCleared`).
      */
     fun createPlaybackController(): PlaybackController = Media3PlaybackController(appContext)
+
+    /**
+     * La minuterie de veille, portée par l'application et non par le service.
+     *
+     * On la règle depuis l'écran de lecture puis on quitte souvent
+     * l'application elle-même : elle doit survivre à l'écran. Le service écoute
+     * ses expirations pour mettre en pause ; elle ne connaît pas le lecteur.
+     */
+    val sleepTimer = SleepTimer(applicationScope, SystemClock::elapsedRealtime)
 
     /**
      * Cache des pistes distantes, unique pour le processus.

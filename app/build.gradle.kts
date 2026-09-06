@@ -60,8 +60,6 @@ android {
         // `targetSdk` reste volontairement en deçà de `compileSdk` : rien ici
         // n'opte pour les nouveaux comportements d'exécution (voir plus haut).
         disable += "OldTargetApi"
-        // La CI n'ouvre pas le rapport HTML ; le texte, lui, arrive au journal.
-        textReport = true
     }
     testOptions {
         unitTests {
@@ -126,3 +124,51 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+/*
+ * Fait remonter les avertissements du lint au journal du build.
+ *
+ * AGP 9 produit toujours le rapport texte, mais dans un fichier que la CI
+ * n'ouvre pas — et les deux propriétés qui l'y amenaient, `textReport` et
+ * `textOutput`, sont dépréciées ensemble. Les garder coûterait un avertissement
+ * de compilation à chaque build, alors que le dépôt tient à n'en avoir aucun.
+ *
+ * Le fichier est donc lu et réimprimé. Le chemin est résolu à la configuration,
+ * hors du `doLast`, pour rester compatible avec le cache de configuration.
+ *
+ * Une tâche à part, et non un `doLast` sur `lintDebug` : les actions d'une tâche
+ * sont sautées si elle échoue, c'est-à-dire précisément quand le lint a trouvé
+ * une erreur et qu'on veut savoir laquelle. `finalizedBy` s'exécute dans les
+ * deux cas.
+ *
+ * `upToDateWhen { false }` parce que cette tâche ne produit rien : son travail
+ * est d'imprimer, et une tâche sans sortie serait tenue pour à jour.
+ *
+ * Le chemin est écrit en clair plutôt que pris à `SingleArtifact.LINT_TEXT_REPORT`.
+ * Passer par l'artefact demanderait une classe de tâche et un `onVariants`, pour
+ * se prémunir d'un déplacement de fichier que rien n'annonce. À reprendre le
+ * jour où le chemin bougera — la tâche se taira alors sans rien casser, le
+ * fichier absent étant traité comme tel.
+ */
+val afficherRapportLint = tasks.register("afficherRapportLint") {
+    description = "Réimprime le rapport texte du lint dans le journal du build."
+    val rapport = layout.buildDirectory.file("reports/lint-results-debug.txt")
+    outputs.upToDateWhen { false }
+
+    doLast {
+        val fichier = rapport.get().asFile
+        if (!fichier.exists()) return@doLast
+
+        val texte = fichier.readText().trim()
+        // « No issues found. » n'apprend rien et noierait le journal d'un build
+        // propre : seul ce qui demande une décision est réimprimé.
+        if (texte.isNotEmpty() && !texte.startsWith("No issues found")) {
+            logger.lifecycle(texte)
+        }
+    }
+}
+
+// Nommée exactement : AGP crée plusieurs tâches qui commencent par `lint` —
+// `lintReportDebug`, `lintAnalyzeDebug` — et les prendre toutes imprimait le
+// rapport trois fois.
+tasks.matching { it.name == "lintDebug" }.configureEach { finalizedBy(afficherRapportLint) }

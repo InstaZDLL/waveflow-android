@@ -105,10 +105,29 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
         player.addListener(historyListener(container.playHistoryRepository))
+        observeSleepTimer(container.sleepTimer, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
         observeLibrary(container)
+    }
+
+    /**
+     * Met la lecture en pause quand la minuterie de veille arrive à échéance.
+     *
+     * Une pause et non un arrêt : on se rendort rarement pour de bon, et
+     * reprendre là où l'on s'est endormi vaut mieux que de retrouver une file
+     * vide. La minuterie ignore tout du lecteur — c'est le service, qui le
+     * tient, qui fait le geste.
+     *
+     * L'abonnement vit dans [artworkScope], donc tombe avec le service. Une
+     * minuterie qui expirerait après lui n'aurait de toute façon plus rien à
+     * mettre en pause.
+     */
+    private fun observeSleepTimer(timer: SleepTimer, player: Player) {
+        artworkScope.launch {
+            timer.expirations.collect { player.pause() }
+        }
     }
 
     /**
