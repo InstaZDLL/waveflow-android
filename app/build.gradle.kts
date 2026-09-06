@@ -60,8 +60,6 @@ android {
         // `targetSdk` reste volontairement en deçà de `compileSdk` : rien ici
         // n'opte pour les nouveaux comportements d'exécution (voir plus haut).
         disable += "OldTargetApi"
-        // La CI n'ouvre pas le rapport HTML ; le texte, lui, arrive au journal.
-        textReport = true
     }
     testOptions {
         unitTests {
@@ -125,4 +123,34 @@ dependencies {
     // les tests unitaires fusionnent celui de la variante debug.
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+/*
+ * Fait remonter les avertissements du lint au journal du build.
+ *
+ * AGP 9 produit toujours le rapport texte, mais dans un fichier que la CI
+ * n'ouvre pas — et les deux propriétés qui l'y amenaient, `textReport` et
+ * `textOutput`, sont dépréciées ensemble. Les garder coûterait un avertissement
+ * de compilation à chaque build, alors que le dépôt tient à n'en avoir aucun.
+ *
+ * Le fichier est donc lu et réimprimé. Le chemin est résolu à la configuration,
+ * hors du `doLast`, pour rester compatible avec le cache de configuration.
+ *
+ * Une seule tâche, nommée exactement : AGP en crée plusieurs qui commencent par
+ * `lint` — `lintReportDebug`, `lintAnalyzeDebug` — et les prendre toutes
+ * imprimait le rapport trois fois.
+ */
+tasks.matching { it.name == "lintDebug" }.configureEach {
+    val rapport = layout.buildDirectory.file("reports/lint-results-debug.txt")
+    doLast {
+        val fichier = rapport.get().asFile
+        if (!fichier.exists()) return@doLast
+
+        val texte = fichier.readText().trim()
+        // « No issues found. » n'apprend rien et noierait le journal d'un build
+        // propre : seul ce qui demande une décision est réimprimé.
+        if (texte.isNotEmpty() && !texte.startsWith("No issues found")) {
+            logger.lifecycle(texte)
+        }
+    }
 }

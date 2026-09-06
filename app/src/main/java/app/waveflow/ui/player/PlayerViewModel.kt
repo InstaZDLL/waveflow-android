@@ -10,9 +10,11 @@ import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackFailure
+import app.waveflow.playback.SleepTimer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -27,14 +29,19 @@ import kotlinx.coroutines.flow.stateIn
  */
 class PlayerViewModel(
     private val playbackController: PlaybackController,
+    private val sleepTimer: SleepTimer,
 ) : ViewModel() {
 
     // Plus de croisement avec la bibliothèque : le lecteur décrit lui-même sa
     // piste, ce qui vaut aussi pour celles du serveur, absentes du MediaStore.
     // Cette projection est réévaluée à chaque tic de position — la garder sans
     // recherche est ce qui la rend gratuite.
+    //
+    // La minuterie s'y joint plutôt que d'être un flux à part : son décompte
+    // n'a de sens qu'à côté du reste, et les tics de position le rafraîchissent
+    // sans qu'elle ait à entretenir une horloge pour l'affichage.
     val state: StateFlow<PlayerUiState> =
-        playbackController.state.map { playback ->
+        combine(playbackController.state, sleepTimer.endsAtMs) { playback, _ ->
             PlayerUiState(
                 track = playback.current,
                 isPlaying = playback.isPlaying,
@@ -45,6 +52,7 @@ class PlayerViewModel(
                 repeatMode = playback.repeatMode,
                 queue = playback.queue,
                 queueIndex = playback.queueIndex,
+                sleepTimerRemainingMs = sleepTimer.remainingMs(),
             )
         }.stateIn(
             scope = viewModelScope,
@@ -137,6 +145,12 @@ class PlayerViewModel(
 
     fun removeQueueItem(index: Int) = playbackController.removeQueueItem(index)
 
+    /** Arme la minuterie de veille, en remplaçant celle qui courait. */
+    fun startSleepTimer(durationMs: Long) = sleepTimer.start(durationMs)
+
+    /** Éteint la minuterie sans toucher à la lecture en cours. */
+    fun cancelSleepTimer() = sleepTimer.cancel()
+
     override fun onCleared() {
         // Le service, lui, survit et continue la lecture en arrière-plan.
         playbackController.release()
@@ -151,6 +165,7 @@ class PlayerViewModel(
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as WaveFlowApp
                 PlayerViewModel(
                     playbackController = app.container.createPlaybackController(),
+                    sleepTimer = app.container.sleepTimer,
                 )
             }
         }

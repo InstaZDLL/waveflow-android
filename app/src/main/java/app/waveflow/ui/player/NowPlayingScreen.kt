@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -79,11 +80,16 @@ fun NowPlayingScreen(
     onPlayQueueItem: (Int) -> Unit,
     onMoveQueueItem: (from: Int, to: Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
+    onStartSleepTimer: (Long) -> Unit,
+    onCancelSleepTimer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Local et non remonté : voir la file est une façon de regarder le lecteur,
     // pas un état de l'application. Refermer le lecteur la referme.
     var queueShown by rememberSaveable { mutableStateOf(false) }
+
+    // Même raison : la feuille est un geste en cours, pas un état à conserver.
+    var sleepSheetShown by rememberSaveable { mutableStateOf(false) }
 
     // La file peut se vider pendant l'animation de fermeture : on continue
     // d'afficher le dernier morceau connu le temps que l'écran redescende,
@@ -116,6 +122,8 @@ fun NowPlayingScreen(
                 queueShown = queueShown,
                 upNextCount = state.upNextCount,
                 onToggleQueue = { queueShown = !queueShown },
+                sleepTimerRemainingMs = state.sleepTimerRemainingMs,
+                onOpenSleepTimer = { sleepSheetShown = true },
             )
 
             if (queueShown) {
@@ -171,6 +179,21 @@ fun NowPlayingScreen(
 
             Spacer(Modifier.height(32.dp))
         }
+
+        if (sleepSheetShown) {
+            SleepTimerSheet(
+                remainingMs = state.sleepTimerRemainingMs,
+                onPick = { duree ->
+                    onStartSleepTimer(duree)
+                    sleepSheetShown = false
+                },
+                onCancelTimer = {
+                    onCancelSleepTimer()
+                    sleepSheetShown = false
+                },
+                onDismiss = { sleepSheetShown = false },
+            )
+        }
     }
 }
 
@@ -181,6 +204,8 @@ private fun PlayerHeader(
     queueShown: Boolean,
     upNextCount: Int,
     onToggleQueue: () -> Unit,
+    sleepTimerRemainingMs: Long?,
+    onOpenSleepTimer: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -209,6 +234,23 @@ private fun PlayerHeader(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        IconButton(onClick = onOpenSleepTimer) {
+            Icon(
+                imageVector = Icons.Filled.Bedtime,
+                // Le temps restant est dans la description plutôt qu'affiché :
+                // le décompte à la minute encombrerait un en-tête déjà chargé,
+                // et un lecteur d'écran a besoin du chiffre, pas d'une teinte.
+                contentDescription = sleepTimerRemainingMs
+                    ?.let { "Minuterie de veille — arrêt dans ${formatRemaining(it)}" }
+                    ?: "Minuterie de veille",
+                tint = if (sleepTimerRemainingMs != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
 
