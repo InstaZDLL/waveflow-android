@@ -4,16 +4,16 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-06**, sur `main` = `59db1fd`.
+Dernière mise à jour : **2026-09-07**, sur `main` = `0d6bd36`.
 
 ## État du dépôt
 
-- `main` = `59db1fd`. Une PR ouverte : **la vitesse de lecture**, branche
-  `feat/vitesse-lecture`.
-- **364 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
+- `main` = `0d6bd36`, arbre propre, **aucune PR ouverte**, aucune branche en
+  cours.
+- **369 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
 - **Aucun avertissement de compilation.** C'est une propriété qu'on tient, pas un
   hasard — voir le piège `textReport` plus bas avant d'en supprimer un.
-- Gradle 9.7.1, AGP 9.3.2, OkHttp 5.5.0, media3 1.11.0.
+- Gradle 9.7.1, AGP 9.4.0, OkHttp 5.5.0, media3 1.11.0.
 - Baseline Detekt : 16 entrées. **Elle ne doit que rétrécir.**
 
 ## Le chantier : la refonte v2
@@ -34,7 +34,7 @@ lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
 
-**La vitesse de lecture** (branche `feat/vitesse-lecture`).
+**PR #48 — la vitesse de lecture.**
 
 Elle vit dans les **préférences**, et c'est le **service** qui les observe pour
 l'appliquer au lecteur — comme il écoute déjà les expirations de la minuterie.
@@ -57,6 +57,25 @@ bas.
 
 **Ce qui n'a pas été fait :** le mini-player ne dit pas la vitesse. Elle n'est
 visible qu'une fois le lecteur déplié. À revoir si quelqu'un s'y perd.
+
+**Trois défauts du magasin de préférences, relevés en revue et antérieurs à
+cette PR.** La vitesse les a mis en lumière en ajoutant une seconde clé typée ;
+tous trois valaient déjà pour le thème seul.
+
+1. **Les écritures ne retenaient pas leurs erreurs.** `setTheme` comme
+   `setPlaybackSpeed` laissaient remonter une `IOException` dans la portée du
+   ViewModel, qui n'a pas de gestionnaire : un disque plein emportait
+   l'application pour un réglage d'apparence. La retenue est désormais partagée
+   par `ecrire`.
+2. **Le `catch` ne couvrait pas la conversion**, étant posé en amont du `map`.
+   `this[cle]` est un cast non vérifié : une clé portant un autre type que le
+   sien y lève une `ClassCastException` que rien ne retenait. Les valeurs se
+   lisent maintenant par `asMap()` avec un `as?`.
+3. Corollaire du précédent : **déplacer le `catch` en aval aurait suffi à ne
+   plus tomber, mais aurait terminé le flux** — ce que la KDoc défend
+   explicitement. Un flux terminé fige le partage en aval : on changerait encore
+   de thème sans que rien ne bouge. C'est le piège à connaître avant de toucher
+   à ce fichier.
 
 **PR #47 — la minuterie de veille.**
 
