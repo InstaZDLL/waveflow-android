@@ -1,5 +1,6 @@
 package app.waveflow.ui.player
 
+import app.waveflow.model.PlaybackSpeed
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
 
@@ -14,6 +15,10 @@ import app.waveflow.playback.RepeatMode
  *   du tout quand la lecture est en pause, alors que la minuterie continue de
  *   courir. Le décompte se demande à la minuterie au moment de l'afficher — ce
  *   que fait la feuille de réglage, seul endroit où quelqu'un le lit.
+ * @property playbackSpeed la vitesse de lecture. Elle vient des préférences et
+ *   non du lecteur : le flux des préférences émet au moment du choix, quand
+ *   celui du lecteur, lui, ne se rafraîchit qu'aux tics de position — donc plus
+ *   du tout en pause, où l'on règle pourtant volontiers sa vitesse.
  */
 data class PlayerUiState(
     val track: PlayingTrack? = null,
@@ -26,6 +31,7 @@ data class PlayerUiState(
     val queue: List<PlayingTrack> = emptyList(),
     val queueIndex: Int = -1,
     val sleepTimerActive: Boolean = false,
+    val playbackSpeed: Float = PlaybackSpeed.NORMALE,
 ) {
 
     /** Ce qui reste à jouer après le morceau courant. */

@@ -3,10 +3,14 @@ package app.waveflow.testing
 import android.net.Uri
 import app.waveflow.data.MusicRepository
 import app.waveflow.data.PlaylistRepository
+import app.waveflow.data.PreferencesStore
+import app.waveflow.model.AppPreferences
+import app.waveflow.model.PlaybackSpeed
 import app.waveflow.model.Playlist
 import app.waveflow.model.PlaylistEntry
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.model.ThemeChoice
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackState
 import app.waveflow.playback.PlayingTrack
@@ -16,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.update
 
 /**
  * Fabrique de morceaux pour les tests.
@@ -210,4 +215,37 @@ class FakePlaybackController : PlaybackController {
     fun emit(state: PlaybackState) {
         _state.value = state
     }
+}
+
+/**
+ * Les préférences, en mémoire.
+ *
+ * Un `MutableStateFlow` et non le vrai magasin : ce que ces tests éprouvent est
+ * ce que fait l'application d'une préférence qui change, pas la fidélité du
+ * DataStore — celle-ci se joue dans `PreferencesStoreTest`, sur un vrai fichier.
+ *
+ * Il **borne comme le vrai**. Un faux plus permissif que l'original rendrait
+ * verts des tests qui décriraient une application qui n'existe pas.
+ */
+class FakePreferencesStore(initial: AppPreferences = AppPreferences()) : PreferencesStore {
+
+    // Borné dès la construction, et pas seulement à l'écriture : le vrai
+    // magasin borne ce qu'il relit, et un faux plus permissif rendrait vert un
+    // test décrivant une application qui n'existe pas.
+    private val flux = MutableStateFlow(
+        initial.copy(playbackSpeed = PlaybackSpeed.borner(initial.playbackSpeed)),
+    )
+
+    override val preferences: Flow<AppPreferences> = flux
+
+    override suspend fun setTheme(choice: ThemeChoice) {
+        flux.update { it.copy(theme = choice) }
+    }
+
+    override suspend fun setPlaybackSpeed(speed: Float) {
+        flux.update { it.copy(playbackSpeed = PlaybackSpeed.borner(speed)) }
+    }
+
+    val theme: ThemeChoice get() = flux.value.theme
+    val playbackSpeed: Float get() = flux.value.playbackSpeed
 }

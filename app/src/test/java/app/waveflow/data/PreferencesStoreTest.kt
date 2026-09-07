@@ -3,8 +3,10 @@ package app.waveflow.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import app.waveflow.model.PlaybackSpeed
 import app.waveflow.model.ThemeChoice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +133,135 @@ class PreferencesStoreTest {
 
         assertEquals(setOf(ThemeChoice.System), vus.toSet())
     }
+
+    @Test
+    fun `la vitesse de lecture survit a la relecture`() = runTest {
+        // C'est là toute sa raison d'être persistée : qui écoute ses podcasts à
+        // ×1,5 ne veut pas le redire à chaque lancement.
+        avecUnMagasin { it.setPlaybackSpeed(1.5f) }
+
+        val vitesse = avecUnMagasin { it.preferences.first().playbackSpeed }
+
+        assertEquals(1.5f, vitesse, 0f)
+    }
+
+    @Test
+    fun `sans rien de choisi la lecture est a vitesse normale`() = runTest {
+        val vitesse = avecUnMagasin { it.preferences.first().playbackSpeed }
+
+        assertEquals(PlaybackSpeed.NORMALE, vitesse, 0f)
+    }
+
+    @Test
+    fun `une vitesse aberrante ecrite dans le fichier est ramenee dans les bornes`() = runTest {
+        // Le cas se présente si une version future élargit les bornes puis
+        // qu'on redescend : l'ancienne lit une vitesse qu'elle ne sait pas
+        // tenir, et l'appliquer telle quelle rendrait la lecture inaudible.
+        // Écrit ici sans passer par `setPlaybackSpeed`, qui borne déjà : c'est
+        // la relecture qu'on éprouve, pas l'écriture.
+        val magasin = magasinFige(preferencesOf(floatPreferencesKey("playback_speed") to 8f))
+
+        val vitesse = magasin.preferences.first().playbackSpeed
+
+        assertEquals(PlaybackSpeed.MAX, vitesse, 0f)
+    }
+
+    @Test
+    fun `une vitesse aberrante n'est pas meme ecrite dans le fichier`() = runTest {
+        // La relecture borne déjà, et suffirait à protéger l'application. Ce
+        // qu'on garde ici, c'est le **fichier** : une valeur aberrante gravée
+        // sur le disque survivrait à une version future aux bornes plus larges,
+        // qui la relirait alors sans rien pour l'arrêter.
+        //
+        // Lu sous la clé brute et non par `preferences` : celui-ci borne à la
+        // relecture, et rendrait le test vert quoi qu'on ait écrit.
+        val brut = avecUnMagasinBrut { magasin, dataStore ->
+            magasin.setPlaybackSpeed(8f)
+            dataStore.data.first()[floatPreferencesKey("playback_speed")]
+        }
+
+        assertEquals(PlaybackSpeed.MAX, brut!!, 0f)
+    }
+
+    /** Comme [avecUnMagasin], mais donne aussi le DataStore sous-jacent. */
+    private suspend fun <T> avecUnMagasinBrut(
+        bloc: suspend (PreferencesStore, DataStore<Preferences>) -> T,
+    ): T {
+        val portee = CoroutineScope(Job() + Dispatchers.IO)
+        try {
+            val dataStore = PreferenceDataStoreFactory.create(scope = portee) { fichier }
+            return bloc(DataStorePreferencesStore(dataStore), dataStore)
+        } finally {
+            portee.coroutineContext[Job]!!.cancelAndJoin()
+        }
+    }
+
+    @Test
+    fun `une vitesse qui ne s'ecrit pas ne fait pas tomber l'appelant`() = runTest {
+        // Les appelants lancent dans la portée de leur ViewModel, qui n'a pas de
+        // gestionnaire d'exception : sans cette retenue, un disque plein
+        // emporterait l'application entière — pour une vitesse de lecture.
+        //
+        // Ne lève pas : c'est tout ce qui est demandé. Le choix est perdu, et
+        // l'écran le dit en restant sur l'ancienne valeur.
+        magasinIncapableDEcrire().setPlaybackSpeed(1.5f)
+    }
+
+    @Test
+    fun `un theme qui ne s'ecrit pas ne fait pas tomber l'appelant`() = runTest {
+        // Un test à part et non deux appels dans le même : la seule assertion
+        // est qu'il ne soit rien levé, et deux appels à la suite verraient le
+        // premier lever pour les deux. La seconde écriture n'aurait alors
+        // jamais été éprouvée.
+        magasinIncapableDEcrire().setTheme(ThemeChoice.Dark)
+    }
+
+    /** Un magasin dont toute écriture échoue, la lecture restant possible. */
+    private fun magasinIncapableDEcrire(): PreferencesStore =
+        DataStorePreferencesStore(
+            object : DataStore<Preferences> {
+                override val data: Flow<Preferences> = flow { emit(preferencesOf()) }
+                override suspend fun updateData(
+                    transform: suspend (Preferences) -> Preferences,
+                ): Preferences = throw IOException("disque plein")
+            },
+        )
+
+    @Test
+    fun `une vitesse d'un autre type que le sien ne fait pas tomber la collecte`() = runTest {
+        // Le fichier peut porter une clé au type qu'on n'attend pas : une
+        // version future qui l'aurait changée, puis un retour en arrière. La
+        // lecture par `this[cle]` est un cast non vérifié, et ce qu'elle lève
+        // passerait **après** le `catch`, posé en amont de la conversion.
+        val magasin = magasinFige(preferencesOf(stringPreferencesKey("playback_speed") to "vite"))
+
+        val prefs = magasin.preferences.first()
+
+        assertEquals(PlaybackSpeed.NORMALE, prefs.playbackSpeed, 0f)
+    }
+
+    @Test
+    fun `un theme d'un autre type que le sien ne fait pas tomber la collecte`() = runTest {
+        // Un test à part : les deux lectures sont distinctes, et réunies ici la
+        // première lèverait pour les deux — la seconde n'aurait jamais été
+        // éprouvée. Ce trou-là précède la vitesse de lecture.
+        val magasin = magasinFige(preferencesOf(floatPreferencesKey("theme") to 2f))
+
+        val prefs = magasin.preferences.first()
+
+        assertEquals(ThemeChoice.System, prefs.theme)
+    }
+
+    /** Un magasin en lecture seule, sur un contenu écrit à la main. */
+    private fun magasinFige(contenu: Preferences): PreferencesStore =
+        DataStorePreferencesStore(
+            object : DataStore<Preferences> {
+                override val data: Flow<Preferences> = flow { emit(contenu) }
+                override suspend fun updateData(
+                    transform: suspend (Preferences) -> Preferences,
+                ): Preferences = throw UnsupportedOperationException("lecture seule")
+            },
+        )
 
     @Test
     fun `changer de theme se voit sans rouvrir le fichier`() = runTest {

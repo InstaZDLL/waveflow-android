@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.waveflow.model.PlaybackSpeed
 import app.waveflow.model.orUnknownArtist
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
@@ -83,6 +84,7 @@ fun NowPlayingScreen(
     onStartSleepTimer: (Long) -> Unit,
     onCancelSleepTimer: () -> Unit,
     onSleepTimerRemainingMs: () -> Long?,
+    onSetPlaybackSpeed: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Local et non remonté : voir la file est une façon de regarder le lecteur,
@@ -91,6 +93,7 @@ fun NowPlayingScreen(
 
     // Même raison : la feuille est un geste en cours, pas un état à conserver.
     var sleepSheetShown by rememberSaveable { mutableStateOf(false) }
+    var speedSheetShown by rememberSaveable { mutableStateOf(false) }
 
     // La file peut se vider pendant l'animation de fermeture : on continue
     // d'afficher le dernier morceau connu le temps que l'écran redescende,
@@ -125,6 +128,8 @@ fun NowPlayingScreen(
                 onToggleQueue = { queueShown = !queueShown },
                 sleepTimerActive = state.sleepTimerActive,
                 onOpenSleepTimer = { sleepSheetShown = true },
+                playbackSpeed = state.playbackSpeed,
+                onOpenPlaybackSpeed = { speedSheetShown = true },
             )
 
             if (queueShown) {
@@ -195,6 +200,17 @@ fun NowPlayingScreen(
                 onDismiss = { sleepSheetShown = false },
             )
         }
+
+        if (speedSheetShown) {
+            PlaybackSpeedSheet(
+                speed = state.playbackSpeed,
+                onPick = { vitesse ->
+                    onSetPlaybackSpeed(vitesse)
+                    speedSheetShown = false
+                },
+                onDismiss = { speedSheetShown = false },
+            )
+        }
     }
 }
 
@@ -207,6 +223,8 @@ private fun PlayerHeader(
     onToggleQueue: () -> Unit,
     sleepTimerActive: Boolean,
     onOpenSleepTimer: () -> Unit,
+    playbackSpeed: Float,
+    onOpenPlaybackSpeed: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -237,6 +255,8 @@ private fun PlayerHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+
+        PlaybackSpeedButton(speed = playbackSpeed, onClick = onOpenPlaybackSpeed)
 
         IconButton(onClick = onOpenSleepTimer) {
             Icon(
@@ -428,6 +448,42 @@ private fun PlayerControls(
             },
             active = repeatMode != RepeatMode.Off,
             onClick = onCycleRepeat,
+        )
+    }
+}
+
+/**
+ * La vitesse de lecture : le bouton **est** son affichage.
+ *
+ * Le chiffre plutôt qu'une icône, contrairement à ses voisins. Une vitesse
+ * active et invisible est un défaut qu'on cherche longtemps — « pourquoi cette
+ * voix est-elle pressée ? » — et aucune icône ne dit ×1,5. Elle tient dans la
+ * même empreinte que les autres boutons de la rangée : `IconButton` et non
+ * `TextButton`, dont la largeur minimale creuserait un trou dans l'alignement.
+ *
+ * La teinte reprend la grammaire du reste de l'en-tête : accentuée quand le
+ * réglage s'écarte de l'ordinaire, éteinte sinon.
+ */
+@Composable
+private fun PlaybackSpeedButton(speed: Float, onClick: () -> Unit) {
+    val libelle = PlaybackSpeed.format(speed)
+    val ordinaire = speed == PlaybackSpeed.NORMALE
+
+    IconButton(
+        onClick = onClick,
+        // Le texte seul se lirait « fois un virgule cinq » sans qu'on sache de
+        // quoi ; la description dit la grandeur, et prend le pas sur lui.
+        modifier = Modifier.semantics { contentDescription = "Vitesse de lecture : $libelle" },
+    ) {
+        Text(
+            text = libelle,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            color = if (ordinaire) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
         )
     }
 }
