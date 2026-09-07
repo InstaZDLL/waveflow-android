@@ -147,14 +147,28 @@ class DataStorePreferencesStore(
      * alors une valeur qu'elle ne connaît pas. Lever ici rendrait
      * l'application inutilisable pour un réglage d'apparence.
      */
-    private fun Preferences.toAppPreferences(): AppPreferences = AppPreferences(
-        theme = this[THEME]
-            ?.let { name -> ThemeChoice.entries.firstOrNull { it.name == name } }
-            ?: AppPreferences().theme,
-        playbackSpeed = this[PLAYBACK_SPEED]
-            ?.let(PlaybackSpeed::borner)
-            ?: AppPreferences().playbackSpeed,
-    )
+    private fun Preferences.toAppPreferences(): AppPreferences {
+        // Lues par la carte et non par `this[cle]`, dont le cast n'est pas
+        // vérifié : une clé portant un autre type que le sien y lève une
+        // `ClassCastException`. Elle surviendrait **après** le `catch`, posé en
+        // amont de cette conversion, et emporterait l'application dans la
+        // portée du ViewModel — pour une préférence. `as?` retombe sur le
+        // défaut sans rien lever, et sans terminer le flux : le fichier reste
+        // relu, si bien qu'un autre réglage change encore.
+        //
+        // Le cas se présente si une version future change le type d'une clé
+        // puis qu'on redescend.
+        val valeurs = asMap()
+
+        return AppPreferences(
+            theme = (valeurs[THEME] as? String)
+                ?.let { name -> ThemeChoice.entries.firstOrNull { it.name == name } }
+                ?: AppPreferences().theme,
+            playbackSpeed = (valeurs[PLAYBACK_SPEED] as? Float)
+                ?.let(PlaybackSpeed::borner)
+                ?: AppPreferences().playbackSpeed,
+        )
+    }
 
     private companion object {
         const val TAG = "PreferencesStore"

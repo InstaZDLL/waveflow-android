@@ -227,6 +227,31 @@ class PreferencesStoreTest {
             },
         )
 
+    @Test
+    fun `une vitesse d'un autre type que le sien ne fait pas tomber la collecte`() = runTest {
+        // Le fichier peut porter une clé au type qu'on n'attend pas : une
+        // version future qui l'aurait changée, puis un retour en arrière. La
+        // lecture par `this[cle]` est un cast non vérifié, et ce qu'elle lève
+        // passerait **après** le `catch`, posé en amont de la conversion.
+        val magasin = magasinFige(preferencesOf(stringPreferencesKey("playback_speed") to "vite"))
+
+        val prefs = magasin.preferences.first()
+
+        assertEquals(PlaybackSpeed.NORMALE, prefs.playbackSpeed, 0f)
+    }
+
+    @Test
+    fun `un theme d'un autre type que le sien ne fait pas tomber la collecte`() = runTest {
+        // Un test à part : les deux lectures sont distinctes, et réunies ici la
+        // première lèverait pour les deux — la seconde n'aurait jamais été
+        // éprouvée. Ce trou-là précède la vitesse de lecture.
+        val magasin = magasinFige(preferencesOf(floatPreferencesKey("theme") to 2f))
+
+        val prefs = magasin.preferences.first()
+
+        assertEquals(ThemeChoice.System, prefs.theme)
+    }
+
     /** Un magasin en lecture seule, sur un contenu écrit à la main. */
     private fun magasinFige(contenu: Preferences): PreferencesStore =
         DataStorePreferencesStore(
