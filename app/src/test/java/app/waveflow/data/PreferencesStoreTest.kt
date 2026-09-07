@@ -197,11 +197,28 @@ class PreferencesStoreTest {
     }
 
     @Test
-    fun `une ecriture en echec ne fait pas tomber l'appelant`() = runTest {
+    fun `une vitesse qui ne s'ecrit pas ne fait pas tomber l'appelant`() = runTest {
         // Les appelants lancent dans la portée de leur ViewModel, qui n'a pas de
         // gestionnaire d'exception : sans cette retenue, un disque plein
         // emporterait l'application entière — pour une vitesse de lecture.
-        val magasin = DataStorePreferencesStore(
+        //
+        // Ne lève pas : c'est tout ce qui est demandé. Le choix est perdu, et
+        // l'écran le dit en restant sur l'ancienne valeur.
+        magasinIncapableDEcrire().setPlaybackSpeed(1.5f)
+    }
+
+    @Test
+    fun `un theme qui ne s'ecrit pas ne fait pas tomber l'appelant`() = runTest {
+        // Un test à part et non deux appels dans le même : la seule assertion
+        // est qu'il ne soit rien levé, et deux appels à la suite verraient le
+        // premier lever pour les deux. La seconde écriture n'aurait alors
+        // jamais été éprouvée.
+        magasinIncapableDEcrire().setTheme(ThemeChoice.Dark)
+    }
+
+    /** Un magasin dont toute écriture échoue, la lecture restant possible. */
+    private fun magasinIncapableDEcrire(): PreferencesStore =
+        DataStorePreferencesStore(
             object : DataStore<Preferences> {
                 override val data: Flow<Preferences> = flow { emit(preferencesOf()) }
                 override suspend fun updateData(
@@ -209,11 +226,6 @@ class PreferencesStoreTest {
                 ): Preferences = throw IOException("disque plein")
             },
         )
-
-        // Ne lève pas : c'est tout ce qui est demandé. Le choix est perdu, et
-        // l'écran le dit en restant sur l'ancienne valeur.
-        magasin.setPlaybackSpeed(1.5f)
-    }
 
     /** Un magasin en lecture seule, sur un contenu écrit à la main. */
     private fun magasinFige(contenu: Preferences): PreferencesStore =

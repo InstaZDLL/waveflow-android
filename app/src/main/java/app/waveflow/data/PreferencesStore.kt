@@ -3,6 +3,7 @@ package app.waveflow.data
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -99,9 +100,8 @@ class DataStorePreferencesStore(
         .catch { emit(emptyPreferences()) }
         .map { it.toAppPreferences() }
 
-    override suspend fun setTheme(choice: ThemeChoice) {
-        dataStore.edit { it[THEME] = choice.name }
-    }
+    override suspend fun setTheme(choice: ThemeChoice) =
+        ecrire("Thème") { it[THEME] = choice.name }
 
     /**
      * La vitesse est bornée à l'écriture **et** à la relecture.
@@ -110,23 +110,32 @@ class DataStorePreferencesStore(
      * de ce que l'appelant apporte, borner en lisant protège l'application de
      * ce que le fichier contient déjà — une version future aux bornes plus
      * larges, ou un fichier abîmé.
+     */
+    override suspend fun setPlaybackSpeed(speed: Float) =
+        ecrire("Vitesse de lecture") { it[PLAYBACK_SPEED] = PlaybackSpeed.borner(speed) }
+
+    /**
+     * Écrit une préférence sans faire tomber celui qui la demande.
      *
      * L'échec d'écriture est retenu ici, comme l'est déjà celui de lecture. Les
      * appelants lancent dans la portée de leur ViewModel, laquelle n'a pas de
      * gestionnaire d'exception : un disque plein y ferait tomber l'application
-     * entière — pour une vitesse de lecture. Le choix est alors simplement
-     * perdu, ce que l'écran dit de lui-même en restant sur l'ancienne valeur,
-     * le flux n'ayant rien émis.
+     * entière — pour un thème ou une vitesse de lecture. Le choix est alors
+     * simplement perdu, ce que l'écran dit de lui-même en restant sur l'ancienne
+     * valeur, le flux n'ayant rien émis.
      *
      * `IOException` et non tout le reste : une annulation traverse elle aussi
      * `edit`, et l'avaler ferait survivre une écriture à la portée qui l'a
      * demandée.
+     *
+     * @param quoi ce qu'on tentait d'enregistrer, pour que le journal dise
+     *   lequel des réglages a été perdu.
      */
-    override suspend fun setPlaybackSpeed(speed: Float) {
+    private suspend fun ecrire(quoi: String, transform: (MutablePreferences) -> Unit) {
         try {
-            dataStore.edit { it[PLAYBACK_SPEED] = PlaybackSpeed.borner(speed) }
+            dataStore.edit(transform)
         } catch (erreur: IOException) {
-            Log.w(TAG, "Vitesse de lecture non enregistrée", erreur)
+            Log.w(TAG, "$quoi non enregistré", erreur)
         }
     }
 
