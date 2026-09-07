@@ -229,7 +229,12 @@ class FakePlaybackController : PlaybackController {
  */
 class FakePreferencesStore(initial: AppPreferences = AppPreferences()) : PreferencesStore {
 
-    private val flux = MutableStateFlow(initial)
+    // Borné dès la construction, et pas seulement à l'écriture : le vrai
+    // magasin borne ce qu'il relit, et un faux plus permissif rendrait vert un
+    // test décrivant une application qui n'existe pas.
+    private val flux = MutableStateFlow(
+        initial.copy(playbackSpeed = PlaybackSpeed.borner(initial.playbackSpeed)),
+    )
 
     override val preferences: Flow<AppPreferences> = flux
 

@@ -196,6 +196,25 @@ class PreferencesStoreTest {
         }
     }
 
+    @Test
+    fun `une ecriture en echec ne fait pas tomber l'appelant`() = runTest {
+        // Les appelants lancent dans la portée de leur ViewModel, qui n'a pas de
+        // gestionnaire d'exception : sans cette retenue, un disque plein
+        // emporterait l'application entière — pour une vitesse de lecture.
+        val magasin = DataStorePreferencesStore(
+            object : DataStore<Preferences> {
+                override val data: Flow<Preferences> = flow { emit(preferencesOf()) }
+                override suspend fun updateData(
+                    transform: suspend (Preferences) -> Preferences,
+                ): Preferences = throw IOException("disque plein")
+            },
+        )
+
+        // Ne lève pas : c'est tout ce qui est demandé. Le choix est perdu, et
+        // l'écran le dit en restant sur l'ancienne valeur.
+        magasin.setPlaybackSpeed(1.5f)
+    }
+
     /** Un magasin en lecture seule, sur un contenu écrit à la main. */
     private fun magasinFige(contenu: Preferences): PreferencesStore =
         DataStorePreferencesStore(

@@ -62,7 +62,14 @@ fun PlaybackSpeedSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            PlaybackSpeed.PROPOSEES.forEach { proposee ->
+            // La vitesse en cours se joint aux propositions si elle n'y est
+            // pas. Le format persisté ne se limite pas à cette liste — une
+            // version future peut offrir un réglage plus fin, et un fichier
+            // rapporté d'ailleurs porter ×1,1. Sans cela la feuille s'ouvrirait
+            // sans rien de coché, à contredire le bouton qui l'a ouverte.
+            val vitesses = (PlaybackSpeed.PROPOSEES + speed).distinct().sorted()
+
+            vitesses.forEach { proposee ->
                 val choisie = proposee == speed
 
                 ListItem(

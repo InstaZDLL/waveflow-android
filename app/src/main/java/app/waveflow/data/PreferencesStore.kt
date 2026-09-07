@@ -110,9 +110,24 @@ class DataStorePreferencesStore(
      * de ce que l'appelant apporte, borner en lisant protège l'application de
      * ce que le fichier contient déjà — une version future aux bornes plus
      * larges, ou un fichier abîmé.
+     *
+     * L'échec d'écriture est retenu ici, comme l'est déjà celui de lecture. Les
+     * appelants lancent dans la portée de leur ViewModel, laquelle n'a pas de
+     * gestionnaire d'exception : un disque plein y ferait tomber l'application
+     * entière — pour une vitesse de lecture. Le choix est alors simplement
+     * perdu, ce que l'écran dit de lui-même en restant sur l'ancienne valeur,
+     * le flux n'ayant rien émis.
+     *
+     * `IOException` et non tout le reste : une annulation traverse elle aussi
+     * `edit`, et l'avaler ferait survivre une écriture à la portée qui l'a
+     * demandée.
      */
     override suspend fun setPlaybackSpeed(speed: Float) {
-        dataStore.edit { it[PLAYBACK_SPEED] = PlaybackSpeed.borner(speed) }
+        try {
+            dataStore.edit { it[PLAYBACK_SPEED] = PlaybackSpeed.borner(speed) }
+        } catch (erreur: IOException) {
+            Log.w(TAG, "Vitesse de lecture non enregistrée", erreur)
+        }
     }
 
     /**
