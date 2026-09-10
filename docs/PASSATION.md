@@ -4,13 +4,14 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-07**, sur `main` = `0d6bd36`.
+Dernière mise à jour : **2026-09-10**, sur `main` = `a4f0377`.
 
 ## État du dépôt
 
-- `main` = `0d6bd36`, arbre propre, **aucune PR ouverte**, aucune branche en
-  cours.
-- **369 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
+- `main` = `a4f0377`. **Une PR ouverte : #50, la boucle A-B** — CI verte,
+  fusionnable, en attente de l'approbation de l'utilisateur.
+- **369 tests verts sur `main`**, 389 sur la #50. CI verte (workflow
+  `Build & test`, ~4 min 45 s).
 - **Aucun avertissement de compilation.** C'est une propriété qu'on tient, pas un
   hasard — voir le piège `textReport` plus bas avant d'en supprimer un.
 - Gradle 9.7.1, AGP 9.4.0, OkHttp 5.5.0, media3 1.11.0.
@@ -22,8 +23,8 @@ Six lots, dans cet ordre :
 
 1. Réglages / DataStore — **fait**
 2. Navigation + identité — **fait**
-3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **il ne reste que
-   la boucle A-B**
+3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **soldé dès que
+   la #50 sera fusionnée**
 4. Transcodage (remonté du 6ᵉ rang : meilleur rapport travail/effet, le serveur
    est déjà prêt)
 5. Paroles
@@ -33,6 +34,27 @@ Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait de
 lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
+
+**PR #50 — la boucle A-B (ouverte, pas encore fusionnée).**
+
+Media3 n'a pas de « répéter entre deux points » : `REPEAT_MODE_ONE` reprend la
+piste entière. On échantillonne donc la position et on rembobine soi-même, dans
+le **service** — on pose une boucle pour repiquer un passage, puis on éteint
+l'écran et on prend son instrument.
+
+`AbLoop` porte les bornes sans connaître le lecteur, comme `SleepTimer`.
+`AbLoopRunner` **reçoit** la position et le rembobinage au lieu de les prendre
+sur un `Player` : c'est ce qui le rend éprouvable sur la JVM, là où Robolectric
+ne peut rien montrer faute de codec. Le sommeil se règle sur ce qui reste avant
+B, borné des deux côtés.
+
+**Le menu de débordement annoncé n'a pas été nécessaire** — voir plus bas, la
+note sur l'en-tête a été corrigée.
+
+**Ce qui n'a pas été fait :** les bornes ne sont pas dessinées sur la barre de
+progression. Seuls la teinte du bouton et sa description disent qu'une boucle
+court. Les marquer demanderait une piste de `Slider` personnalisée ; c'est le
+prolongement naturel si l'usage le réclame.
 
 **PR #48 — la vitesse de lecture.**
 
@@ -132,6 +154,13 @@ comme non éprouvée** ; un test écrit pour elle passait le retrait de la garde
 a été retiré plutôt que de laisser croire la zone couverte. Voir le commentaire
 en fin de `SleepTimerTest.kt`.
 
+**Quatrième occurrence, #50 :** `AbLoopRunner.surveiller` relit l'état après
+chaque sommeil. Le même scénario s'est rejoué à l'identique — test écrit, test
+creux, test retiré, garde documentée. Sous `runTest` c'est `collectLatest` qui
+annule la surveillance avant tout réveil, et le retrait de la garde ne fait
+tomber personne. **Ne pas réessayer d'écrire ce test** sans changer d'outil :
+c'est un vrai dispatcher qu'il faudrait, pas une horloge virtuelle.
+
 ### 3. Le piège `textReport`
 
 `textReport` et `textOutput` sont dépréciés **ensemble** depuis AGP 9. Les
@@ -142,23 +171,62 @@ réimprime — `finalizedBy` et **non** `doLast`, parce qu'une action de tâche 
 sautée quand la tâche échoue, c'est-à-dire précisément quand le lint a trouvé
 une erreur. Ne pas rouvrir.
 
-## La suite : solder le lot 3
+## La suite : le lot 4, le transcodage
 
-La vitesse est faite. Reste la boucle A-B — aucune trace dans
-`PlaybackController`.
+Une fois la #50 fusionnée, le lot 3 est clos et le lot 4 vient — remonté au
+quatrième rang pour son rapport travail/effet, le serveur étant déjà prêt.
 
-### La boucle A-B — tout ce qui reste, et le plus retorse
+**Le terrain est préparé côté Android.** `MediaItemMapper.cacheKeyOf` prend déjà
+un format et un débit, et fait entrer le rendu entier dans la clé de cache : le
+serveur sert la même piste en plusieurs versions, et les confondre rendrait un
+Opus à 64 kbit/s à qui demande l'original. Le client ne demande aujourd'hui que
+`DEFAULT_FORMAT` (`raw`), sans débit. Lire la KDoc de `cacheKeyOf` avant de
+brancher quoi que ce soit : elle dit pourquoi le débit est omis de la clé quand
+il ne décrit aucun rendu.
 
-Media3 **n'a pas** de « répéter entre deux points ». Il faut échantillonner la
-position et rembobiner au passage de B, ce qui place le mécanisme **dans le
-service**, pas dans l'interface. Ce que Robolectric peut en prouver est déjà
-borné : `isPlaying` à `true` et l'échantillonnage de position restent hors de
-portée faute de codec.
+**L'en-tête du lecteur est plein**, et le restera : quatre boutons — réduire,
+vitesse, veille, file — et la colonne du titre déjà serrée sur un écran étroit.
 
-**L'en-tête du lecteur est plein.** Quatre boutons y tiennent déjà — réduire,
-vitesse, veille, file — et la colonne du titre s'en trouve serrée sur un écran
-étroit. L'A-B n'y entrera pas sans un menu de débordement qui regrouperait
-veille, vitesse et bornes. C'est le moment de le poser, pas après.
+La #50 y échappe sans menu de débordement : le bouton A-B vit **entre les deux
+durées**, sous la barre de progression, parce que A et B sont des positions et
+se posent en regardant celle qui défile. Le réflexe à garder : avant de pousser
+un cinquième bouton dans l'en-tête, chercher si le réglage n'a pas une place
+plus juste ailleurs.
+
+## Trois pièges de méthode, payés cette session
+
+Ils ne sont pas dans le code : ils sont dans la façon de le vérifier.
+
+### Le faux doit se comporter comme le vrai
+
+Le faux `seekTo` de `AbLoopRunnerTest` notait le rembobinage **sans déplacer la
+position**. La surveillance retrouvait donc la lecture au-delà de B à chaque
+réveil et rembobinait sans fin ; trois tests comptaient des tours que le vrai
+lecteur ne fait pas. Même famille que le bornage de `FakePreferencesStore`,
+relevé en revue sur la #48 : un faux plus permissif — ou plus inerte — que
+l'original rend verts des tests qui décrivent une application qui n'existe pas.
+
+### Une assertion « rien n'est levé » ne supporte qu'un seul appel
+
+Deux appels à la suite, et le premier lève pour les deux : le second n'est
+jamais éprouvé, et sa protection peut disparaître sans que rien ne tombe.
+Rencontré en couvrant `setTheme` et `setPlaybackSpeed` du même filet. Sixième
+forme de test creux du dépôt.
+
+### Un script qui applique puis défait un retrait
+
+Deux fois il a abîmé l'arbre, de deux façons :
+
+1. **Un motif de remplacement vide** : `str.replace("", ligne, 1)` réinsère en
+   **tête de fichier**, silencieusement. Toujours remplacer par un marqueur non
+   vide (`// RETRAIT`).
+2. **Un motif de restauration trop générique** : rendre `courant` là où il
+   apparaît vingt fois écrase la première occurrence venue. Le motif du retour
+   doit être aussi unique que celui de l'aller.
+
+Le contrôle qui les a rattrapés : après une campagne, relancer Gradle et
+vérifier qu'il annonce tout **`UP-TO-DATE`**. S'il recompile, un fichier n'est
+pas revenu à l'identique.
 
 ## En attente d'une décision de l'utilisateur
 
@@ -179,7 +247,7 @@ Reste aussi **la validation sur appareil** de l'arbre Android Auto : il n'a
 jamais été vu dans une vraie voiture ni sur le DHU, tout ce qui est consigné
 vient de Robolectric.
 
-## Un compromis à solder dans le lot 3 ou après
+## Un compromis qui traîne, à solder quand l'occasion viendra
 
 Le catalogue serveur est un **sous-onglet** de la bibliothèque, à côté de
 Titres/Albums/Artistes/Playlists. Ce n'est pas le filtre de source décidé le
