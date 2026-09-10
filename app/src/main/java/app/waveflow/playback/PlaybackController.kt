@@ -112,6 +112,16 @@ interface PlaybackController {
 
     fun seekTo(positionMs: Long)
 
+    /**
+     * La position de lecture, lue à l'instant de la demande.
+     *
+     * [PlaybackState.positionMs] ne suffit pas pour poser une borne de boucle :
+     * il est échantillonné toutes les demi-secondes, ce qui ajouterait au temps
+     * de réaction de l'utilisateur un quart de seconde d'erreur moyenne. Sur un
+     * passage qu'on repique à l'instrument, cela s'entend.
+     */
+    fun currentPositionMs(): Long
+
     fun toggleShuffle()
 
     /** Fait tourner le mode de répétition : Off -> All -> One -> Off. */

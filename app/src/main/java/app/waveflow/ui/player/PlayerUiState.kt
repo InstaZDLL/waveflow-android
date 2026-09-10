@@ -1,6 +1,7 @@
 package app.waveflow.ui.player
 
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.playback.AbLoopState
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
 
@@ -19,6 +20,10 @@ import app.waveflow.playback.RepeatMode
  *   non du lecteur : le flux des préférences émet au moment du choix, quand
  *   celui du lecteur, lui, ne se rafraîchit qu'aux tics de position — donc plus
  *   du tout en pause, où l'on règle pourtant volontiers sa vitesse.
+ * @property abLoop où en est la pose des bornes de boucle. Elle vient de son
+ *   propre flux, pour la même raison que la vitesse : on pose une borne, on
+ *   met en pause pour reprendre son instrument, et l'état du lecteur cesse
+ *   alors d'émettre.
  */
 data class PlayerUiState(
     val track: PlayingTrack? = null,
@@ -32,6 +37,7 @@ data class PlayerUiState(
     val queueIndex: Int = -1,
     val sleepTimerActive: Boolean = false,
     val playbackSpeed: Float = PlaybackSpeed.NORMALE,
+    val abLoop: AbLoopState = AbLoopState.Off,
 ) {
 
     /** Ce qui reste à jouer après le morceau courant. */

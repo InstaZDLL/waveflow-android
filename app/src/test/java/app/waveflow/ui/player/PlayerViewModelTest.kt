@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.data.PreferencesStore
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.playback.AbLoop
+import app.waveflow.playback.AbLoopState
 import app.waveflow.playback.PlaybackFailure
 import app.waveflow.playback.PlaybackState
 import app.waveflow.playback.PlayingTrack
@@ -44,6 +46,18 @@ class PlayerViewModelTest {
     private val remoteSongs = listOf(remoteSong("a"), remoteSong("b"), remoteSong("c"))
     private val controller = FakePlaybackController()
     private val preferences = FakePreferencesStore()
+    private val abLoop = AbLoop()
+
+    /** Une piste chargée dans le lecteur, à laquelle des bornes peuvent tenir. */
+    private val piste = PlayingTrack(
+        mediaId = "remote:a",
+        title = "Résonance",
+        artist = "Bruit de Fond",
+        album = "Écho",
+        artworkUri = null,
+        localSongId = null,
+        source = TrackSource.Remote,
+    )
 
     /**
      * Le ViewModel sous test, muni d'une minuterie qui suit l'horloge virtuelle.
@@ -58,6 +72,7 @@ class PlayerViewModelTest {
         playbackController = controller,
         sleepTimer = SleepTimer(backgroundScope) { testScheduler.currentTime },
         preferencesStore = preferencesStore,
+        abLoop = abLoop,
     )
 
     @Test
@@ -362,5 +377,75 @@ class PlayerViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1.75f, preferences.playbackSpeed, 0f)
+    }
+
+    @Test
+    fun `poser une borne lit la position du lecteur, pas celle de l'etat`() = runTest {
+        // L'état est échantillonné toutes les demi-secondes : poser A dessus
+        // ajouterait au temps de réaction un quart de seconde d'erreur moyenne,
+        // ce qui s'entend sur un passage qu'on repique à l'instrument.
+        val viewModel = playerViewModel()
+        controller.emit(PlaybackState(current = piste, positionMs = 10_000L))
+        controller.currentPosition = 12_345L
+
+        viewModel.markAbLoop()
+
+        assertEquals(AbLoopState.Started(piste.mediaId, 12_345L), abLoop.state.value)
+    }
+
+    @Test
+    fun `sans piste courante il n'y a rien a borner`() = runTest {
+        // Les bornes appartiennent à un morceau ; sans lui elles ne désignent
+        // rien, et une boucle posée là suivrait la première piste venue.
+        val viewModel = playerViewModel()
+        controller.currentPosition = 12_345L
+
+        viewModel.markAbLoop()
+
+        assertEquals(AbLoopState.Off, abLoop.state.value)
+    }
+
+    @Test
+    fun `la boucle apparait dans l'etat alors que le lecteur n'emet plus rien`() = runTest {
+        // Même piège que la vitesse : on pose une borne, on met en pause pour
+        // reprendre son instrument, et `PlaybackState` cesse d'émettre. Le
+        // contrôleur reste ici muet après la pose — si l'état tenait la boucle
+        // de lui, rien ne bougerait.
+        val viewModel = playerViewModel()
+        controller.emit(PlaybackState(current = piste))
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.state.collect {} }
+        advanceUntilIdle()
+
+        controller.currentPosition = 10_000L
+        viewModel.markAbLoop()
+        // Deux instants distincts : deux fois le même ne délimiterait rien et
+        // rouvrirait la pose.
+        controller.currentPosition = 25_000L
+        viewModel.markAbLoop()
+        advanceUntilIdle()
+
+        assertEquals(
+            AbLoopState.Armed(piste.mediaId, 10_000L, 25_000L),
+            viewModel.state.value.abLoop,
+        )
+
+        job.cancel()
+    }
+
+    @Test
+    fun `effacer la boucle l'efface de l'etat`() = runTest {
+        val viewModel = playerViewModel()
+        controller.emit(PlaybackState(current = piste))
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.state.collect {} }
+        advanceUntilIdle()
+
+        viewModel.markAbLoop()
+        advanceUntilIdle()
+        viewModel.clearAbLoop()
+        advanceUntilIdle()
+
+        assertEquals(AbLoopState.Off, viewModel.state.value.abLoop)
+
+        job.cancel()
     }
 }

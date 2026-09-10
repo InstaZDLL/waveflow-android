@@ -36,6 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.waveflow.model.PlaybackSpeed
 import app.waveflow.model.orUnknownArtist
+import app.waveflow.playback.AbLoopState
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
 import app.waveflow.ui.components.Artwork
@@ -85,6 +87,7 @@ fun NowPlayingScreen(
     onCancelSleepTimer: () -> Unit,
     onSleepTimerRemainingMs: () -> Long?,
     onSetPlaybackSpeed: (Float) -> Unit,
+    onMarkAbLoop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Local et non remonté : voir la file est une façon de regarder le lecteur,
@@ -167,6 +170,8 @@ fun NowPlayingScreen(
                 durationMs = state.durationMs,
                 trackKey = track.mediaId,
                 onSeek = onSeek,
+                abLoop = state.abLoop,
+                onMarkAbLoop = onMarkAbLoop,
             )
 
             Spacer(Modifier.height(8.dp))
@@ -329,6 +334,8 @@ private fun SeekBar(
     durationMs: Long,
     trackKey: String,
     onSeek: (Long) -> Unit,
+    abLoop: AbLoopState,
+    onMarkAbLoop: () -> Unit,
 ) {
     // Pendant un glissement, la position affichée suit le doigt et non le
     // lecteur ; remise à zéro dès qu'on change de morceau.
@@ -363,6 +370,12 @@ private fun SeekBar(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            // Entre les deux durées, et non dans l'en-tête : A et B sont des
+            // positions, et se posent en regardant celle qui défile. L'en-tête
+            // est par ailleurs plein.
+            AbLoopButton(abLoop = abLoop, onClick = onMarkAbLoop)
+
             Text(
                 text = if (hasDuration) formatDuration(durationMs) else "--:--",
                 style = MaterialTheme.typography.labelMedium,
@@ -480,6 +493,50 @@ private fun PlaybackSpeedButton(speed: Float, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelLarge,
             maxLines = 1,
             color = if (ordinaire) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+        )
+    }
+}
+
+/**
+ * La boucle A-B : un seul bouton pour les trois temps.
+ *
+ * D'abord A, puis B, puis efface — c'est ce qu'on attend de quelque chose qu'on
+ * presse en écoutant, sans quitter la musique des yeux. Le libellé dit où en est
+ * la pose plutôt que ce que fera le prochain appui : « A-… » se lit comme une
+ * phrase laissée en suspens, ce qu'est précisément une boucle dont B manque.
+ *
+ * Une boucle active et muette serait le même défaut que la vitesse invisible —
+ * on chercherait longtemps pourquoi le morceau se répète. D'où la teinte, et une
+ * description qui donne les deux bornes.
+ */
+@Composable
+private fun AbLoopButton(abLoop: AbLoopState, onClick: () -> Unit) {
+    val libelle = when (abLoop) {
+        is AbLoopState.Started -> "A-…"
+        else -> "A-B"
+    }
+
+    val description = when (abLoop) {
+        AbLoopState.Off -> "Boucle A-B : poser le début"
+        is AbLoopState.Started -> "Boucle A-B : poser la fin"
+        is AbLoopState.Armed ->
+            "Boucle active de ${formatDuration(abLoop.startMs)} " +
+                "à ${formatDuration(abLoop.endMs)} — appuyer pour l'effacer"
+    }
+
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.semantics { contentDescription = description },
+    ) {
+        Text(
+            text = libelle,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            color = if (abLoop == AbLoopState.Off) {
                 MaterialTheme.colorScheme.onSurfaceVariant
             } else {
                 MaterialTheme.colorScheme.primary

@@ -110,6 +110,7 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(historyListener(container.playHistoryRepository))
         observeSleepTimer(container.sleepTimer, player)
         observePlaybackSpeed(container.preferencesStore, player)
+        observeAbLoop(container.abLoop, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
@@ -154,6 +155,36 @@ class PlaybackService : MediaLibraryService() {
                 .distinctUntilChanged()
                 .collect { player.setPlaybackSpeed(it) }
         }
+    }
+
+    /**
+     * Fait tourner la lecture entre les deux bornes, et efface celles-ci quand
+     * on change de piste.
+     *
+     * Le rembobinage vit ici et non dans l'interface : Media3 n'ayant pas de
+     * « répéter entre deux points », il faut échantillonner la position, ce que
+     * seul le porteur du lecteur peut faire — et qu'il doit faire écran éteint.
+     *
+     * Voir [AbLoopRunner] pour le pas d'échantillonnage, et pourquoi la position
+     * lui est passée plutôt que prise sur le lecteur.
+     */
+    private fun observeAbLoop(loop: AbLoop, player: Player) {
+        AbLoopRunner(
+            scope = artworkScope,
+            loop = loop,
+            positionMs = { player.currentPosition },
+            seekTo = player::seekTo,
+        ).start()
+
+        player.addListener(
+            object : Player.Listener {
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    // A et B désignent des instants d'un morceau donné : passer
+                    // au suivant les vide de leur sens.
+                    loop.clearIfOtherTrack(mediaItem?.mediaId)
+                }
+            },
+        )
     }
 
     /**

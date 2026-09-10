@@ -150,6 +150,9 @@ class Media3PlaybackController(
         controller?.seekTo(positionMs.coerceAtLeast(0L))
     }
 
+    override fun currentPositionMs(): Long =
+        controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
+
     override fun toggleShuffle() {
         val ctrl = controller ?: return
         ctrl.shuffleModeEnabled = !ctrl.shuffleModeEnabled

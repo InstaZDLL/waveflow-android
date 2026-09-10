@@ -203,6 +203,11 @@ class FakePlaybackController : PlaybackController {
 
     override fun seekTo(positionMs: Long) = Unit
 
+    /** La position que le test veut voir lue au moment d'un geste. */
+    var currentPosition = 0L
+
+    override fun currentPositionMs(): Long = currentPosition
+
     override fun toggleShuffle() = Unit
 
     override fun cycleRepeatMode() = Unit
