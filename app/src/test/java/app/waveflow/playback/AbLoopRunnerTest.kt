@@ -1,6 +1,7 @@
 package app.waveflow.playback
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -28,6 +29,18 @@ class AbLoopRunnerTest {
     /** La position de lecture, que le test avance à la main. */
     private var position = 0L
 
+    /** La lecture avance, sauf quand un test dit le contraire. */
+    private val enLecture = MutableStateFlow(true)
+
+    /**
+     * Combien de fois la position a été demandée.
+     *
+     * C'est la seule trace observable des réveils : à la pause, ce qu'on veut
+     * n'est pas « aucun rembobinage » — ce serait vrai d'une boucle qui tourne
+     * à vide — mais **plus aucun échantillon**.
+     */
+    private var lectures = 0
+
     /**
      * Le rembobinage **déplace la position**, comme le ferait le lecteur.
      *
@@ -39,7 +52,11 @@ class AbLoopRunnerTest {
     private fun TestScope.runner() = AbLoopRunner(
         scope = backgroundScope,
         loop = loop,
-        positionMs = { position },
+        isPlaying = enLecture,
+        positionMs = {
+            lectures++
+            position
+        },
         seekTo = {
             seeks += it
             position = it
@@ -133,6 +150,47 @@ class AbLoopRunnerTest {
         advanceTimeBy(5_000L)
 
         assertTrue(seeks.isEmpty())
+    }
+
+    @Test
+    fun `en pause, plus rien n'est echantillonne`() = runTest {
+        // Une position à l'arrêt reste éternellement sous B. Sans cette garde,
+        // la surveillance réveillerait le service toutes les 500 ms — et toutes
+        // les 50 ms si l'on met en pause juste avant la borne — pour constater
+        // à chaque fois que rien n'a bougé. Une pause dure ce que dure une
+        // pause ; le coût, lui, ne s'arrêterait pas.
+        runner()
+        armer(10_000L, 25_000L)
+        runCurrent()
+        position = 24_000L
+        advanceTimeBy(2_000L)
+
+        enLecture.value = false
+        runCurrent()
+        val avantLaPause = lectures
+        advanceTimeBy(60_000L)
+
+        assertEquals("une minute de pause ne doit coûter aucun réveil", avantLaPause, lectures)
+    }
+
+    @Test
+    fun `la reprise remet la boucle en marche`() = runTest {
+        // Le pendant du test précédent : une garde qui ne se rouvrirait jamais
+        // arrêterait aussi bien l'échantillonnage, et la boucle avec.
+        runner()
+        armer(10_000L, 25_000L)
+        runCurrent()
+
+        enLecture.value = false
+        runCurrent()
+        position = 30_000L
+        advanceTimeBy(5_000L)
+        assertTrue("en pause, la lecture n'est pas ramenée en A", seeks.isEmpty())
+
+        enLecture.value = true
+        advanceTimeBy(600L)
+
+        assertEquals(listOf(10_000L), seeks)
     }
 
     @Test

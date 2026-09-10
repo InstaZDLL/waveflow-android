@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -169,9 +170,15 @@ class PlaybackService : MediaLibraryService() {
      * lui est passée plutôt que prise sur le lecteur.
      */
     private fun observeAbLoop(loop: AbLoop, player: Player) {
+        // Le lecteur ne publie pas son état, il le notifie : on le tient donc
+        // ici, pour le passer au surveillant sous la même forme que le reste —
+        // reçu, et non pris sur le `Player`.
+        val enLecture = MutableStateFlow(player.isPlaying)
+
         AbLoopRunner(
             scope = artworkScope,
             loop = loop,
+            isPlaying = enLecture,
             positionMs = { player.currentPosition },
             seekTo = player::seekTo,
         ).start()
@@ -182,6 +189,12 @@ class PlaybackService : MediaLibraryService() {
                     // A et B désignent des instants d'un morceau donné : passer
                     // au suivant les vide de leur sens.
                     loop.clearIfOtherTrack(mediaItem?.mediaId)
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    // Échantillonner une position à l'arrêt réveillerait le
+                    // service sans fin pour constater qu'elle n'a pas bougé.
+                    enLecture.value = isPlaying
                 }
             },
         )
