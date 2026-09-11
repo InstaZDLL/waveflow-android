@@ -4,21 +4,25 @@ Règles arrêtées **avant le code**, à la demande de l'utilisateur (11/09). Ch
 règle dit ce qu'on doit observer, pour pouvoir s'éprouver par un test. Une règle
 qui change se change ici d'abord.
 
+Ce qui est dit de Media3 a été lu dans les sources de la 1.11.0.
+
 ## Le problème
 
 Un transcodage en direct n'a ni longueur ni plages : le serveur répond
 `Accept-Ranges: none` et refuse en 416 toute plage qui ne part pas du premier
 octet (`waveflow-server`, `src/media.rs`). ExoPlayer, lui, se déplace par plages.
 
-Ce qui en découle aujourd'hui, lu dans le code :
+Ce qui en découle aujourd'hui :
 
-- **Le curseur est désactivé.** Sans longueur, ExoPlayer ne connaît pas la durée ;
-  `Media3PlaybackController` publie alors `durationMs = 0`, et le curseur de
-  `NowPlayingScreen` porte `enabled = hasDuration`.
+- **Media3 tient la piste pour non déplaçable, et sans durée.** Faute de longueur,
+  l'extracteur Ogg pose un `UnseekableOggSeeker`, dont la `SeekMap` est
+  `Unseekable(C.TIME_UNSET)` (`StreamReader`).
+- **Le curseur est désactivé.** Sans durée, `Media3PlaybackController` publie
+  `durationMs = 0`, et le curseur de `NowPlayingScreen` porte
+  `enabled = hasDuration`.
 - **La notification et la voiture ne peuvent pas se déplacer non plus.**
   `Util.getAvailableCommands` n'accorde `COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM` qu'à
-  une piste déplaçable, et un saut venu d'un contrôleur sans cette commande est
-  ignoré.
+  une piste déplaçable.
 
 Le serveur offre l'autre voie : `offset_ms`, un décalage **temporel**. Il relance
 ffmpeg avec `-ss` et sert le reste du morceau à partir de là. Il le refuse sur
@@ -35,7 +39,9 @@ Vocabulaire :
 - **flux** : ce qu'ExoPlayer lit réellement ;
 - **segment** : un flux demandé avec `offset_ms > 0` ;
 - **décalage** : l'instant du morceau où le flux commence, `0` hors segment ;
-- **position logique** : décalage + position dans le flux.
+- **position logique** : décalage + position dans le flux ;
+- **relance** : remplacer le flux de la piste courante par un autre, à un autre
+  décalage.
 
 ## Les règles
 
@@ -53,26 +59,38 @@ déduits par Media3. Avec `ForwardingPlayer`, il faudrait corriger chaque getter
 **et** chaque événement, et l'oubli d'un seul ramène 0:00 dans la notification —
 le ticket #135 de Resonus.
 
+Mais `ForwardingSimpleBasePlayer` **transmet** beaucoup tel quel, et ce qu'il
+transmet raisonne sur l'ExoPlayer. R5 et R13 disent ce qui doit être réécrit.
+
 ### Ce que voit Android
 
 **R2. Position.** Position de contenu et position tamponnée sont logiques :
 décalage + position dans le flux.
 
 **R3. Durée.** La durée exposée est celle du catalogue quand un segment joue, ou
-quand le flux n'en annonce aucune. `RemoteSong.durationMs` existe mais
-`toMediaItem()` ne la transmet pas : elle voyagera dans
-`MediaMetadata.durationMs`. Un segment annonce, au mieux, la durée de ce qui
-reste.
+quand le flux n'en annonce aucune — c'est le cas de tout transcodage en direct.
+`RemoteSong.durationMs` existe mais `toMediaItem()` ne la transmet pas : elle
+voyagera dans `MediaMetadata.durationMs`.
 
 **R4. Déplaçable.** Une piste distante transcodée est annoncée déplaçable, pour
 que la commande de saut existe pour tous les contrôleurs — application,
 notification, Android Auto.
 
 **R5. La relance n'est pas un changement de piste.** Ni la session ni les
-écouteurs du service ne voient de transition. `ListeningCounter.trackChanged`
-remet son compte à zéro à **chaque** appel, même pour la même piste : une
-relance vue comme une transition ferait compter deux fois un morceau déjà
-écouté.
+écouteurs du service ne voient de transition.
+
+Deux raisons de l'écrire :
+
+- `ListeningCounter.trackChanged` remet son compte à zéro à **chaque** appel,
+  même pour la même piste. Une relance vue comme une transition ferait compter
+  deux fois un morceau déjà écouté.
+- Relancer, c'est remplacer la piste courante de l'ExoPlayer par un marqueur
+  différent. `ExoPlayerImpl.replaceMediaItems` ne sait pas mettre à jour une
+  source dont l'URI change : il retire l'ancienne et ajoute la nouvelle, d'où un
+  **nouvel identifiant de piste** et un saut de raison `DISCONTINUITY_REASON_REMOVE`.
+  `SimpleBasePlayer` déduit les transitions de ces identifiants. L'enveloppe
+  garde donc à la piste relancée **l'identifiant qu'elle avait**, et présente le
+  saut comme un déplacement (`DISCONTINUITY_REASON_SEEK`) à la position logique.
 
 **R6. Pendant la relance, la position est déjà la cible.** Le décalage est posé
 avant de relancer : le curseur ne revient pas en arrière le temps que le flux
@@ -112,9 +130,13 @@ sous une clé qui porte le décalage — pas dans cette première version.
 segment. Laisser `REPEAT_MODE_ONE` à ExoPlayer pendant un segment rejouerait ses
 dernières secondes sans fin — le piège payé par Resonus (`applyLoop`).
 
-**R13. « Précédent » décide sur la position logique.** Recommencer ou reculer
-d'une piste se juge sur `maxSeekToPreviousPositionMs` et la position logique : à
-2:13 d'un segment commencé à 2:10, on est à 2:13, pas à 0:03. Revenir au début,
+**R13. « Précédent », « reculer » et « avancer » jugent sur la position
+logique.** `ForwardingSimpleBasePlayer.handleSeek` les transmet tels quels
+(`seekToPrevious`, `seekBack`, `seekForward`), et l'ExoPlayer les calcule sur sa
+position **brute** : à 2:13 d'un segment commencé à 2:10, il se croirait à 0:03
+et reculerait d'une piste au lieu de revenir au début. L'enveloppe les réécrit en
+sauts calculés sur la position logique — `maxSeekToPreviousPositionMs` pour
+« précédent », les incréments pour « reculer » et « avancer ». Revenir au début,
 c'est un décalage `0`.
 
 **R14. Changer de piste remet le décalage à zéro.** Un segment n'est jamais
@@ -143,12 +165,12 @@ saut de l'enveloppe, et non par une position de départ posée sur l'ExoPlayer.
 
 Robolectric ne décode pas l'Opus : aucune piste n'y joue, `isPlaying` n'y est
 jamais vrai. L'enveloppe s'éprouve donc face à un **lecteur enveloppé factice**
-dont on pilote l'état : piste déplaçable ou non, position, durée, fin de flux. Les
-règles R2 à R14 s'y vérifient une à une. R1 et R5 se vérifient en plus sur la
-vraie chaîne service + `MediaController` (voir `PlaybackServiceQualityTest`) :
-c'est la session qui doit voir la position logique, pas seulement l'enveloppe.
-R10 et R11 s'éprouvent sur la chaîne de lecture réelle face à un `MockWebServer`,
-comme `RemoteMediaCacheTest`.
+dont on pilote l'état : piste déplaçable ou non, position, durée, identifiants,
+fin de flux. Les règles R2 à R14 s'y vérifient une à une. R1 et R5 se vérifient
+en plus sur la vraie chaîne service + `MediaController` (voir
+`PlaybackServiceQualityTest`) : c'est la session qui doit voir la position
+logique, pas seulement l'enveloppe. R10 et R11 s'éprouvent sur la chaîne de
+lecture réelle face à un `MockWebServer`, comme `RemoteMediaCacheTest`.
 
 Le jeu réel — un saut entendu au bon endroit, la notification et la voiture qui
 suivent — reste **à valider sur appareil**.
