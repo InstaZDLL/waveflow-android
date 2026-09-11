@@ -121,6 +121,12 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
 
             COMMAND_SEEK_TO_MEDIA_ITEM -> allerA(mediaItemIndex, positionMs)
 
+            // Le début du morceau est un décalage `0`, pas le début du flux.
+            // C'est ce que demande un appui sur la ligne en cours de la file :
+            // `seekToDefaultPosition`, que l'ExoPlayer ramènerait au début du
+            // segment.
+            COMMAND_SEEK_TO_DEFAULT_POSITION -> allerA(mediaItemIndex, C.TIME_UNSET)
+
             // Recommencer ou reculer d'une piste : tranché sur la position
             // logique. Reculer d'une piste reste à l'ExoPlayer, qui connaît
             // l'ordre aléatoire.
@@ -197,10 +203,18 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
         if (segmentRepete) {
             segmentRepete = false
             val courant = player.currentMediaItemIndex
-            val fenetre = player.currentTimeline.getWindow(courant, Timeline.Window())
-            if ((decalages[fenetre.uid] ?: 0L) > 0L) {
-                relancer(courant, fenetre, 0L)
-                change = true
+            val courante = player.currentTimeline
+            // Bornée comme dans [allerA] : la file peut s'être vidée entre la
+            // discontinuité et cette salve d'événements, et il ne reste alors
+            // aucune fenêtre à lire. Garde **non éprouvée** — la fenêtre est
+            // trop étroite pour qu'un test la vise —, mais une exception ici
+            // emporterait le service de lecture.
+            if (courant != C.INDEX_UNSET && courant < courante.windowCount) {
+                val fenetre = courante.getWindow(courant, Timeline.Window())
+                if ((decalages[fenetre.uid] ?: 0L) > 0L) {
+                    relancer(courant, fenetre, 0L)
+                    change = true
+                }
             }
         }
 

@@ -335,6 +335,22 @@ class TranscodeSeekingPlayerTest {
     }
 
     @Test
+    fun `rejouer la piste courante depuis la file repart du debut du morceau`() {
+        // `seekToDefaultPosition` : ce que fait un appui sur la ligne en cours
+        // dans la file. Laissé à l'ExoPlayer, il revient au début du flux — le
+        // milieu du morceau — en gardant le décalage.
+        jouer(transcode())
+        lecteur.seekTo(133_000L)
+        ecouler()
+
+        lecteur.seekToDefaultPosition(0)
+        ecouler()
+
+        assertEquals(0L, faux.dernierDecalage)
+        assertEquals(0L, lecteur.currentPosition)
+    }
+
+    @Test
     fun `une position inconnue reste inconnue`() {
         // R2 : lui ajouter le décalage publierait un instant plausible et faux.
         assertEquals(C.TIME_UNSET, logicalPositionMs(C.TIME_UNSET, 133_000L, DUREE_MS))
