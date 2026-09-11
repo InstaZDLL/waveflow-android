@@ -104,6 +104,8 @@ Deux raisons de l'écrire :
   `SimpleBasePlayer` déduit les transitions de ces identifiants. L'enveloppe
   garde donc à la piste relancée **l'identifiant qu'elle avait**, et présente le
   saut comme un déplacement (`DISCONTINUITY_REASON_SEEK`) à la position logique.
+  Rattacher l'identifiant juste après le remplacement suffit : Media3 livre
+  `onEvents` par un message posté, et l'état n'est relu qu'ensuite.
 
 **R6. Pendant la relance, la position est déjà la cible.** Le décalage est posé
 avant de relancer : le curseur ne revient pas en arrière le temps que le flux

@@ -286,6 +286,55 @@ class TranscodeSeekingPlayerTest {
     }
 
     @Test
+    fun `repeter un titre joue depuis un segment repart du debut du morceau`() {
+        // R12 : laisser l'ExoPlayer répéter le flux rejouerait les dernières
+        // secondes du morceau sans fin.
+        faux.dureeUs = { item ->
+            if (streamOffsetOfRemoteUri(item.localConfiguration!!.uri) > 0L) Util.msToUs(112_000L) else C.TIME_UNSET
+        }
+        jouer(transcode())
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+        lecteur.seekTo(133_000L)
+        ecouler()
+
+        faux.finirLeFlux()
+
+        assertEquals(0L, faux.dernierDecalage)
+        assertEquals(0L, lecteur.currentPosition)
+    }
+
+    @Test
+    fun `repeter un titre joue depuis le debut ne relance rien`() {
+        // Le pendant du précédent : sans segment, la répétition de l'ExoPlayer
+        // est la bonne, et la remplacer couperait le son pour rien.
+        faux.dureeUs = { Util.msToUs(DUREE_MS) }
+        jouer(transcode())
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+
+        faux.finirLeFlux()
+
+        assertEquals(0, faux.remplacements.size)
+    }
+
+    @Test
+    fun `une piste relancee qu'on quitte retrouve son marqueur nu`() {
+        // R14 : sinon, y revenir — piste suivante, file rejouée — la ferait
+        // repartir en plein milieu.
+        faux.dureeUs = { item ->
+            if (streamOffsetOfRemoteUri(item.localConfiguration!!.uri) > 0L) Util.msToUs(112_000L) else C.TIME_UNSET
+        }
+        jouer(transcode("a"), transcode("b"))
+        lecteur.seekTo(133_000L)
+        ecouler()
+
+        faux.finirLeFlux()
+
+        assertEquals("on est passé au morceau suivant", 1, faux.currentMediaItemIndex)
+        assertEquals(0, faux.remplacements.last().first)
+        assertEquals(0L, faux.dernierDecalage)
+    }
+
+    @Test
     fun `une position inconnue reste inconnue`() {
         // R2 : lui ajouter le décalage publierait un instant plausible et faux.
         assertEquals(C.TIME_UNSET, logicalPositionMs(C.TIME_UNSET, 133_000L, DUREE_MS))
@@ -347,6 +396,23 @@ private class FauxLecteur : SimpleBasePlayer(Looper.getMainLooper()) {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    /**
+     * Joue le flux courant jusqu'au bout, puis enchaîne comme le vrai lecteur :
+     * la même piste si elle se répète, la suivante sinon.
+     *
+     * C'est le dépassement de la durée qui fait qualifier la discontinuité de
+     * transition automatique, et non un drapeau posé à la main.
+     */
+    fun finirLeFlux() {
+        val courante = pistes[index]
+        positionMs = Util.usToMs(courante.dureeUs)
+        invalidateState()
+        if (repetition != Player.REPEAT_MODE_ONE) index += 1
+        positionMs = 0L
+        invalidateState()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
     override fun getState(): State {
         val courante = pistes.getOrNull(index)
         val commandes = Player.Commands.Builder().addAllCommands().apply {
@@ -362,9 +428,17 @@ private class FauxLecteur : SimpleBasePlayer(Looper.getMainLooper()) {
             .setPlaybackState(if (pistes.isEmpty()) STATE_IDLE else STATE_READY)
             .setPlayWhenReady(true, PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setShuffleModeEnabled(melange)
+            .setRepeatMode(repetition)
             .setMaxSeekToPreviousPositionMs(3_000L)
             .setSeekBackIncrementMs(5_000L)
             .build()
+    }
+
+    private var repetition = Player.REPEAT_MODE_OFF
+
+    override fun handleSetRepeatMode(repeatMode: Int): ListenableFuture<*> {
+        repetition = repeatMode
+        return Futures.immediateVoidFuture()
     }
 
     private fun piste(item: MediaItem) = Piste(item, deplacable(item), dureeUs(item))

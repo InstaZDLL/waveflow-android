@@ -35,23 +35,35 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
     /** Le décalage du flux de chaque fenêtre relancée ; absente, elle part du début. */
     private val decalages = HashMap<Any, Long>()
 
-    /**
-     * Vrai le temps d'une relance.
-     *
-     * L'ExoPlayer publie ses événements pendant le remplacement même, avec un
-     * identifiant de piste que l'enveloppe ne sait pas encore rattacher à
-     * l'ancien : un état lu à cet instant annoncerait un changement de piste.
-     * On rend donc le dernier état cohérent jusqu'à ce que le lien soit posé.
-     */
-    private var enRelance = false
-    private var dernierEtat: State? = null
-
     /** La cible d'une relance, à annoncer comme un saut à la place de la discontinuité qu'elle provoque. */
     private var sautAnnonce: Long? = null
 
-    override fun getState(): State {
-        dernierEtat?.takeIf { enRelance }?.let { return it }
+    /** Vrai quand un flux vient de finir et de reprendre sur la même piste : R12. */
+    private var segmentRepete = false
 
+    init {
+        // Deux choses ne se déduisent pas d'un état mais d'un événement : la fin
+        // d'un flux qui se répète, et une piste relancée qu'on vient de quitter.
+        player.addListener(
+            object : Player.Listener {
+                override fun onPositionDiscontinuity(
+                    oldPosition: Player.PositionInfo,
+                    newPosition: Player.PositionInfo,
+                    reason: Int,
+                ) {
+                    if (reason == DISCONTINUITY_REASON_AUTO_TRANSITION &&
+                        oldPosition.mediaItemIndex == newPosition.mediaItemIndex
+                    ) {
+                        segmentRepete = true
+                    }
+                }
+
+                override fun onEvents(player: Player, events: Player.Events) = veillerAuxSegments()
+            },
+        )
+    }
+
+    override fun getState(): State {
         val etat = super.getState()
         val brute = etat.timeline
         oublierLesAbsentes(brute)
@@ -63,7 +75,7 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
         )
         val builder = etat.buildUpon().setPlaylist(logique, etat.currentTracks, etat.currentMetadata)
         if (!brute.isEmpty) corrigerLaPisteCourante(etat, logique, builder)
-        return builder.build().also { dernierEtat = it }
+        return builder.build()
     }
 
     private fun corrigerLaPisteCourante(etat: State, logique: Timeline, builder: State.Builder) {
@@ -139,22 +151,7 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
     }
 
     private fun relancer(index: Int, fenetre: Timeline.Window, decalageMs: Long) {
-        val avant = player.currentTimeline
-        val fenetreLogique = fenetresLogiques[fenetre.uid] ?: fenetre.uid
-        val periodeBrute = avant.getUidOfPeriod(fenetre.firstPeriodIndex)
-        val periodeLogique = periodesLogiques[periodeBrute] ?: periodeBrute
-
-        enRelance = true
-        try {
-            player.replaceMediaItem(index, fenetre.mediaItem.withStreamOffset(decalageMs))
-            val apres = player.currentTimeline
-            val nouvelle = apres.getWindow(index, Timeline.Window())
-            fenetresLogiques[nouvelle.uid] = fenetreLogique
-            periodesLogiques[apres.getUidOfPeriod(nouvelle.firstPeriodIndex)] = periodeLogique
-            if (decalageMs > 0L) decalages[nouvelle.uid] = decalageMs
-        } finally {
-            enRelance = false
-        }
+        remplacer(index, fenetre, decalageMs)
 
         if (index == player.currentMediaItemIndex) {
             // R6 : annoncé tout de suite, le curseur ne revient pas en arrière.
@@ -162,6 +159,62 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
         } else {
             player.seekTo(index, 0L)
         }
+    }
+
+    /**
+     * Échange le flux d'une piste contre celui qui commence à [decalageMs], en
+     * lui gardant son identité.
+     *
+     * L'ExoPlayer ne sait pas mettre à jour une source dont l'URI change : il
+     * retire et ajoute, d'où de nouveaux identifiants. Les rattacher juste après
+     * suffit — Media3 livre `onEvents` par un message posté, et l'enveloppe ne
+     * relit donc son état qu'ensuite.
+     */
+    private fun remplacer(index: Int, fenetre: Timeline.Window, decalageMs: Long) {
+        val avant = player.currentTimeline
+        val fenetreLogique = fenetresLogiques[fenetre.uid] ?: fenetre.uid
+        val periodeBrute = avant.getUidOfPeriod(fenetre.firstPeriodIndex)
+        val periodeLogique = periodesLogiques[periodeBrute] ?: periodeBrute
+
+        player.replaceMediaItem(index, fenetre.mediaItem.withStreamOffset(decalageMs))
+
+        val apres = player.currentTimeline
+        val nouvelle = apres.getWindow(index, Timeline.Window())
+        fenetresLogiques[nouvelle.uid] = fenetreLogique
+        periodesLogiques[apres.getUidOfPeriod(nouvelle.firstPeriodIndex)] = periodeLogique
+        if (decalageMs > 0L) decalages[nouvelle.uid] = decalageMs
+    }
+
+    /**
+     * R12 : un flux qui se répète rejouerait les dernières secondes d'un segment
+     * sans fin ; on repart du début du morceau. R14 : une piste relancée qu'on a
+     * quittée retrouve son marqueur nu, sans quoi y revenir la ferait repartir au
+     * milieu.
+     */
+    private fun veillerAuxSegments() {
+        var change = false
+
+        if (segmentRepete) {
+            segmentRepete = false
+            val courant = player.currentMediaItemIndex
+            val fenetre = player.currentTimeline.getWindow(courant, Timeline.Window())
+            if ((decalages[fenetre.uid] ?: 0L) > 0L) {
+                relancer(courant, fenetre, 0L)
+                change = true
+            }
+        }
+
+        val timeline = player.currentTimeline
+        for (index in 0 until timeline.windowCount) {
+            if (index == player.currentMediaItemIndex) continue
+            val fenetre = timeline.getWindow(index, Timeline.Window())
+            if ((decalages[fenetre.uid] ?: 0L) > 0L) {
+                remplacer(index, fenetre, 0L)
+                change = true
+            }
+        }
+
+        if (change) invalidateState()
     }
 
     /** Ce que le lecteur enveloppé ne connaît plus n'a plus à être rattaché à rien. */
