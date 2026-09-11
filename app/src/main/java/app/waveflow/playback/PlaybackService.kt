@@ -14,12 +14,9 @@ import androidx.media3.session.MediaSession
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.PlayHistoryRepository
 import app.waveflow.data.PreferencesStore
-import app.waveflow.model.StreamQuality
 import app.waveflow.model.StreamRendering
 import coil.imageLoader
-import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,8 +24,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -78,12 +73,12 @@ class PlaybackService : MediaLibraryService() {
     private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot }, ::renduDemande)
 
     /**
-     * La qualité de lecture choisie, `null` tant que le réglage n'a pas été lu.
+     * Le rendu de la qualité choisie, `null` tant que le réglage n'a pas été lu.
      *
      * `null` et non le défaut : le défaut est une valeur qu'on pourrait poser
      * par erreur sur une file. Voir [renduDemande].
      */
-    private val qualite = MutableStateFlow<StreamQuality?>(null)
+    private val rendu = MutableStateFlow<StreamRendering?>(null)
 
     override fun onCreate() {
         super.onCreate()
@@ -135,17 +130,17 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * Tient [qualite] à jour tant que le service vit.
+     * Tient [rendu] à jour tant que le service vit.
      *
-     * Observée plutôt que lue à la demande, pour la même raison que la vitesse :
+     * Observé plutôt que lu à la demande, pour la même raison que la vitesse :
      * le service joue aussi quand aucun écran n'est ouvert.
      */
     private fun observeStreamQuality(preferences: PreferencesStore) {
         artworkScope.launch {
             preferences.preferences
-                .map { it.streamQuality }
+                .map { it.streamQuality.rendering }
                 .distinctUntilChanged()
-                .collect { qualite.value = it }
+                .collect { rendu.value = it }
         }
     }
 
@@ -156,20 +151,10 @@ class PlaybackService : MediaLibraryService() {
      * Android Auto ou une reprise de lecture —, la file peut arriver avant la
      * première lecture du fichier de préférences : on attend alors la valeur.
      * Elle arrive toujours, le magasin rendant ses défauts plutôt que
-     * d'échouer.
-     *
-     * La lecture de [qualite] qui précède n'est qu'un raccourci, et ne crée pas
-     * d'écart : si la valeur arrive entre elle et l'abonnement, `first` sur un
-     * `StateFlow` la rend aussitôt. Rien ne peut donc être manqué, et la file
-     * n'attend jamais une émission déjà passée.
+     * d'échouer ; et si le service est détruit avant, le futur se termine quand
+     * même. Voir [firstValueAsFuture].
      */
-    private fun renduDemande(): ListenableFuture<StreamRendering> {
-        qualite.value?.let { return Futures.immediateFuture(it.rendering) }
-
-        val futur = SettableFuture.create<StreamRendering>()
-        artworkScope.launch { futur.set(qualite.filterNotNull().first().rendering) }
-        return futur
-    }
+    private fun renduDemande(): ListenableFuture<StreamRendering> = rendu.firstValueAsFuture(artworkScope)
 
     /**
      * Met la lecture en pause quand la minuterie de veille arrive à échéance.
