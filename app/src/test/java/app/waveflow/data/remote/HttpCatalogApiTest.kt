@@ -1,5 +1,6 @@
 package app.waveflow.data.remote
 
+import app.waveflow.model.StreamRendering
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -164,7 +165,7 @@ class HttpCatalogApiTest {
     fun `le ticket de diffusion devient une URL absolue`() = runTest {
         server.enqueue(MockResponse().setBody(TICKET_BODY))
 
-        val streamUrl = api.streamTicket(url(), "wfa_1", "c07f8d98")
+        val streamUrl = api.streamTicket(url(), "wfa_1", "c07f8d98", StreamRendering.ORIGINAL)
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
@@ -181,7 +182,7 @@ class HttpCatalogApiTest {
         // n'atteindrait plus le serveur.
         server.enqueue(MockResponse().setBody(TICKET_BODY))
 
-        val streamUrl = api.streamTicket("${url()}/musique", "wfa_1", "c07f8d98")
+        val streamUrl = api.streamTicket("${url()}/musique", "wfa_1", "c07f8d98", StreamRendering.ORIGINAL)
 
         assertEquals("${url()}/musique/api/v2/stream/VkdLrczM", streamUrl)
     }
@@ -195,7 +196,7 @@ class HttpCatalogApiTest {
             MockResponse().setBody("""{"url":"//ailleurs.test/api/v2/stream/x","expires_at":0}"""),
         )
 
-        val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98") }
+        val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98", StreamRendering.ORIGINAL) }
 
         assertTrue(error.toString(), error is ServerException.Unexpected)
     }
@@ -210,9 +211,34 @@ class HttpCatalogApiTest {
             ),
         )
 
-        val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98") }
+        val error = echecDe { api.streamTicket(url(), "wfa_1", "c07f8d98", StreamRendering.ORIGINAL) }
 
         assertTrue(error.toString(), error is ServerException.Unexpected)
+    }
+
+    @Test
+    fun `un rendu transcode s'ajoute a l'URL de diffusion`() = runTest {
+        // Le ticket ne porte pas le rendu : c'est l'URL rendue qui le dit au
+        // serveur, au moment où le lecteur l'ouvre.
+        server.enqueue(MockResponse().setBody(TICKET_BODY))
+
+        val streamUrl = api.streamTicket(url(), "wfa_1", "c07f8d98", StreamRendering("opus", 96))
+
+        assertEquals("${url()}/api/v2/stream/VkdLrczM?format=opus&bitrate=96", streamUrl)
+    }
+
+    @Test
+    fun `un serveur sans ffmpeg le dit`() = runTest {
+        server.enqueue(
+            MockResponse().setBody("""{"available":false,"active":0,"global_limit":4,"per_user_limit":2}"""),
+        )
+
+        val disponible = api.transcodingAvailable(url(), "wfa_1")
+
+        val request = server.takeRequest()
+        assertEquals("/api/v2/transcode/status", request.path)
+        assertEquals("Bearer wfa_1", request.getHeader("Authorization"))
+        assertEquals(false, disponible)
     }
 
     @Test

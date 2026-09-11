@@ -11,7 +11,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import app.waveflow.model.ServerSession
+import app.waveflow.model.StreamQuality
 import app.waveflow.ui.cache.CacheUiState
+import app.waveflow.ui.quality.StreamQualityUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -52,16 +54,44 @@ class ServerScreenTest {
     }
 
     /** Écran de compte : atteint depuis la barre du haut, une fois connecté. */
-    private fun afficherCompte(cache: CacheUiState = CacheUiState(usedBytes = 0L)) {
+    private fun afficherCompte(
+        cache: CacheUiState = CacheUiState(usedBytes = 0L),
+        quality: StreamQualityUiState = StreamQualityUiState(),
+        onChooseQuality: (StreamQuality) -> Unit = {},
+    ) {
         compose.setContent {
             ServerAccountScreen(
                 session = session,
+                quality = quality,
                 cache = cache,
                 onDisconnect = { deconnexions++ },
+                onChooseQuality = onChooseQuality,
                 onClearCache = { vidages++ },
                 onDismissCacheError = {},
             )
         }
+    }
+
+    @Test
+    fun `choisir une qualite de lecture est transmis`() {
+        val choisies = mutableListOf<StreamQuality>()
+        afficherCompte(onChooseQuality = { choisies += it })
+
+        compose.onNodeWithText("Haute qualité").performClick()
+
+        assertEquals(listOf(StreamQuality.Haute), choisies)
+    }
+
+    @Test
+    fun `un serveur sans ffmpeg grise les profils transcodes`() {
+        // Proposer un profil que le serveur ne sait pas produire ferait
+        // échouer chaque piste : il reste visible, pour qu'on sache qu'il
+        // existe, mais ne se choisit pas.
+        afficherCompte(quality = StreamQualityUiState(transcodingAvailable = false))
+
+        compose.onNodeWithText("Qualité d'origine").assertIsEnabled()
+        compose.onNodeWithText("Haute qualité").assertIsNotEnabled()
+        compose.onNodeWithText("Économie").assertIsNotEnabled()
     }
 
     /**

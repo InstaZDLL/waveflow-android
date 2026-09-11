@@ -14,7 +14,12 @@ import androidx.media3.session.MediaSession
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.PlayHistoryRepository
 import app.waveflow.data.PreferencesStore
+import app.waveflow.model.StreamQuality
+import app.waveflow.model.StreamRendering
 import coil.imageLoader
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +27,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -68,7 +75,15 @@ class PlaybackService : MediaLibraryService() {
      * parce qu'il faut pouvoir lui redemander de prévenir ses abonnés à chaque
      * fois que [browseSnapshot] change.
      */
-    private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot })
+    private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot }, ::renduDemande)
+
+    /**
+     * La qualité de lecture choisie, `null` tant que le réglage n'a pas été lu.
+     *
+     * `null` et non le défaut : le défaut est une valeur qu'on pourrait poser
+     * par erreur sur une file. Voir [renduDemande].
+     */
+    private val qualite = MutableStateFlow<StreamQuality?>(null)
 
     override fun onCreate() {
         super.onCreate()
@@ -111,11 +126,49 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(historyListener(container.playHistoryRepository))
         observeSleepTimer(container.sleepTimer, player)
         observePlaybackSpeed(container.preferencesStore, player)
+        observeStreamQuality(container.preferencesStore)
         observeAbLoop(container.abLoop, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
         observeLibrary(container)
+    }
+
+    /**
+     * Tient [qualite] à jour tant que le service vit.
+     *
+     * Observée plutôt que lue à la demande, pour la même raison que la vitesse :
+     * le service joue aussi quand aucun écran n'est ouvert.
+     */
+    private fun observeStreamQuality(preferences: PreferencesStore) {
+        artworkScope.launch {
+            preferences.preferences
+                .map { it.streamQuality }
+                .distinctUntilChanged()
+                .collect { qualite.value = it }
+        }
+    }
+
+    /**
+     * Le rendu à poser sur une file, dès que le réglage est connu.
+     *
+     * Immédiat en régime établi. Au démarrage à froid — le service lancé par
+     * Android Auto ou une reprise de lecture —, la file peut arriver avant la
+     * première lecture du fichier de préférences : on attend alors la valeur.
+     * Elle arrive toujours, le magasin rendant ses défauts plutôt que
+     * d'échouer.
+     *
+     * La lecture de [qualite] qui précède n'est qu'un raccourci, et ne crée pas
+     * d'écart : si la valeur arrive entre elle et l'abonnement, `first` sur un
+     * `StateFlow` la rend aussitôt. Rien ne peut donc être manqué, et la file
+     * n'attend jamais une émission déjà passée.
+     */
+    private fun renduDemande(): ListenableFuture<StreamRendering> {
+        qualite.value?.let { return Futures.immediateFuture(it.rendering) }
+
+        val futur = SettableFuture.create<StreamRendering>()
+        artworkScope.launch { futur.set(qualite.filterNotNull().first().rendering) }
+        return futur
     }
 
     /**

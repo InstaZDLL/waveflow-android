@@ -45,8 +45,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
+import app.waveflow.model.StreamQuality
 import app.waveflow.ui.cache.CacheSection
 import app.waveflow.ui.cache.CacheUiState
+import app.waveflow.ui.quality.StreamQualitySection
+import app.waveflow.ui.quality.StreamQualityUiState
 
 /**
  * Ouverture d'une session serveur.
@@ -70,16 +73,20 @@ fun ServerSignInScreen(
 }
 
 /**
- * Le compte connecté, la sortie, et le cache des pistes qu'il a servies.
+ * Le compte connecté, la sortie, la qualité de lecture et le cache des pistes
+ * qu'il a servies.
  *
- * Le cache trouve sa place ici plutôt que dans des réglages généraux, qui
- * n'existent pas : il ne contient que des pistes du serveur.
+ * La qualité et le cache trouvent leur place ici plutôt que dans les réglages
+ * généraux : ils ne concernent que les pistes du serveur. La qualité vient avant
+ * le cache, parce qu'elle décide de ce qu'il contiendra.
  */
 @Composable
 fun ServerAccountScreen(
     session: ServerSession.Connected,
+    quality: StreamQualityUiState,
     cache: CacheUiState,
     onDisconnect: () -> Unit,
+    onChooseQuality: (StreamQuality) -> Unit,
     onClearCache: () -> Unit,
     onDismissCacheError: () -> Unit,
     modifier: Modifier = Modifier,
@@ -89,6 +96,10 @@ fun ServerAccountScreen(
         ConnectedAccount(session = session, onDisconnect = onDisconnect)
 
         Spacer(Modifier.height(24.dp))
+
+        StreamQualitySection(state = quality, onChoose = onChooseQuality)
+
+        Spacer(Modifier.height(16.dp))
 
         CacheSection(
             state = cache,

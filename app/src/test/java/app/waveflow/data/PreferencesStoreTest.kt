@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -279,5 +280,47 @@ class PreferencesStoreTest {
         }
 
         assertEquals(listOf(ThemeChoice.Light, ThemeChoice.Dark), vus)
+    }
+
+    @Test
+    fun `sans rien de choisi la lecture est en qualite d'origine`() = runTest {
+        // Ne toucher à rien ne doit rien changer à ce qu'on entendait avant que
+        // le réglage n'existe.
+        val qualite = avecUnMagasin { it.preferences.first().streamQuality }
+
+        assertEquals(StreamQuality.Original, qualite)
+    }
+
+    @Test
+    fun `la qualite de lecture survit a la relecture`() = runTest {
+        avecUnMagasin { it.setStreamQuality(StreamQuality.Economie) }
+
+        val qualite = avecUnMagasin { it.preferences.first().streamQuality }
+
+        assertEquals(StreamQuality.Economie, qualite)
+    }
+
+    @Test
+    fun `un profil inconnu du fichier retombe sur l'original`() = runTest {
+        // Un profil qu'une version future aurait ajouté, puis un retour en
+        // arrière. Retomber sur un autre profil transcodé déciderait à la place
+        // de l'utilisateur de ce qu'il perd en fidélité.
+        val magasin = magasinFige(preferencesOf(stringPreferencesKey("stream_quality") to "Automatique"))
+
+        assertEquals(StreamQuality.Original, magasin.preferences.first().streamQuality)
+    }
+
+    @Test
+    fun `une qualite d'un autre type que le sien ne fait pas tomber la collecte`() = runTest {
+        val magasin = magasinFige(preferencesOf(floatPreferencesKey("stream_quality") to 1f))
+
+        assertEquals(StreamQuality.Original, magasin.preferences.first().streamQuality)
+    }
+
+    @Test
+    fun `une qualite qui ne s'ecrit pas ne fait pas tomber l'appelant`() = runTest {
+        // Un test à part, pour la raison déjà dite plus haut : une assertion
+        // « rien n'est levé » ne supporte qu'un seul appel.
+        magasinIncapableDEcrire().setStreamQuality(StreamQuality.Economie)
     }
 }

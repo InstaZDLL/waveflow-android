@@ -73,6 +73,7 @@ import app.waveflow.ui.playlists.PlaylistDetailScreen
 import app.waveflow.ui.playlists.PlaylistMenu
 import app.waveflow.ui.playlists.PlaylistsScreen
 import app.waveflow.ui.playlists.PlaylistsViewModel
+import app.waveflow.ui.quality.StreamQualityViewModel
 import app.waveflow.ui.search.SearchField
 import app.waveflow.ui.search.SearchScreen
 import app.waveflow.ui.search.SearchViewModel
@@ -134,6 +135,7 @@ private fun WaveFlowRoot(
     val serverViewModel: ServerViewModel = viewModel(factory = ServerViewModel.Factory)
     val catalogViewModel: CatalogViewModel = viewModel(factory = CatalogViewModel.Factory)
     val cacheViewModel: CacheViewModel = viewModel(factory = CacheViewModel.Factory)
+    val qualityViewModel: StreamQualityViewModel = viewModel(factory = StreamQualityViewModel.Factory)
 
     val library by libraryViewModel.library.collectAsStateWithLifecycle()
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
@@ -525,17 +527,25 @@ private fun WaveFlowRoot(
 
                     composable(Routes.SERVER_ACCOUNT) {
                         serverState.connected?.let { session ->
-                            // La taille bouge à chaque piste lue : elle se
-                            // relève à l'ouverture, pas une fois pour toutes.
-                            LaunchedEffect(Unit) { cacheViewModel.refresh() }
+                            val qualityState by qualityViewModel.state.collectAsStateWithLifecycle()
+
+                            // La taille bouge à chaque piste lue, et ffmpeg peut
+                            // avoir été installé ou retiré du serveur : les deux
+                            // se relèvent à l'ouverture, pas une fois pour toutes.
+                            LaunchedEffect(Unit) {
+                                cacheViewModel.refresh()
+                                qualityViewModel.refresh()
+                            }
 
                             ServerAccountScreen(
                                 session = session,
+                                quality = qualityState,
                                 cache = cacheState,
                                 onDisconnect = {
                                     serverViewModel.disconnect()
                                     navController.popBackStack()
                                 },
+                                onChooseQuality = qualityViewModel::choose,
                                 onClearCache = cacheViewModel::clear,
                                 onDismissCacheError = cacheViewModel::dismissError,
                                 bottomPadding = listBottomPadding,

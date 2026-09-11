@@ -12,6 +12,7 @@ import app.waveflow.model.RemoteArtistDetail
 import app.waveflow.model.RemoteSearchResults
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.ServerSession
+import app.waveflow.model.StreamRendering
 import kotlinx.coroutines.CompletableDeferred
 
 /**
@@ -176,9 +177,23 @@ class FakeCatalogApi(
         serverUrl: String,
         accessToken: String,
         trackId: String,
+        rendering: StreamRendering,
     ): String {
         record(serverUrl, accessToken, null)
+        lastRendering = rendering
         return "$serverUrl/api/v2/stream/ticket-$trackId"
+    }
+
+    /** Le rendu demandé au dernier ticket. */
+    var lastRendering: StreamRendering? = null
+        private set
+
+    /** Ce que le serveur répond sur sa capacité à transcoder. */
+    var transcoding = true
+
+    override suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean {
+        record(serverUrl, accessToken, null)
+        return transcoding
     }
 
     private suspend fun record(serverUrl: String, accessToken: String, page: Pair<Int, Int>?) {
@@ -308,7 +323,10 @@ class PagingCatalogApi(
         serverUrl: String,
         accessToken: String,
         trackId: String,
+        rendering: StreamRendering,
     ): String = "$serverUrl/api/v2/stream/ticket-$trackId"
+
+    override suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean = true
 
     private fun failIfDue(call: Int) {
         if (failFromCall > 0 && call >= failFromCall) {

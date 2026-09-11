@@ -144,14 +144,20 @@ class ServerHttp(
      *
      * @param pathSegment ajouté après [path], et encodé — un identifiant ou un
      *   hachage venu d'une réponse n'a pas à être interpolé dans le chemin.
+     * @param query ajoutée encodée, pour la même raison.
      */
-    fun absoluteUrl(serverUrl: String, path: String, pathSegment: String? = null): String {
+    fun absoluteUrl(
+        serverUrl: String,
+        path: String,
+        pathSegment: String? = null,
+        query: Map<String, String> = emptyMap(),
+    ): String {
         if (!path.startsWith("/") || path.startsWith("//")) {
             throw ServerException.Unexpected("Chemin de diffusion inattendu : $path")
         }
 
         return serverUrl
-            .toApiUrl(path = path.removePrefix("/"), pathSegment = pathSegment, query = emptyMap())
+            .toApiUrl(path = path.removePrefix("/"), pathSegment = pathSegment, query = query)
             .toString()
     }
 

@@ -5,6 +5,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.model.StreamRendering
 
 /**
  * Traduction des morceaux vers [MediaItem], et retour.
@@ -101,9 +102,7 @@ internal fun localSongIdOf(mediaId: String): Long? =
  * 64 kbit/s à qui demande l'original. C'est d'ailleurs ainsi que le serveur
  * nomme ses propres entrées de cache.
  *
- * Le client ne demande aujourd'hui que [DEFAULT_FORMAT], sans débit — le
- * transcodage n'est pas branché. Mettre les deux dès maintenant évite qu'un
- * ajout futur du format oublie le débit, et fasse se recouvrir deux versions.
+ * Les deux sont posés ensemble par [withRendering], jamais séparément.
  *
  * @param bitrate omis de la clé quand il ne décrit aucun rendu — absent, nul ou
  *   négatif — pour que le cas courant reste lisible : `remote:<id>:raw`. Aucun
@@ -121,7 +120,47 @@ internal fun cacheKeyOf(
 }
 
 /** Le défaut du serveur : le fichier tel quel, sans transcodage. */
-internal const val DEFAULT_FORMAT = "raw"
+internal const val DEFAULT_FORMAT = StreamRendering.FORMAT_ORIGINAL
+
+/**
+ * Pose sur une piste distante le rendu à demander au serveur.
+ *
+ * L'URI **et** la clé de cache sont réécrites ensemble, depuis le même rendu.
+ * Le cache calcule sa clé avant que [RemoteStreamResolver] ne construise l'URL :
+ * deux lectures du réglage, une à chaque bout, laisseraient un changement
+ * s'intercaler entre elles. Une version Opus se rangerait alors sous le nom de
+ * l'original, et serait resservie à qui demande l'original.
+ *
+ * L'original laisse le marqueur nu, et retrouve ainsi la clé qu'il portait avant
+ * que la qualité ne se choisisse : le cache déjà constitué reste valable.
+ *
+ * Une piste locale est rendue telle quelle : elle ne passe pas par le serveur.
+ */
+internal fun MediaItem.withRendering(rendering: StreamRendering): MediaItem {
+    val uri = localConfiguration?.uri ?: return this
+    val trackId = trackIdOfRemoteUri(uri) ?: return this
+
+    val marqueur = uri.buildUpon().clearQuery().apply {
+        if (!rendering.isOriginal) {
+            appendQueryParameter(PARAM_FORMAT, rendering.format)
+            rendering.bitrate?.let { appendQueryParameter(PARAM_BITRATE, it.toString()) }
+        }
+    }.build()
+
+    return buildUpon()
+        .setUri(marqueur)
+        .setCustomCacheKey(cacheKeyOf(trackId, rendering.format, rendering.bitrate))
+        .build()
+}
+
+/** Le rendu que porte le marqueur d'une piste distante ; l'original s'il n'en dit rien. */
+internal fun renderingOfRemoteUri(uri: android.net.Uri): StreamRendering {
+    val format = uri.getQueryParameter(PARAM_FORMAT) ?: return StreamRendering.ORIGINAL
+    return StreamRendering(format, uri.getQueryParameter(PARAM_BITRATE)?.toIntOrNull())
+}
+
+private const val PARAM_FORMAT = "format"
+private const val PARAM_BITRATE = "bitrate"
 
 /** Identifiant de piste serveur, ou `null` si la piste est locale. */
 internal fun trackIdOfRemoteUri(uri: android.net.Uri): String? =
