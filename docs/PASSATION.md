@@ -4,14 +4,13 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-10**, sur `main` = `a4f0377`.
+Dernière mise à jour : **2026-09-11**, sur `main` = `ae32fa0`.
 
 ## État du dépôt
 
-- `main` = `a4f0377`. **Une PR ouverte : #50, la boucle A-B** — CI verte,
-  fusionnable, en attente de l'approbation de l'utilisateur.
-- **369 tests verts sur `main`**, 389 sur la #50. CI verte (workflow
-  `Build & test`, ~4 min 45 s).
+- `main` = `ae32fa0`, arbre propre, **aucune PR ouverte**, aucune branche en
+  cours.
+- **391 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
 - **Aucun avertissement de compilation.** C'est une propriété qu'on tient, pas un
   hasard — voir le piège `textReport` plus bas avant d'en supprimer un.
 - Gradle 9.7.1, AGP 9.4.0, OkHttp 5.5.0, media3 1.11.0.
@@ -23,8 +22,7 @@ Six lots, dans cet ordre :
 
 1. Réglages / DataStore — **fait**
 2. Navigation + identité — **fait**
-3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **soldé dès que
-   la #50 sera fusionnée**
+3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **fait**
 4. Transcodage (remonté du 6ᵉ rang : meilleur rapport travail/effet, le serveur
    est déjà prêt)
 5. Paroles
@@ -35,7 +33,7 @@ lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
 
-**PR #50 — la boucle A-B (ouverte, pas encore fusionnée).**
+**PR #50 — la boucle A-B (fusionnée le 11/09).**
 
 Media3 n'a pas de « répéter entre deux points » : `REPEAT_MODE_ONE` reprend la
 piste entière. On échantillonne donc la position et on rembobine soi-même, dans
@@ -47,6 +45,17 @@ l'écran et on prend son instrument.
 sur un `Player` : c'est ce qui le rend éprouvable sur la JVM, là où Robolectric
 ne peut rien montrer faute de codec. Le sommeil se règle sur ce qui reste avant
 B, borné des deux côtés.
+
+**Rien n'est échantillonné quand rien ne joue** — ajouté en revue. En pause, la
+position reste sous B : la surveillance réveillait le service toutes les 500 ms,
+toutes les 50 ms si l'on avait mis en pause juste avant la borne. La revue
+proposait d'injecter un `Player` et un `Player.Listener` dans le runner ; c'était
+défaire ce qui le rend éprouvable. L'état de lecture entre donc par la même
+porte que la position — un `StateFlow<Boolean>` que le service alimente depuis
+`onIsPlayingChanged` — et un `combine` le place dans le `collectLatest` existant :
+à la pause, la surveillance n'attend pas, elle est **annulée**, puis relancée à la
+reprise. La garde relue après chaque sommeil (`enVigueur`) lit les deux
+conditions ensemble.
 
 **Le menu de débordement annoncé n'a pas été nécessaire** — voir plus bas, la
 note sur l'en-tête a été corrigée.
@@ -173,8 +182,8 @@ une erreur. Ne pas rouvrir.
 
 ## La suite : le lot 4, le transcodage
 
-Une fois la #50 fusionnée, le lot 3 est clos et le lot 4 vient — remonté au
-quatrième rang pour son rapport travail/effet, le serveur étant déjà prêt.
+Le lot 3 est clos ; le lot 4 vient — remonté au quatrième rang pour son rapport
+travail/effet, le serveur étant déjà prêt.
 
 **Le terrain est préparé côté Android.** `MediaItemMapper.cacheKeyOf` prend déjà
 un format et un débit, et fait entrer le rendu entier dans la clé de cache : le
@@ -193,9 +202,23 @@ se posent en regardant celle qui défile. Le réflexe à garder : avant de pouss
 un cinquième bouton dans l'en-tête, chercher si le réglage n'a pas une place
 plus juste ailleurs.
 
-## Trois pièges de méthode, payés cette session
+## Quatre pièges de méthode, payés sur les #48 et #50
 
 Ils ne sont pas dans le code : ils sont dans la façon de le vérifier.
+
+### L'assertion que le défaut satisfait lui-même
+
+Pour prouver qu'une boucle A-B ne travaille plus en pause, le test naturel est
+« en pause, aucun rembobinage ». Il passe **avec** le défaut : une position à
+l'arrêt reste sous B, et une surveillance qui tourne à vide ne rembobine jamais
+non plus. Le symptôme réel était le réveil, pas le geste.
+
+Avant d'écrire une assertion, se demander si le code fautif la satisferait. Si
+oui, observer ce que le défaut **coûte** plutôt que ce qu'il **fait** : le faux
+`positionMs` de `AbLoopRunnerTest` compte ses appels, et une minute de pause doit
+n'en coûter aucun. Puis lui adjoindre son pendant contre la sur-correction — une
+garde qui ne se rouvrirait jamais passerait le premier test. Au retrait, ces
+deux tests tombent, et eux seuls.
 
 ### Le faux doit se comporter comme le vrai
 
@@ -266,7 +289,7 @@ pagine sur le réseau. Le retirer de la barre sans cela l'aurait rendu
   prohibits the merge », et **il n'y a pas à passer outre avec `--admin`**.
 - **Tout test de régression se valide par retrait** : on enlève le correctif et
   on vérifie que le bon test — et lui seul — tombe, avec `--rerun-tasks`. Un test
-  qui passe des deux côtés est un test creux, et il y en a six formes connues.
+  qui passe des deux côtés est un test creux, et il y en a sept formes connues.
   *Sur une machine à court de mémoire, `--rerun-tasks` fait tomber le build ;
   un retrait modifie de toute façon une source, ce qui invalide déjà la tâche de
   test. Le drapeau ne protège que du cas où rien n'a changé.*
