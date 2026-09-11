@@ -122,4 +122,26 @@ class RemoteStreamResolverTest {
 
         assertEquals(StreamRendering.ORIGINAL, catalog.lastRendering)
     }
+
+    @Test
+    fun `le decalage demande au serveur est celui du marqueur`() = runTest {
+        // Lu au même endroit que le rendu : c'est sur ce marqueur que la chaîne
+        // a décidé de ne pas passer par le cache.
+        val catalog = FakeCatalogApi()
+
+        resolver(catalog).resolveDataSpec(
+            specOf("waveflow://track/c07f8d98?format=opus&bitrate=96&offset_ms=133000"),
+        )
+
+        assertEquals(133_000L, catalog.lastOffsetMs)
+    }
+
+    @Test
+    fun `un marqueur sans decalage part du debut`() = runTest {
+        val catalog = FakeCatalogApi()
+
+        resolver(catalog).resolveDataSpec(specOf("waveflow://track/c07f8d98?format=opus&bitrate=96"))
+
+        assertEquals(0L, catalog.lastOffsetMs)
+    }
 }

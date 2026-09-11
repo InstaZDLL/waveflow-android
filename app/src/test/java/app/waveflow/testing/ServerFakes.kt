@@ -178,14 +178,20 @@ class FakeCatalogApi(
         accessToken: String,
         trackId: String,
         rendering: StreamRendering,
+        offsetMs: Long,
     ): String {
         record(serverUrl, accessToken, null)
         lastRendering = rendering
+        lastOffsetMs = offsetMs
         return "$serverUrl/api/v2/stream/ticket-$trackId"
     }
 
     /** Le rendu demandé au dernier ticket. */
     var lastRendering: StreamRendering? = null
+        private set
+
+    /** Le décalage demandé au dernier ticket. */
+    var lastOffsetMs: Long? = null
         private set
 
     private suspend fun record(serverUrl: String, accessToken: String, page: Pair<Int, Int>?) {
@@ -316,6 +322,7 @@ class PagingCatalogApi(
         accessToken: String,
         trackId: String,
         rendering: StreamRendering,
+        offsetMs: Long,
     ): String = "$serverUrl/api/v2/stream/ticket-$trackId"
 
     private fun failIfDue(call: Int) {

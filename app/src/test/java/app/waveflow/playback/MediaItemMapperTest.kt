@@ -178,6 +178,77 @@ class MediaItemMapperTest {
         assertNull(track.artworkUri)
     }
 
+    @Test
+    fun `une piste distante emporte la duree du catalogue`() {
+        // Un transcodage en direct n'annonce aucune durée : sans celle-ci, le
+        // curseur resterait désactivé.
+        val item = remoteSong(id = "a", durationMs = 245_000L).toMediaItem()
+
+        assertEquals(245_000L, item.mediaMetadata.durationMs)
+    }
+
+    @Test
+    fun `une duree inconnue du catalogue n'est pas inventee`() {
+        val item = remoteSong(id = "a", durationMs = 0L).toMediaItem()
+
+        assertNull(item.mediaMetadata.durationMs)
+    }
+
+    @Test
+    fun `le decalage pose se relit sur le marqueur, sans toucher au rendu ni a la cle`() {
+        val avant = remoteSong(id = "a").toMediaItem().withRendering(StreamRendering("opus", 96))
+
+        val segment = avant.withStreamOffset(133_000L)
+        val uri = segment.localConfiguration!!.uri
+
+        assertEquals(133_000L, streamOffsetOfRemoteUri(uri))
+        assertEquals(StreamRendering("opus", 96), renderingOfRemoteUri(uri))
+        assertEquals("a", trackIdOfRemoteUri(uri))
+        assertEquals(avant.localConfiguration?.customCacheKey, segment.localConfiguration?.customCacheKey)
+    }
+
+    @Test
+    fun `revenir au debut rend le marqueur d'avant le segment`() {
+        // C'est ce qui rend à la piste son cache : un marqueur qui garderait
+        // une trace du segment ne serait plus celui sous lequel elle est rangée.
+        val avant = remoteSong(id = "a").toMediaItem().withRendering(StreamRendering("opus", 96))
+
+        val revenu = avant.withStreamOffset(133_000L).withStreamOffset(0L)
+
+        assertEquals(avant, revenu)
+    }
+
+    @Test
+    fun `l'original et une piste locale ne recoivent aucun decalage`() {
+        // Le serveur refuse un décalage sur `raw`, et l'original se déplace par
+        // plages ; une piste locale ne passe pas par le serveur.
+        val original = remoteSong(id = "a").toMediaItem()
+        val locale = song(id = 42L).toMediaItem()
+
+        assertEquals(original, original.withStreamOffset(133_000L))
+        assertEquals(locale, locale.withStreamOffset(133_000L))
+    }
+
+    @Test
+    fun `seul un marqueur porte un decalage`() {
+        // L'aiguillage hors du cache ne regarde que les marqueurs : une URL qui
+        // n'en est pas un ne doit pas passer pour un segment.
+        val url = "https://musique.test/api/v2/stream/ticket?format=opus&offset_ms=133000".toUri()
+
+        assertEquals(0L, streamOffsetOfRemoteUri(url))
+    }
+
+    @Test
+    fun `reposer un rendu efface le decalage`() {
+        // Une piste qui entre dans la file part du début.
+        val item = remoteSong(id = "a").toMediaItem()
+            .withRendering(StreamRendering("opus", 96))
+            .withStreamOffset(133_000L)
+            .withRendering(StreamRendering("opus", 96))
+
+        assertEquals(0L, streamOffsetOfRemoteUri(item.localConfiguration!!.uri))
+    }
+
     private companion object {
         val ARTWORK = "https://serveur.test/api/v2/artwork/1f2e3d".toUri()
     }

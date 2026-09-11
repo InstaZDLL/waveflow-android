@@ -39,9 +39,11 @@ class CatalogRepository(
      * Demandée au moment de lire, et non à la constitution de la file : une
      * longue file dépasserait l'échéance avant d'atteindre ses derniers
      * morceaux.
+     *
+     * @param offsetMs voir [CatalogApi.streamTicket].
      */
-    suspend fun streamUrl(trackId: String, rendering: StreamRendering): String =
-        authorized { url, token -> api.streamTicket(url, token, trackId, rendering) }
+    suspend fun streamUrl(trackId: String, rendering: StreamRendering, offsetMs: Long = 0L): String =
+        authorized { url, token -> api.streamTicket(url, token, trackId, rendering, offsetMs) }
 
     /**
      * Exécute [call] avec un jeton valide, en réessayant une fois sur refus.
