@@ -62,6 +62,13 @@ le ticket #135 de Resonus.
 Mais `ForwardingSimpleBasePlayer` **transmet** beaucoup tel quel, et ce qu'il
 transmet raisonne sur l'ExoPlayer. R5 et R13 disent ce qui doit être réécrit.
 
+Et la timeline se corrige **en enveloppant celle de l'ExoPlayer**
+(`ForwardingTimeline`), jamais en reposant la liste de lecture sous forme de
+liste (`setPlaylist(List)`). Celle-ci fabrique une `PlaylistTimeline`, qui ignore
+l'ordre aléatoire — « TODO: Support shuffle order » dans la 1.11 : « suivant »,
+« précédent » et l'état des boutons de la notification suivraient alors l'ordre
+de la file, lecture aléatoire ou non.
+
 ### Ce que voit Android
 
 **R2. Position.** Position de contenu et position tamponnée sont logiques :
