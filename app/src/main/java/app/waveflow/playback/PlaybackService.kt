@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -110,6 +111,7 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(historyListener(container.playHistoryRepository))
         observeSleepTimer(container.sleepTimer, player)
         observePlaybackSpeed(container.preferencesStore, player)
+        observeAbLoop(container.abLoop, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
@@ -154,6 +156,48 @@ class PlaybackService : MediaLibraryService() {
                 .distinctUntilChanged()
                 .collect { player.setPlaybackSpeed(it) }
         }
+    }
+
+    /**
+     * Fait tourner la lecture entre les deux bornes, et efface celles-ci quand
+     * on change de piste.
+     *
+     * Le rembobinage vit ici et non dans l'interface : Media3 n'ayant pas de
+     * « répéter entre deux points », il faut échantillonner la position, ce que
+     * seul le porteur du lecteur peut faire — et qu'il doit faire écran éteint.
+     *
+     * Voir [AbLoopRunner] pour le pas d'échantillonnage, et pourquoi la position
+     * lui est passée plutôt que prise sur le lecteur.
+     */
+    private fun observeAbLoop(loop: AbLoop, player: Player) {
+        // Le lecteur ne publie pas son état, il le notifie : on le tient donc
+        // ici, pour le passer au surveillant sous la même forme que le reste —
+        // reçu, et non pris sur le `Player`.
+        val enLecture = MutableStateFlow(player.isPlaying)
+
+        AbLoopRunner(
+            scope = artworkScope,
+            loop = loop,
+            isPlaying = enLecture,
+            positionMs = { player.currentPosition },
+            seekTo = player::seekTo,
+        ).start()
+
+        player.addListener(
+            object : Player.Listener {
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    // A et B désignent des instants d'un morceau donné : passer
+                    // au suivant les vide de leur sens.
+                    loop.clearIfOtherTrack(mediaItem?.mediaId)
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    // Échantillonner une position à l'arrêt réveillerait le
+                    // service sans fin pour constater qu'elle n'a pas bougé.
+                    enLecture.value = isPlaying
+                }
+            },
+        )
     }
 
     /**

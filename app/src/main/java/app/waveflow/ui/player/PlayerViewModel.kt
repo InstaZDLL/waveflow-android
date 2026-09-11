@@ -9,6 +9,7 @@ import app.waveflow.WaveFlowApp
 import app.waveflow.data.PreferencesStore
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.playback.AbLoop
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackFailure
 import app.waveflow.playback.SleepTimer
@@ -33,6 +34,7 @@ class PlayerViewModel(
     private val playbackController: PlaybackController,
     private val sleepTimer: SleepTimer,
     private val preferencesStore: PreferencesStore,
+    private val abLoop: AbLoop,
 ) : ViewModel() {
 
     // Plus de croisement avec la bibliothèque : le lecteur décrit lui-même sa
@@ -53,7 +55,8 @@ class PlayerViewModel(
         playbackController.state,
         sleepTimer.endsAtMs,
         preferencesStore.preferences.map { it.playbackSpeed }.distinctUntilChanged(),
-    ) { playback, endsAt, speed ->
+        abLoop.state,
+    ) { playback, endsAt, speed, boucle ->
         PlayerUiState(
             track = playback.current,
             isPlaying = playback.isPlaying,
@@ -66,6 +69,7 @@ class PlayerViewModel(
             queueIndex = playback.queueIndex,
             sleepTimerActive = endsAt != null,
             playbackSpeed = speed,
+            abLoop = boucle,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -178,6 +182,24 @@ class PlayerViewModel(
     }
 
     /**
+     * Pose la borne suivante de la boucle : A, puis B, puis efface.
+     *
+     * La position est demandée au lecteur et non prise dans l'état affiché :
+     * celui-ci est échantillonné toutes les demi-secondes, et une borne posée
+     * un quart de seconde trop tôt s'entend sur un passage qu'on repique.
+     *
+     * Sans piste courante il n'y a rien à borner : les bornes appartiennent à
+     * un morceau.
+     */
+    fun markAbLoop() {
+        val mediaId = playbackController.state.value.current?.mediaId ?: return
+        abLoop.mark(mediaId, playbackController.currentPositionMs())
+    }
+
+    /** Efface la boucle sans toucher à la lecture en cours. */
+    fun clearAbLoop() = abLoop.clear()
+
+    /**
      * Ce qu'il reste avant l'arrêt automatique, lu à l'instant de la demande.
      *
      * Une fonction et non un champ de [PlayerUiState] : celui-ci n'est
@@ -202,6 +224,7 @@ class PlayerViewModel(
                     playbackController = app.container.createPlaybackController(),
                     sleepTimer = app.container.sleepTimer,
                     preferencesStore = app.container.preferencesStore,
+                    abLoop = app.container.abLoop,
                 )
             }
         }

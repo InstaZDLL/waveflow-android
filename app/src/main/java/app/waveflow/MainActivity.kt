@@ -654,6 +654,7 @@ private fun WaveFlowRoot(
                 onCancelSleepTimer = playerViewModel::cancelSleepTimer,
                 onSleepTimerRemainingMs = playerViewModel::sleepTimerRemainingMs,
                 onSetPlaybackSpeed = playerViewModel::setPlaybackSpeed,
+                onMarkAbLoop = playerViewModel::markAbLoop,
             )
         }
     }

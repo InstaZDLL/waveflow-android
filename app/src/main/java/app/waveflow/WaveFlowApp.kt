@@ -20,6 +20,7 @@ import app.waveflow.data.remote.HttpServerApi
 import app.waveflow.data.remote.ServerHttp
 import app.waveflow.data.remote.ServerImageAuthInterceptor
 import app.waveflow.data.remote.ServerSessionRepository
+import app.waveflow.playback.AbLoop
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.RemoteMediaCache
@@ -107,6 +108,16 @@ class AppContainer(app: Application) {
      * ses expirations pour mettre en pause ; elle ne connaît pas le lecteur.
      */
     val sleepTimer = SleepTimer(applicationScope, SystemClock::elapsedRealtime)
+
+    /**
+     * Les bornes de la boucle A-B, portées par l'application comme la minuterie.
+     *
+     * On pose une boucle pour repiquer un passage, puis on éteint l'écran et on
+     * prend son instrument : elle doit survivre à l'écran. Le service
+     * échantillonne la position et rembobine ; elle-même ne connaît pas le
+     * lecteur.
+     */
+    val abLoop = AbLoop()
 
     /**
      * Cache des pistes distantes, unique pour le processus.
