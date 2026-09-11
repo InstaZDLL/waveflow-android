@@ -5,13 +5,19 @@ import android.content.ContentValues
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.core.net.toUri
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.test.core.app.ApplicationProvider
+import app.waveflow.model.StreamRendering
 import kotlinx.coroutines.test.runTest
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -57,11 +63,16 @@ class RemoteMediaCacheTest {
         server.shutdown()
     }
 
-    /** Un résolveur qui rend une URL différente à chaque appel, comme le vrai. */
+    /**
+     * Un résolveur qui rend une URL différente à chaque appel, comme le vrai.
+     *
+     * Le rendu du marqueur suit jusqu'au serveur, comme dans [RemoteStreamResolver].
+     */
     private val resolver = ResolvingDataSource.Resolver { dataSpec ->
         val trackId = trackIdOfRemoteUri(dataSpec.uri) ?: return@Resolver dataSpec
         ticketsDemandes++
-        dataSpec.withUri(server.url("/api/v2/stream/ticket-$ticketsDemandes-$trackId").toString().toUri())
+        val rendu = dataSpec.uri.query?.let { "?$it" }.orEmpty()
+        dataSpec.withUri(server.url("/api/v2/stream/ticket-$ticketsDemandes-$trackId$rendu").toString().toUri())
     }
 
     private fun lire(source: DataSource, spec: DataSpec): ByteArray {
@@ -71,7 +82,7 @@ class RemoteMediaCacheTest {
             val sortie = java.io.ByteArrayOutputStream()
             while (true) {
                 val lus = source.read(tampon, 0, tampon.size)
-                if (lus == androidx.media3.common.C.RESULT_END_OF_INPUT) break
+                if (lus == C.RESULT_END_OF_INPUT) break
                 sortie.write(tampon, 0, lus)
             }
             sortie.toByteArray()
@@ -80,14 +91,73 @@ class RemoteMediaCacheTest {
         }
     }
 
+    /** Lit [octets] puis referme, comme le lecteur qui passe au morceau suivant. */
+    private fun lireLeDebut(source: DataSource, spec: DataSpec, octets: Int) {
+        source.open(spec)
+        try {
+            val tampon = ByteArray(octets)
+            var lus = 0
+            while (lus < octets) {
+                val n = source.read(tampon, lus, octets - lus)
+                if (n == C.RESULT_END_OF_INPUT) break
+                lus += n
+            }
+        } finally {
+            source.close()
+        }
+    }
+
+    /** Le marqueur et la clé qu'une piste distante porte réellement dans la file. */
     private fun specDe(
         trackId: String,
         format: String = DEFAULT_FORMAT,
         bitrate: Int? = null,
-    ) = DataSpec.Builder()
-        .setUri("waveflow://track/$trackId".toUri())
-        .setKey(cacheKeyOf(trackId, format, bitrate))
-        .build()
+    ): DataSpec {
+        val piste = MediaItem.Builder()
+            .setUri("waveflow://track/$trackId".toUri())
+            .build()
+            .withRendering(StreamRendering(format, bitrate))
+        val configuration = checkNotNull(piste.localConfiguration)
+        return DataSpec.Builder()
+            .setUri(configuration.uri)
+            .setKey(configuration.customCacheKey)
+            .build()
+    }
+
+    /**
+     * Répond comme `waveflow-server` (`src/media.rs`) : l'original se sert par
+     * plages ; un transcodage en direct arrive par morceaux, sans longueur, et
+     * refuse toute plage qui ne part pas du premier octet.
+     */
+    private fun servirCommeLeServeur(contenu: ByteArray) {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val debut = request.getHeader("Range")
+                    ?.removePrefix("bytes=")
+                    ?.substringBefore('-')
+                    ?.toInt()
+                    ?: 0
+                val transcode = request.requestUrl?.queryParameter("format") != null
+                return when {
+                    transcode && debut > 0 -> MockResponse()
+                        .setResponseCode(416)
+                        .setHeader("Content-Range", "bytes */0")
+                        .setHeader("Accept-Ranges", "none")
+
+                    transcode -> MockResponse()
+                        .setHeader("Accept-Ranges", "none")
+                        .setChunkedBody(Buffer().write(contenu), 4096)
+
+                    debut > 0 -> MockResponse()
+                        .setResponseCode(206)
+                        .setHeader("Content-Range", "bytes $debut-${contenu.size - 1}/${contenu.size}")
+                        .setBody(Buffer().write(contenu, debut, contenu.size - debut))
+
+                    else -> MockResponse().setBody(Buffer().write(contenu))
+                }
+            }
+        }
+    }
 
     @Test
     fun `une seconde lecture ne redemande ni octets ni ticket`() {
@@ -166,6 +236,57 @@ class RemoteMediaCacheTest {
 
         assertEquals("original", String(brut))
         assertEquals("transcode", String(transcode))
+    }
+
+    @Test
+    fun `un transcodage quitte en route se relit en entier`() {
+        // On passe au morceau suivant avant la fin : le cache garde le début.
+        // Le relire puis demander la suite, c'est demander une plage à un
+        // transcodage en direct, qui la refuse — et Media3 ne retente pas un
+        // 416. La piste tombait en erreur là où le cache s'arrêtait.
+        val contenu = octetsAudio()
+        servirCommeLeServeur(contenu)
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        lireLeDebut(factory.createDataSource(), specDe("piste-1", "opus", 96), OCTETS_ECOUTES)
+        val relu = lire(factory.createDataSource(), specDe("piste-1", "opus", 96))
+
+        assertArrayEquals(contenu, relu)
+    }
+
+    @Test
+    fun `un transcodage lu jusqu'au bout reste en cache`() {
+        // Le pendant du précédent. Sa longueur n'arrive qu'avec la fin du flux,
+        // et c'est elle qui distingue le morceau entier d'un début abandonné.
+        val contenu = octetsAudio()
+        servirCommeLeServeur(contenu)
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        lire(factory.createDataSource(), specDe("piste-1", "opus", 96))
+        val relu = lire(factory.createDataSource(), specDe("piste-1", "opus", 96))
+
+        assertArrayEquals(contenu, relu)
+        assertEquals("une seule requête réseau", 1, server.requestCount)
+    }
+
+    @Test
+    fun `un original quitte en route reprend la ou le cache s'arrete`() {
+        // L'original, lui, se sert par plages : son début en cache reste utile,
+        // et le jeter ferait retélécharger ce qu'on a déjà.
+        val contenu = octetsAudio()
+        servirCommeLeServeur(contenu)
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        lireLeDebut(factory.createDataSource(), specDe("piste-1"), OCTETS_ECOUTES)
+        val relu = lire(factory.createDataSource(), specDe("piste-1"))
+
+        assertArrayEquals(contenu, relu)
+        server.takeRequest()
+        assertEquals(
+            "seule la suite est redemandée",
+            "bytes=$OCTETS_ECOUTES-${contenu.size - 1}",
+            server.takeRequest().getHeader("Range"),
+        )
     }
 
     @Test
@@ -249,6 +370,11 @@ class RemoteMediaCacheTest {
 }
 
 private const val AUTORITE = "app.waveflow.test.audio"
+
+/** Assez pour qu'un début lu laisse une vraie suite à demander. */
+private const val OCTETS_ECOUTES = 8_000
+
+private fun octetsAudio() = ByteArray(64_000) { (it % 251).toByte() }
 
 /**
  * Sert un fichier temporaire derrière une URI `content://`.
