@@ -65,7 +65,13 @@ transmet raisonne sur l'ExoPlayer. R5 et R13 disent ce qui doit être réécrit.
 ### Ce que voit Android
 
 **R2. Position.** Position de contenu et position tamponnée sont logiques :
-décalage + position dans le flux.
+décalage + position dans le flux. Deux gardes :
+
+- une position **inconnue** (`C.TIME_UNSET`) reste inconnue — on n'y ajoute pas
+  le décalage, ce qui publierait un instant plausible et faux ;
+- une position logique reste dans `[0, durée]`. Un flux transcodé peut durer
+  quelques millisecondes de plus que la durée du catalogue : la dépasser ferait
+  afficher une position au-delà de la fin.
 
 **R3. Durée.** La durée exposée est celle du catalogue quand un segment joue, ou
 quand le flux n'en annonce aucune — c'est le cas de tout transcodage en direct.
@@ -120,9 +126,14 @@ en empiler ; le 429 qui en résulterait relève du chantier 429.
 cache et la construction de l'URL : c'est le motif « vérifier puis agir » que la
 #51 a évité par construction.
 
-**R11. Un segment ne touche pas au cache**, ni en lecture ni en écriture. Il ne
-s'y range **jamais** sous la clé du morceau entier. Plus tard, éventuellement,
-sous une clé qui porte le décalage — pas dans cette première version.
+**R11. Un segment contourne `CacheDataSource`**, avant toute lecture et toute
+écriture. Une clé distincte ou une écriture interdite ne suffisent pas : le cache
+est posé **avant** le résolveur, et un segment qui s'y présenterait sous la clé du
+morceau entier se verrait servir les octets du morceau déjà en cache — l'audio
+repartirait de 0:00 pendant que l'enveloppe publierait la position demandée. La
+chaîne aiguille donc un marqueur porteur de `offset_ms` directement vers le
+résolveur. Mettre les segments en cache, sous une clé qui porte le décalage,
+viendra éventuellement plus tard — pas dans cette première version.
 
 ### Répéter, revenir, passer
 
