@@ -335,15 +335,18 @@ class TranscodeSeekingPlayerTest {
     }
 
     @Test
-    fun `rejouer la piste courante depuis la file repart du debut du morceau`() {
-        // `seekToDefaultPosition` : ce que fait un appui sur la ligne en cours
-        // dans la file. Laissé à l'ExoPlayer, il revient au début du flux — le
-        // milieu du morceau — en gardant le décalage.
+    fun `revenir a la position par defaut repart du debut du morceau`() {
+        // `seekToDefaultPosition()` sans rang, ce qu'un contrôleur envoie pour
+        // revenir au début. Laissé à l'ExoPlayer, il revient au début du flux —
+        // le milieu du morceau — en gardant le décalage.
+        //
+        // La variante avec rang, celle de la file, passe par une autre commande,
+        // déjà réécrite : viser celle-là rendrait ce test creux.
         jouer(transcode())
         lecteur.seekTo(133_000L)
         ecouler()
 
-        lecteur.seekToDefaultPosition(0)
+        lecteur.seekToDefaultPosition()
         ecouler()
 
         assertEquals(0L, faux.dernierDecalage)

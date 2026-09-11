@@ -121,10 +121,11 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
 
             COMMAND_SEEK_TO_MEDIA_ITEM -> allerA(mediaItemIndex, positionMs)
 
-            // Le début du morceau est un décalage `0`, pas le début du flux.
-            // C'est ce que demande un appui sur la ligne en cours de la file :
-            // `seekToDefaultPosition`, que l'ExoPlayer ramènerait au début du
-            // segment.
+            // `seekToDefaultPosition()` sans rang, qu'un contrôleur envoie pour
+            // revenir au début : le début du morceau est un décalage `0`, là où
+            // l'ExoPlayer ramènerait au début du flux, c'est-à-dire au milieu du
+            // morceau. La variante avec rang, celle de la file, passe par
+            // `COMMAND_SEEK_TO_MEDIA_ITEM`, juste au-dessus.
             COMMAND_SEEK_TO_DEFAULT_POSITION -> allerA(mediaItemIndex, C.TIME_UNSET)
 
             // Recommencer ou reculer d'une piste : tranché sur la position
