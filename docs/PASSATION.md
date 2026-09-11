@@ -4,13 +4,13 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-11**, sur `main` = `d6ec06d`.
+Dernière mise à jour : **2026-09-12**, sur `main` = `9ff45f5`.
 
 ## État du dépôt
 
-- `main` = `d6ec06d`, arbre propre, **aucune PR ouverte**, aucune branche en
+- `main` = `9ff45f5`, arbre propre, **aucune PR ouverte**, aucune branche en
   cours.
-- **426 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
+- **455 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
 - **Aucun avertissement de compilation.** C'est une propriété qu'on tient, pas un
   hasard — voir le piège `textReport` plus bas avant d'en supprimer un.
 - Gradle 9.7.1, AGP 9.4.0, OkHttp 5.5.0, media3 1.11.0.
@@ -24,8 +24,9 @@ Six lots, dans cet ordre :
 2. Navigation + identité — **fait**
 3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **fait**
 4. Transcodage (remonté du 6ᵉ rang : meilleur rapport travail/effet, le serveur
-   est déjà prêt) — **entamé** : le choix de la qualité est fait (#51), reste à
-   pouvoir se déplacer dans un morceau transcodé
+   est déjà prêt) — **presque fait** : qualité (#51), cache d'un transcodage
+   inachevé (#52), retrait du grisé (#53), déplacement dans un morceau
+   transcodé (#54) ; restent le **429** et le profil *Automatique*
 5. Paroles
 6. Audio avancé (EQ, ReplayGain, gapless, sortie)
 
@@ -33,6 +34,81 @@ Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait de
 lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
+
+**PR #54 — se déplacer dans un morceau transcodé (fusionnée le 12/09).**
+
+C'était impossible auparavant : un transcodage en direct n'a ni longueur ni
+plages, l'extracteur Ogg le tient donc pour non déplaçable, et Media3 retire
+alors la commande de saut à tous les contrôleurs. Le curseur restait désactivé,
+faute de durée.
+
+**Les règles ont été écrites avant le code**, à la demande de l'utilisateur :
+`docs/deplacement-dans-un-transcodage.md`, seize règles numérotées R1 à R16, que
+le code et les tests citent. **Le premier commit ne portait que cette note**, et
+CodeRabbit l'a relue avant qu'une ligne de code n'existe — deux précisions en
+sont sorties. À reprendre pour tout chantier de cette taille.
+
+**Le principe : une timeline logique.** Le flux reçu peut commencer à 2:13 ; pour
+tout le reste d'Android, le morceau commence à 0:00 et dure sa durée entière. La
+correction vit dans **une seule enveloppe**, `TranscodeSeekingPlayer`, un
+`ForwardingSimpleBasePlayer` que la session **et tous les écouteurs du service**
+reçoivent à la place de l'ExoPlayer — historique, minuterie, vitesse, boucle A-B.
+
+Ce que la lecture des sources de media3 1.11 a appris, et qui ne se devine pas :
+
+- `BasePlayer.seekToPrevious`, `seekBack` et `seekForward` calculent déjà leur
+  cible sur l'état de l'enveloppe, donc sur la position logique — et
+  `ForwardingSimpleBasePlayer.handleSeek` la **jette** pour laisser l'ExoPlayer la
+  recalculer sur sa position brute. C'est là qu'il faut reprendre la main ;
+- **ne jamais corriger la liste de lecture par `setPlaylist(List)`** : cela
+  fabrique une `PlaylistTimeline`, qui ignore l'ordre aléatoire (« TODO » dans la
+  1.11). On enveloppe la timeline (`LogicalTimeline`, un `ForwardingTimeline`) ;
+- `SimpleBasePlayer` déduit les transitions des **identifiants** de fenêtre, et
+  `replaceMediaItem` en crée de neufs dès que l'URI change : l'enveloppe rattache
+  l'ancien, sans quoi une relance passerait pour un changement de piste et
+  `ListeningCounter` compterait deux fois un morceau déjà écouté ;
+- `ListenerSet` livre `onEvents` par un **message posté**, jamais dans l'appel :
+  rattacher les identifiants juste après le remplacement suffit. Une garde posée
+  « au cas où » ne faisait tomber aucun test — elle a été retirée.
+
+**Un segment ne touche pas au cache** (`SegmentCacheBypass`) : le cache précède le
+résolveur, et un flux décalé rangé sous la clé du morceau se ferait servir le
+morceau depuis 0:00 pendant que l'écran afficherait l'instant demandé.
+
+**Ce qui n'a pas été fait :** le 429 à la relance, la coalescence des sauts
+rapprochés (R9, ni écrite ni éprouvée — elle vient avec le 429), le cache des
+segments, et la coupure réseau en cours de transcodage, qui se règlera par la
+même relance. Répéter un segment laisse entendre un instant son début avant la
+relance. **Rien n'a tourné sur un appareil** : personne n'a encore *entendu* un
+saut tomber au bon endroit.
+
+**Quatre remarques de revue, toutes justes, et deux leçons.** Deux vrais défauts
+— `seekToDefaultPosition()` sans rang qui ramenait au début du flux, un index non
+borné dans la surveillance des segments. Et **deux fois une couverture annoncée
+plus large qu'elle ne l'était** dans la note. Le réflexe à garder : relire ce
+qu'une note ou un message de commit **affirme** avec la même sévérité qu'un test.
+Une remarque de revue décrivait d'ailleurs le défaut plus largement qu'il ne
+l'était ; repris sans vérification, ce diagnostic a fini dans un message de
+commit avant d'être démenti par les sources.
+
+**PR #53 — retirer le grisé « serveur sans ffmpeg » (fusionnée le 11/09).**
+
+`waveflow-server` refuse de démarrer sans ffmpeg : l'état grisé était
+inatteignable. `transcodingAvailable` sort de l'API, du dépôt, du ViewModel et de
+l'écran, avec les onze tests qui n'éprouvaient que cet état. Un transcodage qui
+échoue en pleine lecture relève du 429.
+
+**PR #52 — ne pas garder le début d'un transcodage quitté en route (fusionnée le
+11/09).**
+
+Défaut de la #51, trouvé en préparant la #54. Quitté en route, le début d'un
+transcodage restait en cache ; à la réécoute, `CacheDataSource` le relisait puis
+demandait la suite par une plage, que le serveur refuse en 416 — une erreur que
+Media3 ne retente **jamais**. La piste tombait là où le cache s'arrêtait.
+`IncompleteTranscodeEviction` retire à la fermeture une entrée **sans longueur
+consignée** : c'est la signature d'un transcodage inachevé, l'original annonçant
+la sienne. Reproduit d'abord par un test sur la vraie chaîne, face à un
+`MockWebServer` qui répond comme le serveur.
 
 **PR #51 — choisir la qualité de lecture (fusionnée le 11/09).**
 
@@ -222,78 +298,29 @@ une erreur. Ne pas rouvrir.
 
 ## La suite : le lot 4, le transcodage
 
-Le choix de la qualité est fait (#51). Les décisions ci-dessous ont été
-**arrêtées avec l'utilisateur le 11/09**, après l'avis d'un agent extérieur. Ce
-qui reste, dans cet ordre :
+Le choix de la qualité (#51), le cache d'un transcodage inachevé (#52), le
+retrait du grisé (#53) et **le déplacement dans un morceau transcodé (#54)** sont
+faits. Les décisions ont été **arrêtées avec l'utilisateur le 11/09**, après
+l'avis d'un agent extérieur ; il reste les deux dernières, dans cet ordre.
 
-### 0. Un transcodage incomplet ne doit pas rester dans le cache — défaut de la #51
+**Les règles du déplacement sont dans `docs/deplacement-dans-un-transcodage.md`**
+— R1 à R16, citées par le code et les tests. Y retourner avant d'y toucher : R9
+(un saut chasse le précédent) et R16 (la reprise d'une position sauvegardée) n'y
+sont **pas** couvertes, et la note le dit.
 
-Déduit du bytecode de media3 1.11.0 et de `src/media.rs` du serveur, **à
-reproduire par un test avant de corriger**. On quitte un morceau transcodé en
-route : `CacheDataSource` garde le début sous la clé du rendu. À la réécoute, il
-lit ce début puis demande la suite avec `Range: bytes=N-`. Un transcodage en
-direct refuse toute plage qui ne part pas du premier octet (416,
-`Content-Range: bytes */0`), et Media3 range cette erreur
-(`ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE`, 2008) parmi celles qu'il ne retente
-jamais. Le morceau tombe en erreur là où le cache s'arrêtait.
-
-Une **coupure réseau** pendant un transcodage mène au même 416 à la reprise, qui
-repart de l'octet N. Le correctif du cache ne la couvre pas ; la relance par
-`offset_ms` du point 2, si.
-
-### 1. Retirer le grisé « serveur sans ffmpeg »
-
-Décidé : l'état est inatteignable, le garder coûte du code et des tests sans rien
-défendre. `transcodingAvailable` sort de l'API, du dépôt, du ViewModel et de
-l'écran. Un transcodage qui échoue en pleine lecture relève du point 3.
-
-### 2. Se déplacer dans un morceau transcodé
-
-**Aujourd'hui, c'est probablement impossible à la première écoute** — lu dans le
-serveur, **pas vérifié sur appareil**. Un transcodage en direct répond
-`Accept-Ranges: none`, refuse en **416** toute plage qui ne part pas du premier
-octet, et un client qui s'en va fait tuer ffmpeg et effacer le fichier partiel.
-ExoPlayer se déplace par plages.
-
-Décidé : **`offset_ms` et une timeline logique.** Le flux reçu peut commencer à
-2:13 ; pour le reste d'Android, le morceau commence toujours à 0:00 et dure sa
-durée entière. **Ces règles s'écrivent dans une note du dépôt, premier commit de
-la branche, avant tout code :**
-
-- position logique = décalage du flux + position dans le flux ; la durée est
-  celle du morceau entier, gardée à part de ce que le flux annonce ;
-- la correction vit **en un seul endroit**, un `ForwardingSimpleBasePlayer` du
-  service (présent dans media3 1.11) plutôt qu'un `ForwardingPlayer` : on corrige
-  l'état, et les événements que voit la session en découlent, là où un
-  `ForwardingPlayer` demanderait de corriger chaque méthode et chaque événement ;
-- répétition d'un titre, « précédent » et piste suivante repartent de
-  `offset_ms=0` — ne jamais boucler sur le reste du flux ;
-- « précédent » choisit entre recommencer et reculer d'une piste **sur la
-  position logique** ;
-- la boucle A-B et la reprise d'une position sauvegardée lisent la position
-  logique ;
-- **pas de cache pour un flux à `offset_ms > 0`** dans un premier temps. Plus
-  tard, éventuellement, sous une clé qui porte le décalage — jamais sous celle du
-  morceau entier.
-
-**Resonus le fait en production** et a payé chaque piège, ticket à l'appui ; voir
-« Sources d'inspiration ». Les plus coûteux : la session qui lit la position
-brute (notification et voiture reviennent à 0:00 à chaque saut), la durée d'un
-segment qui est celle du reste, la répétition qui boucle le segment seul, et tout
-saut qui devient un nouveau décalage une fois un segment en cours.
-
-**Côté serveur, un effet de bord est signalé :** un transcodage abandonné par un
+**Côté serveur, un effet de bord reste ouvert :** un transcodage abandonné par un
 saut n'est jamais mis en cache, si bien qu'une piste déplacée à sa première
-écoute se retranscode à chaque écoute — `InstaZDLL/waveflow-server#185`.
+écoute se retranscode à chaque écoute — `InstaZDLL/waveflow-server#185`. Le
+déplacement étant désormais possible côté client, le gaspillage est réel.
 
-### 3. Le 429
+### 1. Le 429
 
 Honorer `Retry-After` avec gigue et un nombre borné d'essais ; ne redescendre
 vers l'original qu'une fois ceux-ci épuisés, seulement si la liaison le porte,
 et le dire à l'écran. C'est le contrat du serveur, `docs/api-v2-guide.md`,
 « When a transcode is refused » — pas une décision à prendre.
 
-### 4. Le profil *Automatique*
+### 2. Le profil *Automatique*
 
 Décidé : **deux profils**, affichés *Wi-Fi* et *Données mobiles*, mais choisis en
 interne sur le caractère **facturé ou non** du réseau (`NET_CAPABILITY_NOT_METERED`)
