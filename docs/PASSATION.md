@@ -4,13 +4,13 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-11**, sur `main` = `ae32fa0`.
+Dernière mise à jour : **2026-09-11**, sur `main` = `d6ec06d`.
 
 ## État du dépôt
 
-- `main` = `ae32fa0`, arbre propre, **aucune PR ouverte**, aucune branche en
+- `main` = `d6ec06d`, arbre propre, **aucune PR ouverte**, aucune branche en
   cours.
-- **391 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
+- **426 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
 - **Aucun avertissement de compilation.** C'est une propriété qu'on tient, pas un
   hasard — voir le piège `textReport` plus bas avant d'en supprimer un.
 - Gradle 9.7.1, AGP 9.4.0, OkHttp 5.5.0, media3 1.11.0.
@@ -24,7 +24,8 @@ Six lots, dans cet ordre :
 2. Navigation + identité — **fait**
 3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **fait**
 4. Transcodage (remonté du 6ᵉ rang : meilleur rapport travail/effet, le serveur
-   est déjà prêt)
+   est déjà prêt) — **entamé** : le choix de la qualité est fait (#51), reste à
+   pouvoir se déplacer dans un morceau transcodé
 5. Paroles
 6. Audio avancé (EQ, ReplayGain, gapless, sortie)
 
@@ -32,6 +33,44 @@ Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait de
 lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
+
+**PR #51 — choisir la qualité de lecture (fusionnée le 11/09).**
+
+Trois profils sous *Réglages ▸ Serveur*, au-dessus du cache : *Qualité
+d'origine* (le défaut), *Haute qualité* (Opus 160 kbit/s) et *Économie* (Opus
+96 kbit/s). L'original garde le marqueur et la clé de cache d'avant : qui ne
+touche à rien ne perd pas son cache.
+
+**Le rendu voyage dans la piste, pas dans les préférences.** `CacheDataSource`
+calcule sa clé *avant* que le résolveur ne construise l'URL ; lire le réglage aux
+deux bouts laisserait un changement s'intercaler, et une version Opus se
+rangerait sous la clé de l'original. `withRendering` réécrit donc **ensemble** le
+marqueur (`waveflow://track/<id>?format=opus&bitrate=96`) et la clé, et
+`RemoteStreamResolver` relit le marqueur. C'est le motif « vérifier puis agir »,
+évité cette fois par construction plutôt que corrigé après coup.
+
+**C'est le service qui pose le rendu**, dans `BrowseCallback.addMediaItems`,
+comme il applique déjà la vitesse — une fois par file, pour qu'un album ne se
+partage pas entre deux qualités. Au démarrage à froid, la file **attend** la
+lecture du réglage plutôt que de prendre le défaut. L'attente vit dans
+`firstValueAsFuture`, dont le futur se termine toujours : la revue a relevé qu'un
+service détruit pendant l'attente le laissait en suspens, et la réponse que
+Media3 attend de la session avec lui.
+
+**Les profils transcodés se grisent sur un serveur sans ffmpeg — cas qui ne se
+présente pas.** `waveflow-server` refuse de démarrer sans ffmpeg, si bien que
+`GET /api/v2/transcode/status` rend toujours `available: true`. Le grisé suit le
+contrat de l'API et porte un état aujourd'hui inatteignable.
+
+Un test de bout en bout pour l'original, suggéré en revue, a été **écarté** : il
+passerait la chaîne débranchée, `toMediaItem()` produisant déjà le marqueur et la
+clé de l'original. CodeRabbit en a convenu.
+
+**Ce qui n'a pas été fait :** se déplacer dans un morceau transcodé — voir « La
+suite » —, le 429, le profil *Automatique*, et re-rendre la file en cours quand
+on change de qualité ; l'écran dit que le réglage s'applique aux pistes lancées
+ensuite. **Rien n'a tourné sur un appareil** : Robolectric ne décode pas l'Opus,
+le fait qu'une piste transcodée *se joue* n'est pas prouvé.
 
 **PR #50 — la boucle A-B (fusionnée le 11/09).**
 
@@ -182,16 +221,50 @@ une erreur. Ne pas rouvrir.
 
 ## La suite : le lot 4, le transcodage
 
-Le lot 3 est clos ; le lot 4 vient — remonté au quatrième rang pour son rapport
-travail/effet, le serveur étant déjà prêt.
+Le choix de la qualité est fait (#51). Ce qui reste, dans cet ordre :
 
-**Le terrain est préparé côté Android.** `MediaItemMapper.cacheKeyOf` prend déjà
-un format et un débit, et fait entrer le rendu entier dans la clé de cache : le
-serveur sert la même piste en plusieurs versions, et les confondre rendrait un
-Opus à 64 kbit/s à qui demande l'original. Le client ne demande aujourd'hui que
-`DEFAULT_FORMAT` (`raw`), sans débit. Lire la KDoc de `cacheKeyOf` avant de
-brancher quoi que ce soit : elle dit pourquoi le débit est omis de la clé quand
-il ne décrit aucun rendu.
+### 1. Se déplacer dans un morceau transcodé — la décision à confirmer
+
+**Aujourd'hui, c'est probablement impossible à la première écoute** — lu dans le
+serveur, **pas vérifié sur appareil**. Dans `src/media.rs`, un transcodage en
+direct répond `Accept-Ranges: none`, refuse en **416** toute plage qui ne part
+pas du premier octet, et un client qui s'en va fait tuer ffmpeg et effacer le
+fichier partiel. ExoPlayer se déplace par plages. Les plages ne reviennent qu'une
+fois le transcodage terminé et mis en cache côté serveur.
+
+**La voie recommandée à l'utilisateur, pas encore arrêtée par lui :** redemander
+le flux avec `offset_ms`, que le serveur accepte déjà sur l'URL du ticket, et
+compenser la position. En Media3, un `ForwardingPlayer` dans le service, pour que
+la session — donc la notification et Android Auto — lise la position compensée.
+**Resonus le fait en production** et a payé chaque piège, ticket à l'appui ; voir
+« Sources d'inspiration » plus bas. Les plus coûteux :
+
+- la session qui lit la position brute : notification et voiture reviennent à
+  0:00 à chaque saut ;
+- la durée d'un segment, qui est celle du reste et non du morceau ;
+- la répétition d'un titre, qui boucle le segment seul ;
+- une fois un segment en cours, tout saut est un nouveau décalage.
+
+Et un piège propre à ce dépôt : **un segment ne doit jamais entrer dans le cache
+sous la clé du morceau entier.** La clé devra porter le décalage, ou le segment
+contourner le cache.
+
+**Côté serveur, un effet de bord est signalé :** un transcodage abandonné par un
+saut n'est jamais mis en cache, si bien qu'une piste déplacée à sa première
+écoute se retranscode à chaque écoute — `InstaZDLL/waveflow-server#185`.
+
+### 2. Le 429
+
+Honorer `Retry-After` avec gigue et un nombre borné d'essais ; ne redescendre
+vers l'original qu'une fois ceux-ci épuisés, seulement si la liaison le porte,
+et le dire à l'écran. C'est le contrat du serveur, `docs/api-v2-guide.md`,
+« When a transcode is refused ».
+
+### 3. Le profil *Automatique*
+
+Resonus en donne une forme éprouvée : une qualité pour le Wi-Fi, une autre pour
+les données mobiles. Elle se réconcilie avec la décision du 30/08 — des profils,
+pas un codec — en choisissant un profil par réseau.
 
 **L'en-tête du lecteur est plein**, et le restera : quatre boutons — réduire,
 vitesse, veille, file — et la colonne du titre déjà serrée sur un écran étroit.
@@ -301,3 +374,23 @@ pagine sur le réseau. Le retirer de la barre sans cela l'aurait rendu
   côté peuvent fusionner en un `main` qui ne compile pas. C'est arrivé le 18/08
   avec media3 1.5.1 → 1.11.0. Après une fusion suivie d'un Dependabot, relancer
   `ktlintCheck detekt testDebugUnitTest` sur `main`.
+- **Ce que le client attend du serveur s'ouvre en issue sur `waveflow-server`**,
+  directement — autorisé par l'utilisateur le 11/09. Une issue par demande,
+  **vérifiée dans le code de `main`** du serveur, après recherche de doublons,
+  en anglais et selon les conventions de ce dépôt-là. Ni commit ni PR côté
+  serveur.
+
+## Sources d'inspiration
+
+Deux lecteurs désignés par l'utilisateur, à lire pour s'inspirer — leurs choix
+se reprennent avec leur raison, pas sans.
+
+- **Resonus** — `E:\Workspace\resonus`, React Native (Expo, `expo-audio`), GPLv3.
+  Pour le **transcodage** : se déplacer dans un flux transcodé
+  (`src/store/player.ts`, bloc « Seek in transcoded streams »), la qualité par
+  réseau (`src/app/settings/playback.tsx`). Ses commentaires citent les tickets
+  qui ont motivé chaque choix.
+- **CrystalMusic** — `E:\Workspace\CrystalMusic`, Compose, **local seulement**
+  sur `MediaPlayer`, Apache-2.0. Pour l'**interface** : Material 3 Expressive,
+  formes de pochette, curseur ondulé, et une notification qui porte les paroles
+  en direct (`core/Utils.kt`) — utile au lot 5.
