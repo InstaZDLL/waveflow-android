@@ -529,12 +529,10 @@ private fun WaveFlowRoot(
                         serverState.connected?.let { session ->
                             val qualityState by qualityViewModel.state.collectAsStateWithLifecycle()
 
-                            // La taille bouge à chaque piste lue, et ffmpeg peut
-                            // avoir été installé ou retiré du serveur : les deux
-                            // se relèvent à l'ouverture, pas une fois pour toutes.
+                            // La taille bouge à chaque piste lue : elle se relève
+                            // à l'ouverture, pas une fois pour toutes.
                             LaunchedEffect(Unit) {
                                 cacheViewModel.refresh()
-                                qualityViewModel.refresh()
                             }
 
                             ServerAccountScreen(

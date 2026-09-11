@@ -188,14 +188,6 @@ class FakeCatalogApi(
     var lastRendering: StreamRendering? = null
         private set
 
-    /** Ce que le serveur répond sur sa capacité à transcoder. */
-    var transcoding = true
-
-    override suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean {
-        record(serverUrl, accessToken, null)
-        return transcoding
-    }
-
     private suspend fun record(serverUrl: String, accessToken: String, page: Pair<Int, Int>?) {
         calls++
         lastServerUrl = serverUrl
@@ -325,8 +317,6 @@ class PagingCatalogApi(
         trackId: String,
         rendering: StreamRendering,
     ): String = "$serverUrl/api/v2/stream/ticket-$trackId"
-
-    override suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean = true
 
     private fun failIfDue(call: Int) {
         if (failFromCall > 0 && call >= failFromCall) {

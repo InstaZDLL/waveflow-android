@@ -82,18 +82,6 @@ class ServerScreenTest {
         assertEquals(listOf(StreamQuality.Haute), choisies)
     }
 
-    @Test
-    fun `un serveur sans ffmpeg grise les profils transcodes`() {
-        // Proposer un profil que le serveur ne sait pas produire ferait
-        // échouer chaque piste : il reste visible, pour qu'on sache qu'il
-        // existe, mais ne se choisit pas.
-        afficherCompte(quality = StreamQualityUiState(transcodingAvailable = false))
-
-        compose.onNodeWithText("Qualité d'origine").assertIsEnabled()
-        compose.onNodeWithText("Haute qualité").assertIsNotEnabled()
-        compose.onNodeWithText("Économie").assertIsNotEnabled()
-    }
-
     /**
      * Nombre de nœuds dont un texte contient [text].
      *

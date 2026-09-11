@@ -43,10 +43,6 @@ class CatalogRepository(
     suspend fun streamUrl(trackId: String, rendering: StreamRendering): String =
         authorized { url, token -> api.streamTicket(url, token, trackId, rendering) }
 
-    /** Voir [CatalogApi.transcodingAvailable]. */
-    suspend fun transcodingAvailable(): Boolean =
-        authorized { url, token -> api.transcodingAvailable(url, token) }
-
     /**
      * Exécute [call] avec un jeton valide, en réessayant une fois sur refus.
      *
