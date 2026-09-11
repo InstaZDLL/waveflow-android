@@ -228,6 +228,39 @@ class HttpCatalogApiTest {
     }
 
     @Test
+    fun `un decalage s'ajoute a l'URL d'un transcodage`() = runTest {
+        // Un transcodage en direct n'a pas de plages : c'est par cet instant
+        // qu'on s'y déplace.
+        server.enqueue(MockResponse().setBody(TICKET_BODY))
+
+        val streamUrl = api.streamTicket(
+            url(),
+            "wfa_1",
+            "c07f8d98",
+            StreamRendering("opus", 96),
+            offsetMs = 133_000L,
+        )
+
+        assertEquals("${url()}/api/v2/stream/VkdLrczM?format=opus&bitrate=96&offset_ms=133000", streamUrl)
+    }
+
+    @Test
+    fun `l'original ne recoit jamais de decalage`() = runTest {
+        // Le serveur le refuserait en 422 : l'original se déplace par plages.
+        server.enqueue(MockResponse().setBody(TICKET_BODY))
+
+        val streamUrl = api.streamTicket(
+            url(),
+            "wfa_1",
+            "c07f8d98",
+            StreamRendering.ORIGINAL,
+            offsetMs = 133_000L,
+        )
+
+        assertEquals("${url()}/api/v2/stream/VkdLrczM", streamUrl)
+    }
+
+    @Test
     fun `un jeton refuse remonte comme tel`() = runTest {
         server.enqueue(
             MockResponse()

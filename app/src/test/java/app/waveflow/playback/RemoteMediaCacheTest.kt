@@ -66,7 +66,8 @@ class RemoteMediaCacheTest {
     /**
      * Un résolveur qui rend une URL différente à chaque appel, comme le vrai.
      *
-     * Le rendu du marqueur suit jusqu'au serveur, comme dans [RemoteStreamResolver].
+     * Le rendu et le décalage du marqueur suivent jusqu'au serveur, comme dans
+     * [RemoteStreamResolver].
      */
     private val resolver = ResolvingDataSource.Resolver { dataSpec ->
         val trackId = trackIdOfRemoteUri(dataSpec.uri) ?: return@Resolver dataSpec
@@ -112,11 +113,13 @@ class RemoteMediaCacheTest {
         trackId: String,
         format: String = DEFAULT_FORMAT,
         bitrate: Int? = null,
+        offsetMs: Long = 0L,
     ): DataSpec {
         val piste = MediaItem.Builder()
             .setUri("waveflow://track/$trackId".toUri())
             .build()
             .withRendering(StreamRendering(format, bitrate))
+            .withStreamOffset(offsetMs)
         val configuration = checkNotNull(piste.localConfiguration)
         return DataSpec.Builder()
             .setUri(configuration.uri)
@@ -127,7 +130,8 @@ class RemoteMediaCacheTest {
     /**
      * Répond comme `waveflow-server` (`src/media.rs`) : l'original se sert par
      * plages ; un transcodage en direct arrive par morceaux, sans longueur, et
-     * refuse toute plage qui ne part pas du premier octet.
+     * refuse toute plage qui ne part pas du premier octet ; un segment est un
+     * autre flux, qui commence à l'instant demandé.
      */
     private fun servirCommeLeServeur(contenu: ByteArray) {
         server.dispatcher = object : Dispatcher() {
@@ -138,11 +142,16 @@ class RemoteMediaCacheTest {
                     ?.toInt()
                     ?: 0
                 val transcode = request.requestUrl?.queryParameter("format") != null
+                val decalage = request.requestUrl?.queryParameter("offset_ms")?.toLong() ?: 0L
                 return when {
                     transcode && debut > 0 -> MockResponse()
                         .setResponseCode(416)
                         .setHeader("Content-Range", "bytes */0")
                         .setHeader("Accept-Ranges", "none")
+
+                    transcode && decalage > 0 -> MockResponse()
+                        .setHeader("Accept-Ranges", "none")
+                        .setChunkedBody(Buffer().write(segmentDe(decalage)), 4096)
 
                     transcode -> MockResponse()
                         .setHeader("Accept-Ranges", "none")
@@ -290,6 +299,34 @@ class RemoteMediaCacheTest {
     }
 
     @Test
+    fun `un segment ne se sert pas du morceau deja en cache`() {
+        // Le cache est posé avant le résolveur. Sous la clé du morceau, un
+        // segment se verrait servir le morceau depuis 0:00 pendant que l'écran
+        // afficherait l'instant demandé.
+        val contenu = octetsAudio()
+        servirCommeLeServeur(contenu)
+        val factory = mediaCache.dataSourceFactory(resolver)
+        lire(factory.createDataSource(), specDe("piste-1", "opus", 96))
+
+        val segment = lire(factory.createDataSource(), specDe("piste-1", "opus", 96, offsetMs = 133_000L))
+
+        assertArrayEquals(segmentDe(133_000L), segment)
+        assertEquals("le segment est allé au serveur", 2, server.requestCount)
+    }
+
+    @Test
+    fun `un segment ne s'ecrit pas dans le cache`() = runTest {
+        // Lu jusqu'au bout, son reste rangé sous la clé du morceau serait
+        // resservi à qui demande le morceau entier.
+        servirCommeLeServeur(octetsAudio())
+        val factory = mediaCache.dataSourceFactory(resolver)
+
+        lire(factory.createDataSource(), specDe("piste-1", "opus", 96, offsetMs = 133_000L))
+
+        assertEquals(0L, mediaCache.usedBytes())
+    }
+
+    @Test
     fun `un fichier local ne passe pas par le cache`() {
         // Il est déjà sur le disque : le recopier doublerait sa place.
         val fichier = File.createTempFile("local", ".bin").apply { writeBytes("local".toByteArray()) }
@@ -375,6 +412,9 @@ private const val AUTORITE = "app.waveflow.test.audio"
 private const val OCTETS_ECOUTES = 8_000
 
 private fun octetsAudio() = ByteArray(64_000) { (it % 251).toByte() }
+
+/** Ce que le serveur rend d'un flux décalé : reconnaissable, et autre que le morceau. */
+private fun segmentDe(offsetMs: Long) = "segment à partir de $offsetMs ms".toByteArray()
 
 /**
  * Sert un fichier temporaire derrière une URI `content://`.

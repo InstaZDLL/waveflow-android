@@ -52,7 +52,10 @@ class RemoteMediaCache(context: Context) : PlaybackCache {
      * - `DefaultDataSource` aiguille en amont selon le schéma : `content://` et
      *   `file://` partent vers les sources locales sans jamais toucher au cache ;
      * - au-dessus du cache, [IncompleteTranscodeEviction] retire le début d'un
-     *   transcodage quitté en route, que le serveur ne laisserait pas compléter.
+     *   transcodage quitté en route, que le serveur ne laisserait pas compléter ;
+     * - au-dessus encore, [SegmentCacheBypass] envoie un segment droit au
+     *   résolveur : ses octets ne sont pas ceux du morceau, et le cache les
+     *   confondrait.
      */
     fun dataSourceFactory(resolver: ResolvingDataSource.Resolver): DataSource.Factory {
         val resolving = ResolvingDataSource.Factory(DefaultHttpDataSource.Factory(), resolver)
@@ -72,7 +75,14 @@ class RemoteMediaCache(context: Context) : PlaybackCache {
             IncompleteTranscodeEviction(cached.createDataSource(), cache, cles)
         }
 
-        return DefaultDataSource.Factory(appContext, sansDebutOrphelin)
+        val segmentsHorsCache = DataSource.Factory {
+            SegmentCacheBypass(
+                cached = sansDebutOrphelin.createDataSource(),
+                direct = resolving.createDataSource(),
+            )
+        }
+
+        return DefaultDataSource.Factory(appContext, segmentsHorsCache)
     }
 
     override val maxBytes: Long = MAX_BYTES

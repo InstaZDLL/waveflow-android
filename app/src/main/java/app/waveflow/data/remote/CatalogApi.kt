@@ -62,12 +62,18 @@ interface CatalogApi {
      * Le ticket ne porte pas le rendu : [rendering] s'ajoute à l'URL rendue, et
      * le serveur le lit au moment de servir. L'original n'y ajoute rien — le
      * serveur refuse un débit accompagnant `raw`.
+     *
+     * @param offsetMs l'instant du morceau où le flux doit commencer. Un
+     *   transcodage en direct n'a pas de plages : c'est ainsi qu'on s'y déplace.
+     *   Ignoré pour l'original, que le serveur refuse de décaler et qui se
+     *   déplace par plages.
      */
     suspend fun streamTicket(
         serverUrl: String,
         accessToken: String,
         trackId: String,
         rendering: StreamRendering,
+        offsetMs: Long = 0L,
     ): String
 }
 

@@ -98,6 +98,7 @@ class HttpCatalogApi(
         accessToken: String,
         trackId: String,
         rendering: StreamRendering,
+        offsetMs: Long,
     ): String {
         val ticket = http.post(
             serverUrl = serverUrl,
@@ -106,17 +107,21 @@ class HttpCatalogApi(
             accessToken = accessToken,
         ).decode<StreamTicketResponse>()
 
-        return http.absoluteUrl(serverUrl, ticket.url, query = rendering.toQuery())
+        return http.absoluteUrl(serverUrl, ticket.url, query = rendering.toQuery(offsetMs))
     }
 
-    /** L'original ne dit rien : le serveur le sert par défaut, et refuse qu'on lui donne un débit. */
-    private fun StreamRendering.toQuery(): Map<String, String> =
+    /**
+     * L'original ne dit rien : le serveur le sert par défaut, et refuse qu'on
+     * lui donne un débit ou un décalage.
+     */
+    private fun StreamRendering.toQuery(offsetMs: Long): Map<String, String> =
         if (isOriginal) {
             emptyMap()
         } else {
             buildMap {
                 put("format", format)
                 bitrate?.let { put("bitrate", it.toString()) }
+                if (offsetMs > 0L) put("offset_ms", offsetMs.toString())
             }
         }
 

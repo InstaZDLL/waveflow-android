@@ -24,6 +24,10 @@ import java.io.IOException
  * clé de cache a été calculée depuis ce même marqueur, avant ce résolveur. Relire
  * le réglage ici laisserait un changement s'intercaler entre les deux, et une
  * version se rangerait sous le nom d'une autre. Voir [withRendering].
+ *
+ * Le décalage d'un segment se lit au même endroit, pour la même raison : c'est
+ * sur ce marqueur que la chaîne a décidé de ne pas passer par le cache. Voir
+ * [withStreamOffset].
  */
 class RemoteStreamResolver(
     private val catalogRepository: CatalogRepository,
@@ -32,9 +36,10 @@ class RemoteStreamResolver(
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val trackId = trackIdOfRemoteUri(dataSpec.uri) ?: return dataSpec
         val rendering = renderingOfRemoteUri(dataSpec.uri)
+        val offsetMs = streamOffsetOfRemoteUri(dataSpec.uri)
 
         val url = try {
-            runBlocking { catalogRepository.streamUrl(trackId, rendering) }
+            runBlocking { catalogRepository.streamUrl(trackId, rendering, offsetMs) }
         } catch (error: Exception) {
             // Media3 n'attend que des IOException ici : toute autre remonterait
             // brute jusqu'au lecteur et ferait tomber le service au lieu de
