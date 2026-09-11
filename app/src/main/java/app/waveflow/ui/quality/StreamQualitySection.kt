@@ -52,20 +52,18 @@ fun StreamQualitySection(
                     QualityRow(
                         quality = quality,
                         selected = quality == state.current,
-                        enabled = state.isSelectable(quality),
                         onChoose = onChoose,
                     )
                 }
             }
 
             Text(
-                text = note(state),
+                // Le rendu est posé sur chaque piste quand elle entre dans la
+                // file : changer d'avis en pleine écoute sans que rien ne bouge
+                // se lirait sinon comme une panne.
+                text = "S'applique aux pistes lancées ensuite, pas à la file en cours.",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (state.isCurrentUnavailable) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
@@ -76,7 +74,6 @@ fun StreamQualitySection(
 private fun QualityRow(
     quality: StreamQuality,
     selected: Boolean,
-    enabled: Boolean,
     onChoose: (StreamQuality) -> Unit,
 ) {
     Row(
@@ -85,13 +82,12 @@ private fun QualityRow(
             .fillMaxWidth()
             .selectable(
                 selected = selected,
-                enabled = enabled,
                 role = Role.RadioButton,
                 onClick = { onChoose(quality) },
             )
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        RadioButton(selected = selected, onClick = null, enabled = enabled)
+        RadioButton(selected = selected, onClick = null)
         Column(
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier.padding(start = 16.dp),
@@ -99,11 +95,7 @@ private fun QualityRow(
             Text(
                 text = quality.label,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = quality.summary,
@@ -112,22 +104,4 @@ private fun QualityRow(
             )
         }
     }
-}
-
-/**
- * Ce qu'il faut savoir sous les choix.
- *
- * Par défaut, que le réglage ne touche pas la file en cours : le rendu est posé
- * sur chaque piste quand elle y entre, et changer d'avis en pleine écoute sans
- * que rien ne bouge se lirait sinon comme une panne.
- */
-internal fun note(state: StreamQualityUiState): String = when {
-    state.isCurrentUnavailable ->
-        "Ce serveur ne sait pas transcoder : ses pistes ne pourront pas être lues " +
-            "dans la qualité choisie. Revenez à la qualité d'origine."
-
-    state.transcodingAvailable == false ->
-        "Ce serveur ne sait pas transcoder : seule la qualité d'origine est disponible."
-
-    else -> "S'applique aux pistes lancées ensuite, pas à la file en cours."
 }

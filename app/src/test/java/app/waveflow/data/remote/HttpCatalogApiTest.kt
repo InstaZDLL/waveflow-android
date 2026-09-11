@@ -228,20 +228,6 @@ class HttpCatalogApiTest {
     }
 
     @Test
-    fun `un serveur sans ffmpeg le dit`() = runTest {
-        server.enqueue(
-            MockResponse().setBody("""{"available":false,"active":0,"global_limit":4,"per_user_limit":2}"""),
-        )
-
-        val disponible = api.transcodingAvailable(url(), "wfa_1")
-
-        val request = server.takeRequest()
-        assertEquals("/api/v2/transcode/status", request.path)
-        assertEquals("Bearer wfa_1", request.getHeader("Authorization"))
-        assertEquals(false, disponible)
-    }
-
-    @Test
     fun `un jeton refuse remonte comme tel`() = runTest {
         server.enqueue(
             MockResponse()

@@ -109,13 +109,6 @@ class HttpCatalogApi(
         return http.absoluteUrl(serverUrl, ticket.url, query = rendering.toQuery())
     }
 
-    override suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean =
-        http.get(
-            serverUrl = serverUrl,
-            path = TRANSCODE_STATUS,
-            accessToken = accessToken,
-        ).decode<TranscodeStatusResponse>().available
-
     /** L'original ne dit rien : le serveur le sert par défaut, et refuse qu'on lui donne un débit. */
     private fun StreamRendering.toQuery(): Map<String, String> =
         if (isOriginal) {
@@ -141,7 +134,6 @@ class HttpCatalogApi(
     }
 
     private companion object {
-        const val TRANSCODE_STATUS = "api/v2/transcode/status"
         const val ALBUMS = "api/v2/albums"
         const val ARTISTS = "api/v2/artists"
         const val TRACKS = "api/v2/tracks"

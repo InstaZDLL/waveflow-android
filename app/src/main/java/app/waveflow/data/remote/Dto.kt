@@ -139,18 +139,6 @@ internal data class StreamTicketResponse(
     @SerialName("expires_at") val expiresAt: Long,
 )
 
-/**
- * `GET /api/v2/transcode/status`.
- *
- * Le serveur rend aussi `active`, `global_limit` et `per_user_limit` ; seul
- * `available` sert aujourd'hui, et un champ lu sans être utilisé serait un
- * champ de plus à croire à jour.
- */
-@Serializable
-internal data class TranscodeStatusResponse(
-    val available: Boolean,
-)
-
 @Serializable
 internal data class ArtistDetailResponse(
     val id: String,

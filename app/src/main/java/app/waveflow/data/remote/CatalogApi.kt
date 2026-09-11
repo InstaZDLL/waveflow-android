@@ -69,14 +69,6 @@ interface CatalogApi {
         trackId: String,
         rendering: StreamRendering,
     ): String
-
-    /**
-     * `GET /api/v2/transcode/status` : le serveur sait-il transcoder ?
-     *
-     * Un serveur sans ffmpeg sert les originaux et rien d'autre. Lui demander
-     * une version transcodée ferait échouer chaque piste.
-     */
-    suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean
 }
 
 /**
