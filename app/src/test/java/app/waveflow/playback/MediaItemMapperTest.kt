@@ -1,6 +1,8 @@
 package app.waveflow.playback
 
 import androidx.core.net.toUri
+import app.waveflow.model.StreamQuality
+import app.waveflow.model.StreamRendering
 import app.waveflow.testing.remoteSong
 import app.waveflow.testing.song
 import org.junit.Assert.assertEquals
@@ -84,6 +86,56 @@ class MediaItemMapperTest {
         assertEquals(sansDebit, cacheKeyOf("piste", "raw", bitrate = 0))
         assertEquals(sansDebit, cacheKeyOf("piste", "raw", bitrate = -1))
         assertNotEquals(sansDebit, cacheKeyOf("piste", "raw", bitrate = 128))
+    }
+
+    @Test
+    fun `l'original garde le marqueur et la cle d'avant le reglage`() {
+        // Le cache constitué avant que la qualité ne se choisisse est rangé
+        // sous le marqueur nu : le retrouver à l'identique est ce qui le garde
+        // valable pour qui ne touche pas au réglage.
+        val avant = remoteSong(id = "c07f8d98").toMediaItem()
+        val apres = avant.withRendering(StreamRendering.ORIGINAL)
+
+        assertEquals(avant.localConfiguration?.uri, apres.localConfiguration?.uri)
+        assertEquals(avant.localConfiguration?.customCacheKey, apres.localConfiguration?.customCacheKey)
+    }
+
+    @Test
+    fun `le rendu pose se relit sur le marqueur, et la cle dit le meme`() {
+        // Les deux bouts de la chaîne : le cache nomme l'entrée d'après la clé,
+        // le résolveur demande au serveur d'après le marqueur. S'ils ne disent
+        // pas le même rendu, une version se range sous le nom d'une autre.
+        StreamQuality.entries.forEach { qualite ->
+            val rendu = qualite.rendering
+            val item = remoteSong(id = "c07f8d98").toMediaItem().withRendering(rendu)
+            val config = item.localConfiguration!!
+
+            assertEquals(qualite.name, rendu, renderingOfRemoteUri(config.uri))
+            assertEquals(qualite.name, cacheKeyOf("c07f8d98", rendu.format, rendu.bitrate), config.customCacheKey)
+            assertEquals(qualite.name, "c07f8d98", trackIdOfRemoteUri(config.uri))
+        }
+    }
+
+    @Test
+    fun `reposer un rendu remplace le precedent`() {
+        // Une piste remise en file après un changement de réglage : le marqueur
+        // ne doit pas cumuler deux formats, dont le résolveur ne lirait que le
+        // premier pendant que la clé dirait le second.
+        val item = remoteSong(id = "a").toMediaItem()
+            .withRendering(StreamRendering("opus", 96))
+            .withRendering(StreamRendering("opus", 160))
+
+        assertEquals(StreamRendering("opus", 160), renderingOfRemoteUri(item.localConfiguration!!.uri))
+        assertEquals(cacheKeyOf("a", "opus", 160), item.localConfiguration?.customCacheKey)
+    }
+
+    @Test
+    fun `une piste locale ne recoit aucun rendu`() {
+        // Elle ne passe pas par le serveur : un format sur son URI la rendrait
+        // illisible, `content://` ne sachant qu'en faire.
+        val avant = song(id = 42L).toMediaItem()
+
+        assertEquals(avant, avant.withRendering(StreamRendering("opus", 96)))
     }
 
     @Test

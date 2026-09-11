@@ -14,7 +14,9 @@ import androidx.media3.session.MediaSession
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.PlayHistoryRepository
 import app.waveflow.data.PreferencesStore
+import app.waveflow.model.StreamRendering
 import coil.imageLoader
+import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,7 +70,15 @@ class PlaybackService : MediaLibraryService() {
      * parce qu'il faut pouvoir lui redemander de prévenir ses abonnés à chaque
      * fois que [browseSnapshot] change.
      */
-    private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot })
+    private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot }, ::renduDemande)
+
+    /**
+     * Le rendu de la qualité choisie, `null` tant que le réglage n'a pas été lu.
+     *
+     * `null` et non le défaut : le défaut est une valeur qu'on pourrait poser
+     * par erreur sur une file. Voir [renduDemande].
+     */
+    private val rendu = MutableStateFlow<StreamRendering?>(null)
 
     override fun onCreate() {
         super.onCreate()
@@ -111,12 +121,40 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(historyListener(container.playHistoryRepository))
         observeSleepTimer(container.sleepTimer, player)
         observePlaybackSpeed(container.preferencesStore, player)
+        observeStreamQuality(container.preferencesStore)
         observeAbLoop(container.abLoop, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
         // sans délai, et elle a des abonnés à prévenir.
         observeLibrary(container)
     }
+
+    /**
+     * Tient [rendu] à jour tant que le service vit.
+     *
+     * Observé plutôt que lu à la demande, pour la même raison que la vitesse :
+     * le service joue aussi quand aucun écran n'est ouvert.
+     */
+    private fun observeStreamQuality(preferences: PreferencesStore) {
+        artworkScope.launch {
+            preferences.preferences
+                .map { it.streamQuality.rendering }
+                .distinctUntilChanged()
+                .collect { rendu.value = it }
+        }
+    }
+
+    /**
+     * Le rendu à poser sur une file, dès que le réglage est connu.
+     *
+     * Immédiat en régime établi. Au démarrage à froid — le service lancé par
+     * Android Auto ou une reprise de lecture —, la file peut arriver avant la
+     * première lecture du fichier de préférences : on attend alors la valeur.
+     * Elle arrive toujours, le magasin rendant ses défauts plutôt que
+     * d'échouer ; et si le service est détruit avant, le futur se termine quand
+     * même. Voir [firstValueAsFuture].
+     */
+    private fun renduDemande(): ListenableFuture<StreamRendering> = rendu.firstValueAsFuture(artworkScope)
 
     /**
      * Met la lecture en pause quand la minuterie de veille arrive à échéance.

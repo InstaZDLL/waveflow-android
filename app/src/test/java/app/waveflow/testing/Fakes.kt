@@ -10,6 +10,7 @@ import app.waveflow.model.Playlist
 import app.waveflow.model.PlaylistEntry
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackState
@@ -251,6 +252,11 @@ class FakePreferencesStore(initial: AppPreferences = AppPreferences()) : Prefere
         flux.update { it.copy(playbackSpeed = PlaybackSpeed.borner(speed)) }
     }
 
+    override suspend fun setStreamQuality(quality: StreamQuality) {
+        flux.update { it.copy(streamQuality = quality) }
+    }
+
     val theme: ThemeChoice get() = flux.value.theme
     val playbackSpeed: Float get() = flux.value.playbackSpeed
+    val streamQuality: StreamQuality get() = flux.value.streamQuality
 }

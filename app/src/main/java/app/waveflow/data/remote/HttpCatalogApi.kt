@@ -5,6 +5,7 @@ import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
 import app.waveflow.model.RemoteSearchResults
+import app.waveflow.model.StreamRendering
 import kotlinx.serialization.SerializationException
 
 /** Catalogue distant, par-dessus [ServerHttp]. */
@@ -96,6 +97,7 @@ class HttpCatalogApi(
         serverUrl: String,
         accessToken: String,
         trackId: String,
+        rendering: StreamRendering,
     ): String {
         val ticket = http.post(
             serverUrl = serverUrl,
@@ -104,8 +106,26 @@ class HttpCatalogApi(
             accessToken = accessToken,
         ).decode<StreamTicketResponse>()
 
-        return http.absoluteUrl(serverUrl, ticket.url)
+        return http.absoluteUrl(serverUrl, ticket.url, query = rendering.toQuery())
     }
+
+    override suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean =
+        http.get(
+            serverUrl = serverUrl,
+            path = TRANSCODE_STATUS,
+            accessToken = accessToken,
+        ).decode<TranscodeStatusResponse>().available
+
+    /** L'original ne dit rien : le serveur le sert par défaut, et refuse qu'on lui donne un débit. */
+    private fun StreamRendering.toQuery(): Map<String, String> =
+        if (isOriginal) {
+            emptyMap()
+        } else {
+            buildMap {
+                put("format", format)
+                bitrate?.let { put("bitrate", it.toString()) }
+            }
+        }
 
     private fun artwork(serverUrl: String) = ArtworkUrls(serverUrl, http)
 
@@ -121,6 +141,7 @@ class HttpCatalogApi(
     }
 
     private companion object {
+        const val TRANSCODE_STATUS = "api/v2/transcode/status"
         const val ALBUMS = "api/v2/albums"
         const val ARTISTS = "api/v2/artists"
         const val TRACKS = "api/v2/tracks"

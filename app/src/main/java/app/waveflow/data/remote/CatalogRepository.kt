@@ -5,6 +5,7 @@ import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
 import app.waveflow.model.RemoteSearchResults
+import app.waveflow.model.StreamRendering
 
 /**
  * Le catalogue distant, muni d'une session.
@@ -39,8 +40,12 @@ class CatalogRepository(
      * longue file dépasserait l'échéance avant d'atteindre ses derniers
      * morceaux.
      */
-    suspend fun streamUrl(trackId: String): String =
-        authorized { url, token -> api.streamTicket(url, token, trackId) }
+    suspend fun streamUrl(trackId: String, rendering: StreamRendering): String =
+        authorized { url, token -> api.streamTicket(url, token, trackId, rendering) }
+
+    /** Voir [CatalogApi.transcodingAvailable]. */
+    suspend fun transcodingAvailable(): Boolean =
+        authorized { url, token -> api.transcodingAvailable(url, token) }
 
     /**
      * Exécute [call] avec un jeton valide, en réessayant une fois sur refus.

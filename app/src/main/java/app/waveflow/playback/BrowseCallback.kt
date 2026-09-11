@@ -6,9 +6,11 @@ import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
+import app.waveflow.model.StreamRendering
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -17,11 +19,18 @@ import java.util.concurrent.ConcurrentHashMap
  * Séparé du service pour être éprouvable sans en démarrer un : tout ce qui suit
  * est de la traduction, et une traduction se vérifie.
  *
- * Toutes les réponses sont immédiates. L'arbre lit un instantané déjà en
+ * Les réponses de navigation sont immédiates. L'arbre lit un instantané déjà en
  * mémoire ; rien ici ne part sur le réseau ni sur le disque, et un hôte comme
- * Android Auto n'attend pas.
+ * Android Auto n'attend pas. Seul l'ajout à la file peut attendre, et seulement
+ * au démarrage à froid — voir [addMediaItems].
+ *
+ * @param rendering le rendu à demander au serveur pour les pistes distantes,
+ *   dès qu'il est connu.
  */
-class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callback {
+class BrowseCallback(
+    private val tree: BrowseTree,
+    private val rendering: () -> ListenableFuture<StreamRendering>,
+) : MediaLibrarySession.Callback {
 
     /**
      * Les nœuds qu'un navigateur a demandé à suivre, au moins une fois.
@@ -123,12 +132,35 @@ class BrowseCallback(private val tree: BrowseTree) : MediaLibrarySession.Callbac
         mediaSession: MediaSession,
         controller: MediaSession.ControllerInfo,
         mediaItems: MutableList<MediaItem>,
-    ): ListenableFuture<MutableList<MediaItem>> {
+    ): ListenableFuture<MutableList<MediaItem>> = addMediaItems(mediaItems)
+
+    /**
+     * Ce que [onAddMediaItems] répond, sans la session qu'il ne consulte pas.
+     *
+     * Les pistes du serveur y reçoivent le rendu choisi. C'est ici, dans le
+     * service, et non dans l'application qui bâtit la file : une file arrive
+     * aussi d'Android Auto ou d'une reprise de lecture, sans écran ouvert.
+     *
+     * Le rendu est lu **une fois pour toute la file**. Une file ne doit pas se
+     * partager entre deux qualités parce que le réglage a changé pendant qu'on
+     * la traduisait.
+     *
+     * La réponse attend ce rendu s'il n'est pas encore connu — quelques
+     * millisecondes au démarrage à froid, le temps de lire le fichier de
+     * préférences. Poser le défaut à sa place ferait partir en qualité
+     * d'origine une écoute réglée en Économie, précisément sur le forfait
+     * qu'on voulait ménager.
+     */
+    internal fun addMediaItems(mediaItems: List<MediaItem>): ListenableFuture<MutableList<MediaItem>> {
         val resolved = mediaItems.flatMap { item ->
             if (item.localConfiguration != null) listOf(item) else tree.resolve(item.mediaId)
         }
 
-        return Futures.immediateFuture(resolved.toMutableList())
+        return Futures.transform(
+            rendering(),
+            { choisi -> resolved.map { it.withRendering(choisi) }.toMutableList() },
+            MoreExecutors.directExecutor(),
+        )
     }
 }
 

@@ -5,6 +5,7 @@ import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
 import app.waveflow.model.RemoteArtistDetail
 import app.waveflow.model.RemoteSearchResults
+import app.waveflow.model.StreamRendering
 
 /**
  * Lecture du catalogue d'un serveur WaveFlow.
@@ -57,8 +58,25 @@ interface CatalogApi {
      * d'autorisation — le serveur la rend relative, elle est résolue ici contre
      * [serverUrl]. C'est ce qui permet de la confier telle quelle à ExoPlayer,
      * y compris pour les requêtes de plage d'un déplacement dans le morceau.
+     *
+     * Le ticket ne porte pas le rendu : [rendering] s'ajoute à l'URL rendue, et
+     * le serveur le lit au moment de servir. L'original n'y ajoute rien — le
+     * serveur refuse un débit accompagnant `raw`.
      */
-    suspend fun streamTicket(serverUrl: String, accessToken: String, trackId: String): String
+    suspend fun streamTicket(
+        serverUrl: String,
+        accessToken: String,
+        trackId: String,
+        rendering: StreamRendering,
+    ): String
+
+    /**
+     * `GET /api/v2/transcode/status` : le serveur sait-il transcoder ?
+     *
+     * Un serveur sans ffmpeg sert les originaux et rien d'autre. Lui demander
+     * une version transcodée ferait échouer chaque piste.
+     */
+    suspend fun transcodingAvailable(serverUrl: String, accessToken: String): Boolean
 }
 
 /**

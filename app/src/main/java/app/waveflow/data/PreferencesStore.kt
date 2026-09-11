@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,14 @@ interface PreferencesStore {
      * notification part à la bonne vitesse.
      */
     suspend fun setPlaybackSpeed(speed: Float)
+
+    /**
+     * Change la qualité de lecture des pistes du serveur.
+     *
+     * Comme la vitesse, c'est le service qui l'observe : une file lancée depuis
+     * Android Auto doit partir dans la qualité choisie, écran fermé.
+     */
+    suspend fun setStreamQuality(quality: StreamQuality)
 }
 
 /**
@@ -114,6 +123,10 @@ class DataStorePreferencesStore(
     override suspend fun setPlaybackSpeed(speed: Float) =
         ecrire("Vitesse de lecture") { it[PLAYBACK_SPEED] = PlaybackSpeed.borner(speed) }
 
+    /** Écrite par son nom, comme le thème : voir [StreamQuality] pour ce que cela interdit. */
+    override suspend fun setStreamQuality(quality: StreamQuality) =
+        ecrire("Qualité de lecture") { it[STREAM_QUALITY] = quality.name }
+
     /**
      * Écrit une préférence sans faire tomber celui qui la demande.
      *
@@ -167,6 +180,12 @@ class DataStorePreferencesStore(
             playbackSpeed = (valeurs[PLAYBACK_SPEED] as? Float)
                 ?.let(PlaybackSpeed::borner)
                 ?: AppPreferences().playbackSpeed,
+            // Un profil inconnu retombe sur l'original, jamais sur un autre
+            // profil transcodé : ne pas savoir ce qu'on a choisi ne doit pas
+            // décider à la place de l'utilisateur de ce qu'il perd en fidélité.
+            streamQuality = (valeurs[STREAM_QUALITY] as? String)
+                ?.let { name -> StreamQuality.entries.firstOrNull { it.name == name } }
+                ?: AppPreferences().streamQuality,
         )
     }
 
@@ -175,6 +194,7 @@ class DataStorePreferencesStore(
 
         val THEME = stringPreferencesKey("theme")
         val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
+        val STREAM_QUALITY = stringPreferencesKey("stream_quality")
 
         /** Trois reprises : de quoi passer un incident, pas une corruption. */
         const val MAX_TENTATIVES = 3L

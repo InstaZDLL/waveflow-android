@@ -6,6 +6,7 @@ import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.ServerException
 import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.model.ServerSession
+import app.waveflow.model.StreamRendering
 import app.waveflow.testing.FakeCatalogApi
 import app.waveflow.testing.FakeServerApi
 import app.waveflow.testing.FakeSessionStore
@@ -100,5 +101,25 @@ class RemoteStreamResolverTest {
 
         assertTrue(error.toString(), error is IOException)
         assertTrue(error?.cause is ServerException.Unreachable)
+    }
+
+    @Test
+    fun `le rendu demande au serveur est celui du marqueur`() = runTest {
+        // Lu sur le marqueur, et non dans les préférences : c'est de ce même
+        // marqueur que la clé de cache a été tirée, avant ce résolveur.
+        val catalog = FakeCatalogApi()
+
+        resolver(catalog).resolveDataSpec(specOf("waveflow://track/c07f8d98?format=opus&bitrate=96"))
+
+        assertEquals(StreamRendering("opus", 96), catalog.lastRendering)
+    }
+
+    @Test
+    fun `un marqueur nu demande l'original`() = runTest {
+        val catalog = FakeCatalogApi()
+
+        resolver(catalog).resolveDataSpec(specOf("waveflow://track/c07f8d98"))
+
+        assertEquals(StreamRendering.ORIGINAL, catalog.lastRendering)
     }
 }

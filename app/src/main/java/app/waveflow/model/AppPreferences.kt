@@ -6,10 +6,13 @@ package app.waveflow.model
  * @property playbackSpeed la vitesse de lecture. Elle se persiste parce qu'elle
  *   décrit une habitude et non un geste : qui écoute ses podcasts à ×1,5 ne
  *   veut pas le redire à chaque lancement. Voir [PlaybackSpeed] pour ses bornes.
+ * @property streamQuality ce qu'on demande au serveur pour chaque piste. Elle
+ *   ne dit rien des fichiers de l'appareil, qui ne passent pas par lui.
  */
 data class AppPreferences(
     val theme: ThemeChoice = ThemeChoice.System,
     val playbackSpeed: Float = PlaybackSpeed.NORMALE,
+    val streamQuality: StreamQuality = StreamQuality.Original,
 )
 
 /**
