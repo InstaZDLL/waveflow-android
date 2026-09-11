@@ -60,7 +60,8 @@ Media3 attend de la session avec lui.
 **Les profils transcodés se grisent sur un serveur sans ffmpeg — cas qui ne se
 présente pas.** `waveflow-server` refuse de démarrer sans ffmpeg, si bien que
 `GET /api/v2/transcode/status` rend toujours `available: true`. Le grisé suit le
-contrat de l'API et porte un état aujourd'hui inatteignable.
+contrat de l'API et porte un état aujourd'hui inatteignable — **son retrait est
+décidé**, voir « La suite ».
 
 Un test de bout en bout pour l'original, suggéré en revue, a été **écarté** : il
 passerait la chaîne débranchée, `toMediaItem()` produisant déjà le marqueur et la
@@ -221,50 +222,89 @@ une erreur. Ne pas rouvrir.
 
 ## La suite : le lot 4, le transcodage
 
-Le choix de la qualité est fait (#51). Ce qui reste, dans cet ordre :
+Le choix de la qualité est fait (#51). Les décisions ci-dessous ont été
+**arrêtées avec l'utilisateur le 11/09**, après l'avis d'un agent extérieur. Ce
+qui reste, dans cet ordre :
 
-### 1. Se déplacer dans un morceau transcodé — la décision à confirmer
+### 0. Un transcodage incomplet ne doit pas rester dans le cache — défaut de la #51
+
+Déduit du bytecode de media3 1.11.0 et de `src/media.rs` du serveur, **à
+reproduire par un test avant de corriger**. On quitte un morceau transcodé en
+route : `CacheDataSource` garde le début sous la clé du rendu. À la réécoute, il
+lit ce début puis demande la suite avec `Range: bytes=N-`. Un transcodage en
+direct refuse toute plage qui ne part pas du premier octet (416,
+`Content-Range: bytes */0`), et Media3 range cette erreur
+(`ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE`, 2008) parmi celles qu'il ne retente
+jamais. Le morceau tombe en erreur là où le cache s'arrêtait.
+
+Une **coupure réseau** pendant un transcodage mène au même 416 à la reprise, qui
+repart de l'octet N. Le correctif du cache ne la couvre pas ; la relance par
+`offset_ms` du point 2, si.
+
+### 1. Retirer le grisé « serveur sans ffmpeg »
+
+Décidé : l'état est inatteignable, le garder coûte du code et des tests sans rien
+défendre. `transcodingAvailable` sort de l'API, du dépôt, du ViewModel et de
+l'écran. Un transcodage qui échoue en pleine lecture relève du point 3.
+
+### 2. Se déplacer dans un morceau transcodé
 
 **Aujourd'hui, c'est probablement impossible à la première écoute** — lu dans le
-serveur, **pas vérifié sur appareil**. Dans `src/media.rs`, un transcodage en
-direct répond `Accept-Ranges: none`, refuse en **416** toute plage qui ne part
-pas du premier octet, et un client qui s'en va fait tuer ffmpeg et effacer le
-fichier partiel. ExoPlayer se déplace par plages. Les plages ne reviennent qu'une
-fois le transcodage terminé et mis en cache côté serveur.
+serveur, **pas vérifié sur appareil**. Un transcodage en direct répond
+`Accept-Ranges: none`, refuse en **416** toute plage qui ne part pas du premier
+octet, et un client qui s'en va fait tuer ffmpeg et effacer le fichier partiel.
+ExoPlayer se déplace par plages.
 
-**La voie recommandée à l'utilisateur, pas encore arrêtée par lui :** redemander
-le flux avec `offset_ms`, que le serveur accepte déjà sur l'URL du ticket, et
-compenser la position. En Media3, un `ForwardingPlayer` dans le service, pour que
-la session — donc la notification et Android Auto — lise la position compensée.
+Décidé : **`offset_ms` et une timeline logique.** Le flux reçu peut commencer à
+2:13 ; pour le reste d'Android, le morceau commence toujours à 0:00 et dure sa
+durée entière. **Ces règles s'écrivent dans une note du dépôt, premier commit de
+la branche, avant tout code :**
+
+- position logique = décalage du flux + position dans le flux ; la durée est
+  celle du morceau entier, gardée à part de ce que le flux annonce ;
+- la correction vit **en un seul endroit**, un `ForwardingSimpleBasePlayer` du
+  service (présent dans media3 1.11) plutôt qu'un `ForwardingPlayer` : on corrige
+  l'état, et les événements que voit la session en découlent, là où un
+  `ForwardingPlayer` demanderait de corriger chaque méthode et chaque événement ;
+- répétition d'un titre, « précédent » et piste suivante repartent de
+  `offset_ms=0` — ne jamais boucler sur le reste du flux ;
+- « précédent » choisit entre recommencer et reculer d'une piste **sur la
+  position logique** ;
+- la boucle A-B et la reprise d'une position sauvegardée lisent la position
+  logique ;
+- **pas de cache pour un flux à `offset_ms > 0`** dans un premier temps. Plus
+  tard, éventuellement, sous une clé qui porte le décalage — jamais sous celle du
+  morceau entier.
+
 **Resonus le fait en production** et a payé chaque piège, ticket à l'appui ; voir
-« Sources d'inspiration » plus bas. Les plus coûteux :
-
-- la session qui lit la position brute : notification et voiture reviennent à
-  0:00 à chaque saut ;
-- la durée d'un segment, qui est celle du reste et non du morceau ;
-- la répétition d'un titre, qui boucle le segment seul ;
-- une fois un segment en cours, tout saut est un nouveau décalage.
-
-Et un piège propre à ce dépôt : **un segment ne doit jamais entrer dans le cache
-sous la clé du morceau entier.** La clé devra porter le décalage, ou le segment
-contourner le cache.
+« Sources d'inspiration ». Les plus coûteux : la session qui lit la position
+brute (notification et voiture reviennent à 0:00 à chaque saut), la durée d'un
+segment qui est celle du reste, la répétition qui boucle le segment seul, et tout
+saut qui devient un nouveau décalage une fois un segment en cours.
 
 **Côté serveur, un effet de bord est signalé :** un transcodage abandonné par un
 saut n'est jamais mis en cache, si bien qu'une piste déplacée à sa première
 écoute se retranscode à chaque écoute — `InstaZDLL/waveflow-server#185`.
 
-### 2. Le 429
+### 3. Le 429
 
 Honorer `Retry-After` avec gigue et un nombre borné d'essais ; ne redescendre
 vers l'original qu'une fois ceux-ci épuisés, seulement si la liaison le porte,
 et le dire à l'écran. C'est le contrat du serveur, `docs/api-v2-guide.md`,
-« When a transcode is refused ».
+« When a transcode is refused » — pas une décision à prendre.
 
-### 3. Le profil *Automatique*
+### 4. Le profil *Automatique*
 
-Resonus en donne une forme éprouvée : une qualité pour le Wi-Fi, une autre pour
-les données mobiles. Elle se réconcilie avec la décision du 30/08 — des profils,
-pas un codec — en choisissant un profil par réseau.
+Décidé : **deux profils**, affichés *Wi-Fi* et *Données mobiles*, mais choisis en
+interne sur le caractère **facturé ou non** du réseau (`NET_CAPABILITY_NOT_METERED`)
+plutôt que sur un test Wi-Fi contre cellulaire : l'Ethernet suit le Wi-Fi, un
+Wi-Fi déclaré payant suit le mobile. Pas de profil « itinérance » pour l'instant.
+
+**Une question reste à trancher en l'implémentant.** La #51 fixe la qualité d'une
+file à son lancement : une file lancée en Wi-Fi resterait en original sur les
+données mobiles. Proposé : au changement de réseau, réécrire les pistes pas
+encore commencées, jamais la courante — chaque piste garde un marqueur et une clé
+issus de son propre rendu, et la course que la #51 a écartée ne revient pas.
 
 **L'en-tête du lecteur est plein**, et le restera : quatre boutons — réduire,
 vitesse, veille, file — et la colonne du titre déjà serrée sur un écran étroit.
@@ -324,20 +364,24 @@ Le contrôle qui les a rattrapés : après une campagne, relancer Gradle et
 vérifier qu'il annonce tout **`UP-TO-DATE`**. S'il recompile, un fichier n'est
 pas revenu à l'identique.
 
-## En attente d'une décision de l'utilisateur
+## Acceptés le 11/09, pour après le lot 4
 
-Ni l'un ni l'autre n'est bloquant. Ils ne sont pas oubliés, ils sont posés.
-
-1. **Issue #32 — publication sur F-Droid**, ouverte le 19/08, `needs triage`,
-   jamais discutée. Le terrain est favorable : GPLv3, aucune dépendance
-   propriétaire (ni Play Services ni Firebase), pas de `signingConfig` release —
-   F-Droid construit et signe lui-même. Restent les métadonnées `fdroiddata` et
-   la reproductibilité du build.
-2. **La recherche vocale Android Auto.** « Joue tel album » ne fonctionne pas :
-   le lint `MissingIntentFilterForMediaSearch` est **rétrogradé en `warning`**
-   dans `app/lint.xml`, avec sa justification. Déclarer `MEDIA_PLAY_FROM_SEARCH`
-   sans servir la recherche ouvrirait une porte sur une pièce vide. La remontée
-   reste visible à chaque build et disparaîtra quand la recherche arrivera.
+1. **La recherche vocale Android Auto — acceptée.** « Joue tel album » ne
+   fonctionne pas : le lint `MissingIntentFilterForMediaSearch` est
+   **rétrogradé en `warning`** dans `app/lint.xml`, avec sa justification.
+   Déclarer `MEDIA_PLAY_FROM_SEARCH` sans servir la recherche ouvrirait une porte
+   sur une pièce vide. La première version cherche dans la **bibliothèque
+   locale** — l'arbre de la #36 ne contient qu'elle, le catalogue serveur en a été
+   écarté à dessein — sur le moteur de recherche existant plutôt qu'une seconde
+   implémentation : titre, artiste, album, puis le meilleur résultat. D'après la
+   documentation de Media3, **à vérifier** : la demande arrive par
+   `onAddMediaItems`, avec `requestMetadata.searchQuery` et sans `mediaId`, là où
+   `BrowseCallback.addMediaItems` ne résout aujourd'hui que par identifiant.
+2. **Issue #32 — publication sur F-Droid — acceptée, implémentée plus tard.** Le
+   terrain est favorable : GPLv3, aucune dépendance propriétaire (ni Play
+   Services ni Firebase), pas de `signingConfig` release — F-Droid construit et
+   signe lui-même. Restent les métadonnées `fdroiddata` et la reproductibilité du
+   build. Rien n'a encore été répondu sur l'issue.
 
 Reste aussi **la validation sur appareil** de l'arbre Android Auto : il n'a
 jamais été vu dans une vraie voiture ni sur le DHU, tout ce qui est consigné
