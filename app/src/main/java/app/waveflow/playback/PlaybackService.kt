@@ -92,7 +92,7 @@ class PlaybackService : MediaLibraryService() {
             RemoteStreamResolver(container.catalogRepository),
         )
 
-        val player = ExoPlayer.Builder(this)
+        val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             // Route audio "musique" + gestion du focus audio (pause si un appel
             // arrive, etc.).
@@ -106,6 +106,12 @@ class PlaybackService : MediaLibraryService() {
             // Met en pause quand le casque est débranché.
             .setHandleAudioBecomingNoisy(true)
             .build()
+
+        // Tout ce qui suit parle à l'enveloppe, jamais à l'ExoPlayer : dans un
+        // morceau transcodé relancé à 2:13, lui compte depuis zéro, et la
+        // notification, la voiture, l'historique ou la boucle A-B s'y
+        // tromperaient. Voir `docs/deplacement-dans-un-transcodage.md`, R1.
+        val player: Player = TranscodeSeekingPlayer(exoPlayer)
 
         // Sans ce chargeur, Media3 irait chercher les pochettes avec son propre
         // client HTTP, qui ne porte pas le jeton de session : `/api/v2/artwork/`
