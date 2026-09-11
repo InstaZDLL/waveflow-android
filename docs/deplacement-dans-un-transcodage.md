@@ -186,7 +186,10 @@ saut de l'enveloppe, et non par une position de départ posée sur l'ExoPlayer.
 Robolectric ne décode pas l'Opus : aucune piste n'y joue, `isPlaying` n'y est
 jamais vrai. L'enveloppe s'éprouve donc face à un **lecteur enveloppé factice**
 dont on pilote l'état : piste déplaçable ou non, position, durée, identifiants,
-fin de flux. Les règles R2 à R14 s'y vérifient une à une. **R1 se vérifie en plus sur la
+fin de flux. Les règles R2 à R8 et R10 à R14 s'y vérifient une à une. **R9 fait exception :
+rien ne garantit encore qu'un saut chasse le précédent.** Remplacer la piste fait
+bien abandonner le chargement en cours à l'ExoPlayer, mais cette coalescence
+n'est ni écrite ni éprouvée ici ; elle vient avec le 429, où elle a son sens. **R1 se vérifie en plus sur la
 vraie chaîne** service + `MediaController` (`PlaybackServiceSeekTest`) : c'est la
 session qui doit annoncer la durée du catalogue et la commande de saut, pas
 seulement l'enveloppe. R10 et R11 s'éprouvent sur la chaîne de
