@@ -7,6 +7,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import kotlinx.coroutines.Dispatchers
@@ -49,19 +50,29 @@ class RemoteMediaCache(context: Context) : PlaybackCache {
      *   celle de l'élément — non l'URL de diffusion, qui change à chaque ticket
      *   et ne coïnciderait jamais avec elle-même ;
      * - `DefaultDataSource` aiguille en amont selon le schéma : `content://` et
-     *   `file://` partent vers les sources locales sans jamais toucher au cache.
+     *   `file://` partent vers les sources locales sans jamais toucher au cache ;
+     * - au-dessus du cache, [IncompleteTranscodeEviction] retire le début d'un
+     *   transcodage quitté en route, que le serveur ne laisserait pas compléter.
      */
     fun dataSourceFactory(resolver: ResolvingDataSource.Resolver): DataSource.Factory {
         val resolving = ResolvingDataSource.Factory(DefaultHttpDataSource.Factory(), resolver)
+        // Une seule fabrique de clés pour les deux : l'éviction doit viser
+        // l'entrée même que le cache vient d'écrire.
+        val cles = CacheKeyFactory.DEFAULT
 
         val cached = CacheDataSource.Factory()
             .setCache(cache)
+            .setCacheKeyFactory(cles)
             .setUpstreamDataSourceFactory(resolving)
             // Un cache illisible doit dégrader vers le réseau, pas interrompre
             // la lecture.
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
-        return DefaultDataSource.Factory(appContext, cached)
+        val sansDebutOrphelin = DataSource.Factory {
+            IncompleteTranscodeEviction(cached.createDataSource(), cache, cles)
+        }
+
+        return DefaultDataSource.Factory(appContext, sansDebutOrphelin)
     }
 
     override val maxBytes: Long = MAX_BYTES
