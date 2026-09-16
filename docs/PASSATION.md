@@ -4,17 +4,23 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-12**, sur `main` = `9ff45f5`.
+Dernière mise à jour : **2026-09-16**, sur `main` = `1cb4098`.
 
 ## État du dépôt
 
-- `main` = `9ff45f5`, arbre propre, **aucune PR ouverte**, aucune branche en
+- `main` = `1cb4098`, arbre propre, **aucune PR ouverte**, aucune branche en
   cours.
 - **455 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
-- **Aucun avertissement de compilation.** C'est une propriété qu'on tient, pas un
-  hasard — voir le piège `textReport` plus bas avant d'en supprimer un.
-- Gradle 9.7.1, AGP 9.4.0, OkHttp 5.5.0, media3 1.11.0.
+- **Un avertissement de compilation**, et c'est un de trop : la propriété du
+  dépôt est qu'il n'y en a aucun. `TranscodeSeekingPlayerTest.kt:554` appelle un
+  `Timeline.Period.set` déprécié, depuis la #54. Suivi en **#62**.
+  **Il ne se voit pas sur un build tiède** — il faut `--rerun-tasks` ou un
+  `clean`. Voir aussi le piège `textReport` plus bas avant d'en supprimer un.
+- Gradle 9.7.1, AGP 9.4.0, Kotlin 2.4.20, OkHttp 5.5.0, media3 1.11.0,
+  Robolectric 4.17.
 - Baseline Detekt : 16 entrées. **Elle ne doit que rétrécir.**
+- **Tout le reste à faire est suivi en issues** — voir « La suite » et
+  « Acceptés ». Cette note dit le pourquoi ; les issues disent le quoi.
 
 ## Le chantier : la refonte v2
 
@@ -34,6 +40,46 @@ Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait de
 lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
+
+**PR #56 — débloquer la montée de version Gradle (fusionnée le 16/09).**
+
+La CI de ce bump Dependabot échouait sur **tous** les tests Robolectric, pas sur
+le code applicatif. Robolectric 4.17 monte l'application en passant par
+`ApplicationSharedMemory`, apparu avec Android 16 — le `targetSdk` 36 qu'il
+simule. Ce chemin n'existait pas en 4.16.1. Il manipule les entrailles d'un
+descripteur de fichier via `jdk.internal.access`, que le JDK n'exporte plus vers
+le module anonyme :
+
+> Failed to interact with raw FileDescriptor internals; perhaps JRE has changed?
+
+Le correctif tient en un argument de JVM sur les tâches de test,
+`--add-exports=java.base/jdk.internal.access=ALL-UNNAMED`. **À garder en tête :
+il vaut pour tout le monde**, JDK 21 en intégration continue comme JDK 25 en
+local ; ce n'est pas un contournement de poste de travail.
+
+**Deux enseignements, qui valent plus que le correctif.**
+
+1. **Un avertissement de compilation ne se voit pas sur un build tiède.** Celui
+   de la #54 (`Timeline.Period.set` déprécié) dormait depuis quatre jours sur
+   `main`, sous une propriété que le dépôt se croyait tenir. J'ai d'abord cru
+   qu'il venait du bump ; vérifié plutôt que supposé, en recompilant `main` dans
+   une worktree séparée avec `--rerun-tasks` — il y était déjà. Rien dans la CI
+   ne fait échouer le build sur un avertissement : la propriété repose sur la
+   vigilance, et celle-ci a cédé une fois. Suivi en **#62**, avec la piste
+   `allWarningsAsErrors`.
+2. **Du code écrit à la main sur une branche Dependabot échappe à CodeRabbit.**
+   Il a répondu « Review skipped: ignored keyword in the PR title » — le titre
+   de Dependabot le fait passer son tour, et le correctif ci-dessus n'a donc été
+   relu par personne. La règle du dépôt est que rien n'échappe à la revue ; ce
+   trou-là n'est pas bouché. Demander `@coderabbitai review` explicitement quand
+   on pousse du code sur une branche de bump.
+
+**Le reste à faire est passé en issues (le 16/09).** Il vivait jusque-là dans
+cette note et dans une fiche de mémoire, c'est-à-dire nulle part où un humain
+puisse le voir : **#57** le 429, **#58** le profil *Automatique*, **#59** la
+recherche vocale Android Auto, **#60** la coupure réseau pendant un transcodage,
+**#61** la validation sur appareil, **#62** l'avertissement ci-dessus. La #32
+(F-Droid) était déjà ouverte.
 
 **PR #54 — se déplacer dans un morceau transcodé (fusionnée le 12/09).**
 
@@ -313,14 +359,14 @@ saut n'est jamais mis en cache, si bien qu'une piste déplacée à sa première
 écoute se retranscode à chaque écoute — `InstaZDLL/waveflow-server#185`. Le
 déplacement étant désormais possible côté client, le gaspillage est réel.
 
-### 1. Le 429
+### 1. Le 429 — issue #57
 
 Honorer `Retry-After` avec gigue et un nombre borné d'essais ; ne redescendre
 vers l'original qu'une fois ceux-ci épuisés, seulement si la liaison le porte,
 et le dire à l'écran. C'est le contrat du serveur, `docs/api-v2-guide.md`,
 « When a transcode is refused » — pas une décision à prendre.
 
-### 2. Le profil *Automatique*
+### 2. Le profil *Automatique* — issue #58
 
 Décidé : **deux profils**, affichés *Wi-Fi* et *Données mobiles*, mais choisis en
 interne sur le caractère **facturé ou non** du réseau (`NET_CAPABILITY_NOT_METERED`)
