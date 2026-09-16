@@ -69,7 +69,20 @@ android {
             // Le test de migration lit les schémas que le compilateur Room
             // exporte. Le chemin est passé en clair plutôt que déduit d'un
             // répertoire de travail dont rien ne garantit lequel il est.
-            all { test -> test.systemProperty("waveflow.schemas", "$projectDir/schemas") }
+            all { test ->
+                test.systemProperty("waveflow.schemas", "$projectDir/schemas")
+
+                // Robolectric monte l'application en passant par
+                // `ApplicationSharedMemory`, apparu avec Android 16 — le
+                // `targetSdk` 36 qu'il simule. Cet appel manipule les entrailles
+                // d'un descripteur de fichier via `jdk.internal.access`, que le
+                // JDK ne laisse plus atteindre sans y être autorisé.
+                //
+                // Sans cette ligne, *tous* les tests Robolectric tombent avant
+                // d'avoir commencé : « Failed to interact with raw FileDescriptor
+                // internals; perhaps JRE has changed? ».
+                test.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+            }
         }
     }
 }
