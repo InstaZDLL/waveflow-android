@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
  * Ligne de liste pour une entité autre qu'un morceau : album ou artiste.
@@ -42,7 +42,7 @@ fun MediaRow(
     subtitle: String,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
-    artworkShape: Shape = RoundedCornerShape(6.dp),
+    artworkShape: Shape = WaveFlowTheme.shapes.thumbnail,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     Row(

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,6 +23,7 @@ import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.MediaRow
 import app.waveflow.ui.components.SongRow
+import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
 
 /**
@@ -99,7 +99,7 @@ fun SearchScreen(
                 title = artist.name,
                 subtitle = "${albumCountLabel(artist.albumCount)} · ${trackCountLabel(artist.trackCount)}",
                 onClick = { onArtistClick(artist) },
-                artworkShape = CircleShape,
+                artworkShape = WaveFlowTheme.shapes.portrait,
             )
         }
     }

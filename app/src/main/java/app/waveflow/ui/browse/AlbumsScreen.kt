@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +23,7 @@ import app.waveflow.model.Album
 import app.waveflow.model.Library
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.LibraryStateContainer
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /** Onglet Albums : grille de pochettes, adaptative selon la largeur d'écran. */
 @Composable
@@ -66,7 +66,7 @@ private fun AlbumCell(album: Album, onClick: () -> Unit) {
     Column(modifier = Modifier.clickable(onClick = onClick)) {
         Artwork(
             artworkUri = album.artworkUri,
-            shape = RoundedCornerShape(8.dp),
+            shape = WaveFlowTheme.shapes.tile,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f),

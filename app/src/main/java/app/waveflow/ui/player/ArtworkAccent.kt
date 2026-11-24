@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
+import app.waveflow.ui.theme.WaveFlowTheme
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -52,7 +52,8 @@ fun rememberArtworkAccent(artworkUri: Uri?): Color {
 
     val accent by animateColorAsState(
         targetValue = target,
-        animationSpec = tween(durationMillis = ACCENT_FADE_MS),
+        // Une lumière qui s'allume : la plus lente des trois durées.
+        animationSpec = WaveFlowTheme.motion.light(),
         label = "artworkAccent",
     )
     return accent
@@ -117,5 +118,3 @@ private const val SAMPLE_SIZE = 128
 private const val ACCENT_BLEND = 0.55f
 
 private const val GRADIENT_END_STOP = 0.6f
-
-private const val ACCENT_FADE_MS = 600

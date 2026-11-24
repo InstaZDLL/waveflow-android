@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
@@ -30,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.formatDuration
+import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
 
 /**
@@ -46,7 +46,7 @@ fun DetailHeader(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
-    artworkShape: Shape = RoundedCornerShape(12.dp),
+    artworkShape: Shape = WaveFlowTheme.shapes.cover,
     playEnabled: Boolean = true,
 ) {
     Column(

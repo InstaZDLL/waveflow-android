@@ -6,7 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
@@ -108,8 +107,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-private const val PLAYER_TRANSITION_MS = 300
 
 /** Routes affichant une flèche de retour plutôt que le titre de section. */
 private val DETAIL_ROUTES = setOf(
@@ -642,8 +639,8 @@ private fun WaveFlowRoot(
         // par-dessus les barres), comme une feuille qui remonte.
         AnimatedVisibility(
             visible = playerExpanded,
-            enter = slideInVertically(animationSpec = tween(PLAYER_TRANSITION_MS)) { it },
-            exit = slideOutVertically(animationSpec = tween(PLAYER_TRANSITION_MS)) { it },
+            enter = slideInVertically(animationSpec = WaveFlowTheme.motion.shape()) { it },
+            exit = slideOutVertically(animationSpec = WaveFlowTheme.motion.shape()) { it },
             modifier = Modifier.fillMaxSize(),
         ) {
             NowPlayingScreen(

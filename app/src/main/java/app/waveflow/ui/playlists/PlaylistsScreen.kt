@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +34,7 @@ import app.waveflow.model.Playlist
 import app.waveflow.model.Song
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.CenteredMessage
+import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
 
 /** Onglet Playlists : création et accès aux playlists locales. */
@@ -106,7 +106,7 @@ private fun CreatePlaylistRow(onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Surface(
-            shape = RoundedCornerShape(6.dp),
+            shape = WaveFlowTheme.shapes.thumbnail,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(48.dp),
         ) {
