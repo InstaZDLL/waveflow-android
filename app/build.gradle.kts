@@ -14,10 +14,13 @@ ksp {
 android {
     namespace = "app.waveflow"
     // 37 imposé par core-ktx 1.19 et lifecycle 2.11, qui refusent de se lier à
-    // une API plus ancienne. Indépendant de `targetSdk`, qui reste à 36 : rien
-    // ici n'opte pour les nouveaux comportements d'exécution.
+    // une API plus ancienne ; 37.1 par Compose 1.13 (BOM 2026.11.01).
+    // Indépendant de `targetSdk`, qui reste à 36 : rien ici n'opte pour les
+    // nouveaux comportements d'exécution.
     compileSdk {
-        version = release(37)
+        version = release(37) {
+            minorApiLevel = 1
+        }
     }
 
     defaultConfig {
