@@ -11,9 +11,14 @@ import androidx.core.net.toUri
  * Le hachage désigne le contenu, ce qui donne deux propriétés que l'identifiant
  * n'a pas :
  *
- * - remplacer une jaquette change le hachage, donc l'adresse, donc la clé de
- *   cache. Sur l'identifiant, l'ancienne image resterait affichée aussi
- *   longtemps que le cache la garde — le serveur annonce `max-age=86400` ;
+ * - l'image derrière l'adresse ne peut plus changer : le serveur la sert en
+ *   `private, max-age=31536000, immutable`, et Coil la relit ensuite de son
+ *   cache disque sans la moindre requête, jusqu'à un an ou jusqu'à ce qu'il
+ *   l'en évince (`ArtworkCacheTest`).
+ *   Remplacer une jaquette change le hachage, donc l'adresse, donc la clé de
+ *   cache. Sur l'identifiant, le serveur répond `private, no-cache` : chaque
+ *   chargement hors du cache mémoire coûterait un aller-retour de
+ *   revalidation, conclu par un 304 tant que la jaquette n'a pas changé ;
  * - un album et ses pistes portent le même hachage. Une seule entrée de cache
  *   et un seul téléchargement, là où l'identifiant en aurait produit autant que
  *   de lignes affichées.

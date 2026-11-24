@@ -9,6 +9,9 @@
   L'autorisation est donc générale, et c'est à l'utilisateur de saisir une
   adresse `https://` dès que le serveur sort de son réseau — l'écran de
   connexion préfixe d'ailleurs en HTTPS quand le schéma est omis.
+
+  Cette configuration vaut pour toutes les variantes : il n'y a ni
+  `debug-overrides` ni ressource propre à une variante.
 -->
 <network-security-config>
     <!--
@@ -17,5 +20,30 @@
       devra être reprise le jour où le serveur imposera HTTPS — contrairement
       à l'export du service de lecture, qui, lui, ne sera jamais reconsidéré.
     -->
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="true">
+        <!--
+          Depuis Android 7, une app ne croit que les autorités du système.
+          Un serveur derrière Caddy en `tls internal` présente un certificat
+          signé par l'autorité locale de Caddy : même installée sur le
+          téléphone, elle serait refusée, et l'utilisateur n'aurait d'autre
+          choix que le HTTP en clair.
+
+          Les autorités installées par l'utilisateur sont donc crues aussi.
+          C'est un compromis assumé : toute autorité qu'il installe l'est, y
+          compris celle d'un proxy d'entreprise, d'un profil de gestion ou d'un
+          logiciel malveillant, qui pourrait alors lire le trafic chiffré, le
+          jeton de session compris. Le clair, seule autre issue pour ce
+          serveur, livre déjà tout cela à quiconque écoute le réseau.
+
+          Déclarer des `trust-anchors` remplace ceux par défaut : les autorités
+          du système doivent être redonnées.
+
+          L'avertissement `AcceptsUserCertificates` du lint n'est pas supprimé,
+          pour la même raison que `InsecureBaseConfiguration` ci-dessus.
+        -->
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

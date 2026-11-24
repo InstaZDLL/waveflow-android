@@ -178,6 +178,14 @@ and browses its catalogue — albums, artists, and what each contains. A remote
 album plays like a local one: tap a track, or use Play / Shuffle. Nothing of the
 local library is sent anywhere.
 
+**It needs `waveflow-server` 2.2.2 or later.** Up to 2.2.1, an open range
+(`bytes=N-`) stopped 8 MiB after its start (`waveflow-server` #446), and a
+seek into an original asks for one: on an older server, playback could stop
+about a minute after a seek in a FLAC. This is inferred from the code, not
+reproduced, and the client does not check the server's version. What the client
+relies on is the server's [API
+guide](https://github.com/InstaZDLL/waveflow-server/blob/main/docs/guides/api-v2-guide.md).
+
 Search stays split in two. The magnifier in the top bar searches the device; the
 Server tab has its own field. RFC-003 forbids guessing that a local track and a
 server track are the same recording, so a single merged result list would show
@@ -221,11 +229,14 @@ interceptor signs those requests — and only those: an origin other than the
 connected server's (scheme, host and port) is never handed the token.
 
 The URL is keyed on the hash rather than on the entity id, which the endpoint
-would also accept. The hash names the content, so replacing a cover changes the
-URL and the stale image is not served from cache for a day; and an album and its
-tracks share one hash, hence one cache entry and one download instead of one per
-row. No hash means no cover, and no URL — otherwise every coverless row would
-cost a 404.
+would also accept. The hash names the content, so the server serves it as
+`private, max-age=31536000, immutable` and Coil reads it back from its disk
+cache without a single request, for up to a year or until it evicts it;
+replacing a cover changes the hash, hence the URL. Keyed on the id, the answer is `private, no-cache`, and every
+load outside the memory cache would cost a revalidation round trip. An album
+and its tracks also share one hash, hence one cache entry and one download
+instead of one per row. No hash means no cover, and no URL — otherwise every
+coverless row would cost a 404.
 
 Sign-in posts to `/api/v2/auth/login` with the device model as the session
 name, so the server lists it among the account's devices. The access token
@@ -243,6 +254,17 @@ device; signing in there simply asks for the password again.
 
 Cleartext HTTP is permitted, because a self-hosted server usually sits on a LAN
 without a certificate. An address typed without a scheme is joined over HTTPS.
+
+Certificate authorities installed by the user are trusted alongside the
+system's, in every build. That is what lets a server behind Caddy's
+`tls internal` be reached over HTTPS: copy Caddy's root certificate
+(`pki/authorities/local/root.crt` in its data directory) to the phone, then
+install it from the system settings, under *Security ▸ Encryption & credentials
+▸ Install a certificate ▸ CA certificate* (the path varies between vendors).
+The trade-off is deliberate: any authority the user installs is trusted too,
+including a corporate proxy's or a malicious one, which could then read the
+encrypted traffic and the session tokens. For such a server, the only other way
+in is cleartext, which exposes the same to anyone on the network.
 
 ### Sync
 

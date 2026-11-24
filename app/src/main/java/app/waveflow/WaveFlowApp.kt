@@ -1,6 +1,7 @@
 package app.waveflow
 
 import android.app.Application
+import android.content.Context
 import android.os.Build
 import android.os.SystemClock
 import app.waveflow.data.LibraryStore
@@ -31,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 /**
  * Point d'entrée de l'application.
@@ -56,12 +58,24 @@ class WaveFlowApp : Application(), ImageLoaderFactory {
      * reste de l'API : Coil ne connaît rien de la session, c'est l'intercepteur
      * qui la lui apporte.
      */
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient {
-            ServerHttp.imageClient(ServerImageAuthInterceptor(container.serverSessionRepository))
-        }
-        .build()
+    override fun newImageLoader(): ImageLoader = imageLoaderOf(this) {
+        ServerHttp.imageClient(ServerImageAuthInterceptor(container.serverSessionRepository))
+    }
 }
+
+/**
+ * Le chargeur d'images de l'application, hors de [WaveFlowApp] pour être
+ * éprouvé tel quel.
+ *
+ * Il garde deux défauts de Coil dont dépendent les pochettes du serveur : le
+ * cache disque, et le respect des en-têtes `Cache-Control`. Une pochette
+ * adressée par son hachage arrive en `max-age=31536000, immutable` et se
+ * relit ensuite du disque sans requête ; voir `ArtworkUrls`.
+ */
+internal fun imageLoaderOf(context: Context, client: () -> OkHttpClient): ImageLoader =
+    ImageLoader.Builder(context)
+        .okHttpClient(client)
+        .build()
 
 /** Conteneur d'objets partagés à l'échelle de l'application. */
 class AppContainer(app: Application) {
