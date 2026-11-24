@@ -4,23 +4,86 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-09-16**, sur `main` = `1cb4098`.
+Dernière mise à jour : **2026-11-24**, sur `main` = `0ff3ad7`.
 
 ## État du dépôt
 
-- `main` = `1cb4098`, arbre propre, **aucune PR ouverte**, aucune branche en
-  cours.
-- **455 tests verts**, CI verte (workflow `Build & test`, ~4 min 45 s).
-- **Un avertissement de compilation**, et c'est un de trop : la propriété du
-  dépôt est qu'il n'y en a aucun. `TranscodeSeekingPlayerTest.kt:554` appelle un
-  `Timeline.Period.set` déprécié, depuis la #54. Suivi en **#62**.
-  **Il ne se voit pas sur un build tiède** — il faut `--rerun-tasks` ou un
-  `clean`. Voir aussi le piège `textReport` plus bas avant d'en supprimer un.
-- Gradle 9.7.1, AGP 9.4.0, Kotlin 2.4.20, OkHttp 5.5.0, media3 1.11.0,
-  Robolectric 4.17.
+- `main` = `0ff3ad7`. **PR #83 ouverte** (ignorer `.claude/`), approuvée par
+  CodeRabbit, attend la fusion par l'utilisateur.
+- **455 tests verts**, CI verte (workflow `Build & test`, ~4 min).
+- **Six avertissements de compilation**, alors que la propriété du dépôt est
+  qu'il n'y en a aucun : `Timeline.Period.set` (`TranscodeSeekingPlayerTest.kt`,
+  depuis la #54, suivi en **#62**) et cinq API dépréciées par Compose 1.13 —
+  l'ancien `Slider`, l'ancien `ListItem`, `PasswordVisualTransformation` —, qui
+  partent avec la direction artistique (**#78**, **#79**). **Ils ne se voient pas
+  sur un build tiède** : `checks.sh avertissements` de la skill `wa-worker`
+  recompile Kotlin par `--rerun`. Voir aussi le piège `textReport` plus bas.
+- Gradle 9.9.2, AGP 9.5.2, Kotlin 2.4.21, OkHttp 5.5.1, media3 1.11.1,
+  Robolectric 4.18.1, Compose BOM 2026.11.01. **`compileSdk` 37.1** (exigé par
+  Compose 1.13, #76), `targetSdk` 36.
 - Baseline Detekt : 16 entrées. **Elle ne doit que rétrécir.**
-- **Tout le reste à faire est suivi en issues** — voir « La suite » et
-  « Acceptés ». Cette note dit le pourquoi ; les issues disent le quoi.
+- **Tout le reste à faire est suivi en issues, étiquetées par vague** (`vague: 1`
+  à `vague: 3`) — voir « Le mode orchestration ». Cette note dit le pourquoi ;
+  les issues disent le quoi.
+
+## Le mode orchestration (depuis le 24/11)
+
+Le travail avance désormais **par vagues**, comme sur le bureau : une session
+coordinatrice lance trois ouvriers en parallèle, chacun sur une issue et dans son
+worktree, sur des fichiers disjoints ; elle relit, intègre les branches de la
+vague, l'utilisateur teste l'APK d'intégration, puis viennent les MR et les PR.
+
+- **Les ouvriers chargent la skill `wa-worker`** (`~/.claude/skills/wa-worker/`) :
+  worktree, slot, Gradle, émulateur par slot, Fedora, validation par retrait,
+  commits en français, rapport de fin. Le relecteur indépendant est l'agent
+  **`wa-reviewer`** (`~/.claude/agents/`), qui connaît les pièges ci-dessous.
+- **Deux builds Gradle au plus sur le PC** (32 Go), un sur le Fedora
+  (`ssh waveflow-fedora`, 15 Go, clone dans `~/Documents/workspace/waveflow-android`,
+  plateforme 37.1 installée, build complet vert le 24/11).
+- **La revue CodeRabbit passe par GitLab** : le compte pro y relit sans
+  l'attente du compte gratuit de GitHub. Branche poussée sur le miroir
+  `waveflow-groupe/waveflow-android` (remote `gitlab`), MR, revue jusqu'à
+  l'approbation, MR fermée, puis PR GitHub que **l'utilisateur fusionne**.
+  Exception : un bump Dependabot ne passe pas par GitLab (CodeRabbit ne relit pas
+  les fichiers de versions et de verrous). Vérifier avant une MR que `main` du
+  miroir est aligné sur `origin/main`.
+
+**Les vagues prévues :**
+
+1. Tokens, polices et icône de la DA (#77) · le 429 (#57) · la recherche vocale
+   Android Auto (#59) avec l'avertissement #62 et les écarts serveur (#80).
+2. Composants de la DA et lecteur (#78) · le profil *Automatique* (#58) · la
+   coupure réseau pendant un transcodage (#60), qui réutilise la relance du 429.
+3. Recomposition des écrans (#79) · les paroles (#81, lot 5) · ReplayGain et
+   égaliseur en Kotlin (#82, lot 6).
+
+À côté : la validation sur appareil (#61), avec l'utilisateur, et F-Droid (#32).
+
+## Ce qui a changé autour du client le 24/11
+
+**Le serveur est stable.** 2.0.0 le 29/10, 2.3.0 le 17/11 ; le client avait été
+écrit contre la 2.0.0-beta.1. **Aucun appel du client ne casse** : aucune route
+`/api/v2` n'a été retirée, les champs ajoutés sont ignorés. Le guide a déménagé
+dans `docs/guides/api-v2-guide.md` côté serveur. Les petits écarts sont en
+**#80** ; le serveur offre aussi beaucoup que le client n'utilise pas encore
+(paroles, `replay_gain_*`, favoris, file, mixes, radios, podcasts, profils de
+transcodage, AAC, synchronisation par événements).
+
+**Nouvelle direction artistique : Fluid Editorial.** Source de vérité :
+`WaveFlow/docs/design/fluid-editorial.md`, qui prévoit sa traduction pour
+Android. Sombre uniquement, accent `#34D399`, DM Sans et Playfair italique, un
+nouveau logo — le « W en onde », qui remplace les cinq barres. Trois tickets
+(#77 à #79). **Deux décisions attendent l'utilisateur** : retirer ou garder le
+thème clair, et l'accent tiré de la pochette partout ou seulement dans le
+lecteur.
+
+**Le moteur audio Rust du bureau à la place de Media3 : écarté pour l'instant.**
+Seul le remplacement complet du lecteur apporterait ce que Media3 ne fait pas
+(fondu enchaîné, APE/WavPack/DSD en local), pour trois à six mois et la logique
+du saut dans un transcodage à réécrire ; il faudrait d'abord extraire du bureau
+une crate d'orchestration sans Tauri. L'EQ et le ReplayGain se feront en Kotlin
+en portant le code du bureau (#82). À reconsidérer si le fondu enchaîné devient
+une exigence, après un prototype de quelques jours sur l'émulateur.
 
 ## Le chantier : la refonte v2
 
@@ -40,6 +103,12 @@ Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait de
 lecteurs ou une chaîne audio maison.
 
 ## Ce que la dernière session a livré
+
+**PR #76 — bump Dependabot débloqué (fusionnée le 24/11).** La CI échouait sur
+`checkDebugAarMetadata` : le BOM Compose 2026.11.01 apporte Compose 1.13.0, dont
+les AAR refusent une `compileSdk` inférieure à 37.1. Correctif d'une ligne,
+`release(37) { minorApiLevel = 1 }` ; AGP installe seul la plateforme manquante
+au premier build. Les cinq nouveaux avertissements de compilation viennent de là.
 
 **PR #56 — débloquer la montée de version Gradle (fusionnée le 16/09).**
 
@@ -354,16 +423,16 @@ l'avis d'un agent extérieur ; il reste les deux dernières, dans cet ordre.
 (un saut chasse le précédent) et R16 (la reprise d'une position sauvegardée) n'y
 sont **pas** couvertes, et la note le dit.
 
-**Côté serveur, un effet de bord reste ouvert :** un transcodage abandonné par un
-saut n'est jamais mis en cache, si bien qu'une piste déplacée à sa première
-écoute se retranscode à chaque écoute — `InstaZDLL/waveflow-server#185`. Le
-déplacement étant désormais possible côté client, le gaspillage est réel.
+**Côté serveur, l'effet de bord est réglé :** un transcodage abandonné par un
+saut n'était jamais mis en cache — `InstaZDLL/waveflow-server#185`, **fermée le
+11/09** par la PR serveur #189, déjà dans la 2.0.0-beta.1. Le serveur finit
+désormais de remplir le cache en arrière-plan après un saut.
 
 ### 1. Le 429 — issue #57
 
 Honorer `Retry-After` avec gigue et un nombre borné d'essais ; ne redescendre
 vers l'original qu'une fois ceux-ci épuisés, seulement si la liaison le porte,
-et le dire à l'écran. C'est le contrat du serveur, `docs/api-v2-guide.md`,
+et le dire à l'écran. C'est le contrat du serveur, `docs/guides/api-v2-guide.md`,
 « When a transcode is refused » — pas une décision à prendre.
 
 ### 2. Le profil *Automatique* — issue #58
@@ -471,8 +540,9 @@ pagine sur le réseau. Le retirer de la barre sans cela l'aurait rendu
 
 ## Conventions en vigueur
 
-- **Rien ne se commit sur `main`** : branche + PR + revue CodeRabbit. *(Ce
-  document fait exception, à la demande explicite de l'utilisateur.)*
+- **Rien ne se commit sur `main`** : branche + revue CodeRabbit (sur une MR
+  GitLab, voir « Le mode orchestration ») + PR. *(Ce document fait exception, à
+  la demande explicite de l'utilisateur.)*
 - **La fusion demande l'approbation de l'utilisateur.** Le ruleset de `main`
   porte `require_extra_approval_for_unattributed_changes` : l'approbation de
   CodeRabbit ne suffit pas, `gh pr merge` répond « the base branch policy
