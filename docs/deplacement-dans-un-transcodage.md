@@ -139,6 +139,12 @@ observer :
   « +10 s » partent ensemble, à +50 s ;
 - un saut natif (R7), un changement de piste, ou une piste qui n'est plus la
   courante quand l'attente échoit, annulent la relance en attente ;
+- la cible annoncée est **constante** : l'ancien flux qui joue encore ne la fait
+  pas dériver ;
+- si le lecteur s'est arrêté **sur une erreur** — le dernier refus d'une liaison
+  facturée, avant le geste ou pendant l'attente —, la relance le prépare de
+  nouveau : sans cela le saut resterait sans suite. Un arrêt demandé (`stop`),
+  qui ne porte pas d'erreur, se respecte ;
 - les relances que l'enveloppe décide seule — la répétition d'un segment (R12),
   le marqueur rendu nu à la piste quittée (R14) — ne sont pas retardées : ce ne
   sont pas des sauts.
@@ -229,10 +235,17 @@ l'application paraîtrait figée.
 refuser à coup sûr. Sans gigue, dix appareils refusés à la même seconde
 reviendraient ensemble et se refuseraient de nouveau.
 
-**R20. Quatre relances au plus**, soit cinq demandes : de 4 à 6 s d'attente avec
-`Retry-After: 1`. Le compte vaut **par demande de transcodage** — chaque relance
-après un saut est une source neuve, avec ses propres essais. Une erreur qui n'est
-pas un 429 garde le comportement de Media3 : abandon au quatrième échec.
+**R20. Trois relances au plus**, soit quatre demandes : de 3 à 4,5 s d'attente
+avec `Retry-After: 1`. Le compte vaut **par demande de transcodage** — chaque
+relance après un saut est une source neuve, avec ses propres essais.
+
+Trois, c'est le seuil où Media3 rend une erreur de chargement au lecteur, et il
+ne se relève pas pour le seul 429 : le seuil vaut pour toute panne, et le
+compte qu'il juge n'est remis à zéro qu'**après** la relance d'un flux qui avait
+progressé. Le relever ferait attendre une coupure réseau plus longtemps ; y
+renoncer de soi-même à son quatrième échec la rendrait fatale là où Media3
+l'aurait relancée. Une erreur qui n'est pas un 429 garde donc **exactement** le
+comportement de Media3, délais et seuil.
 
 **R21. Un saut pendant l'attente l'abandonne.** Le flux qu'on attendait n'est plus
 celui qu'on veut : la relance remplace la source, et le chargement en attente
