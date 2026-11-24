@@ -21,7 +21,7 @@ import kotlin.random.Random
  * l'on cesse après [RELANCES_MAX] relances (R20). Ce qui suit l'abandon — le
  * repli sur l'original — se décide plus haut, voir [TranscodeRefusalFallback].
  *
- * Toute autre erreur garde le comportement de Media3, abandon compris.
+ * Toute autre erreur garde le comportement de Media3, délais et abandon compris.
  *
  * @param hasard la source de la gigue ; remplaçable pour qu'un test en
  *   connaisse les bornes.
@@ -32,35 +32,26 @@ internal class TranscodeRefusalPolicy(
 
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long {
         val refus = loadErrorInfo.exception.refusDeTranscodage()
-            ?: return delaiParDefaut(loadErrorInfo)
+            ?: return super.getRetryDelayMsFor(loadErrorInfo)
+        // Media3 rendrait de toute façon l'erreur au lecteur à ce compte-là ;
+        // dire qu'on renonce évite de laisser une relance en suspens derrière.
         if (loadErrorInfo.errorCount > RELANCES_MAX) return C.TIME_UNSET
 
         val delaiMs = refus.delaiAnnonceMs()
         return delaiMs + hasard.nextLong(delaiMs / 2 + 1)
     }
 
-    /**
-     * Media3 rend l'erreur au lecteur dès que le compte d'échecs dépasse ce
-     * seuil, retente-t-il ou non : il doit laisser passer toutes les relances
-     * d'un refus.
-     */
-    override fun getMinimumLoadableRetryCount(dataType: Int): Int =
-        maxOf(super.getMinimumLoadableRetryCount(dataType), RELANCES_MAX)
-
-    /**
-     * Le seuil relevé ci-dessus ne doit pas faire attendre plus longtemps une
-     * autre panne : on y renonce là où Media3 l'aurait rendue au lecteur.
-     */
-    private fun delaiParDefaut(info: LoadErrorInfo): Long =
-        if (info.errorCount > super.getMinimumLoadableRetryCount(info.mediaLoadData.dataType)) {
-            C.TIME_UNSET
-        } else {
-            super.getRetryDelayMsFor(info)
-        }
-
     companion object {
-        /** Quatre relances, cinq demandes : de 4 à 6 s avec `Retry-After: 1`. */
-        const val RELANCES_MAX = 4
+        /**
+         * Trois relances, quatre demandes : de 3 à 4,5 s avec `Retry-After: 1`.
+         *
+         * Le seuil même où Media3 rend une erreur de chargement au lecteur
+         * (`getMinimumLoadableRetryCount`), et ce n'est pas un hasard : le
+         * relever pour le 429 le relèverait pour toute panne, et changerait le
+         * moment où une coupure réseau devient fatale — ce compte n'est remis à
+         * zéro qu'après la relance d'un flux qui avait progressé.
+         */
+        const val RELANCES_MAX = DefaultLoadErrorHandlingPolicy.DEFAULT_MIN_LOADABLE_RETRY_COUNT
 
         /** Ce que le serveur envoie toujours, et ce qu'on suppose s'il ne dit rien. */
         const val DELAI_PAR_DEFAUT_MS = 1_000L

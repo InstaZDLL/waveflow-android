@@ -7,6 +7,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -121,22 +122,31 @@ class TranscodeRefusalPolicyTest {
     }
 
     @Test
-    fun `Media3 laisse passer toutes les relances d'un refus`() {
-        // Sinon le lecteur recevrait l'erreur au quatrième échec, relances
-        // encore en cours.
+    fun `les relances tiennent sous le seuil ou Media3 rend l'erreur`() {
+        // Au-delà, le lecteur recevrait l'erreur relances encore en cours.
         assertTrue(politique.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA) >= TranscodeRefusalPolicy.RELANCES_MAX)
     }
 
     @Test
-    fun `une autre panne abandonne la ou Media3 l'aurait fait`() {
-        // R20 : le seuil relevé pour le 429 ne doit pas faire attendre une
-        // coupure réseau plus longtemps qu'avant. Media3 rendait l'erreur au
-        // quatrième échec.
+    fun `une autre panne garde les delais et le seuil de Media3`() {
+        // R20. Un quatrième échec n'est pas forcément fatal : Media3 remet son
+        // compte à zéro quand le flux avait progressé, et doit donc encore
+        // proposer une relance — ce qu'une politique qui y renonçait d'elle-même
+        // empêchait.
+        val media3 = DefaultLoadErrorHandlingPolicy()
         val coupure = IOException("connexion perdue")
 
-        assertEquals(0L, politique.getRetryDelayMsFor(echec(coupure, 1)))
-        assertEquals(2_000L, politique.getRetryDelayMsFor(echec(coupure, 3)))
-        assertEquals(C.TIME_UNSET, politique.getRetryDelayMsFor(echec(coupure, 4)))
+        for (numero in 1..6) {
+            assertEquals(
+                "échec n° $numero",
+                media3.getRetryDelayMsFor(echec(coupure, numero)),
+                politique.getRetryDelayMsFor(echec(coupure, numero)),
+            )
+        }
+        assertEquals(
+            media3.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA),
+            politique.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA),
+        )
     }
 
     @Test

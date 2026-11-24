@@ -138,6 +138,20 @@ class TranscodeSeekingPlayerTest {
     }
 
     @Test
+    fun `pendant l'attente d'une relance, la cible ne derive pas`() {
+        // R9 : l'ancien flux joue encore, et une position posée en nombre
+        // s'extrapolerait avec lui — un « avancer » de plus partirait d'une
+        // cible déjà dépassée.
+        jouer(transcode())
+
+        lecteur.seekTo(60_000L)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(TranscodeSeekingPlayer.COALESCENCE_MS - 100L))
+
+        assertEquals("la relance attend encore", 0, faux.remplacements.size)
+        assertEquals(60_000L, lecteur.currentPosition)
+    }
+
+    @Test
     fun `la position est le decalage plus la position dans le flux`() {
         // R2.
         jouer(transcode())

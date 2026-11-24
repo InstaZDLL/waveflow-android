@@ -113,9 +113,12 @@ internal class TranscodeSeekingPlayer(
         if (attente != null) {
             // R9 et R6 : la relance n'est pas partie, mais la position est déjà
             // la cible — et un « avancer » de plus se compte depuis elle.
+            // Constante : une position posée en nombre s'extrapole tant que
+            // l'ancien flux joue, et la cible dériverait pendant l'attente.
+            val cible = SimpleBasePlayer.PositionSupplier.getConstant(attente.cibleMs)
             builder
-                .setContentPositionMs(attente.cibleMs)
-                .setContentBufferedPositionMs(SimpleBasePlayer.PositionSupplier.getConstant(attente.cibleMs))
+                .setContentPositionMs(cible)
+                .setContentBufferedPositionMs(cible)
         } else {
             builder
                 .setContentPositionMs(etat.contentPositionMsSupplier.logique(decalage, dureeMs))
@@ -226,6 +229,12 @@ internal class TranscodeSeekingPlayer(
         if (fenetre.uid != saut.fenetre) return
 
         remplacer(index, fenetre, saut.cibleMs)
+        // Le flux quitté a pu échouer avant le geste ou pendant l'attente — son
+        // dernier refus, sur une liaison facturée. Le lecteur s'est alors
+        // arrêté sur son erreur, et un
+        // remplacement ne le relance pas : le saut resterait sans suite. Un
+        // arrêt demandé (`stop`), lui, ne porte pas d'erreur, et se respecte.
+        if (player.playbackState == STATE_IDLE && player.playerError != null) player.prepare()
         // Le lecteur enveloppé a déjà notifié son remplacement, dans l'appel
         // même : l'état relu ici le porte. Le drapeau ne vit que le temps de
         // cette relecture, pour ne jamais taire une discontinuité étrangère.

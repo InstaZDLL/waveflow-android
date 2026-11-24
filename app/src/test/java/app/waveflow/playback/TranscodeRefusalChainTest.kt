@@ -30,7 +30,7 @@ import org.robolectric.shadows.ShadowLooper
 import org.robolectric.shadows.ShadowSystemClock
 import java.io.File
 import java.time.Duration
-import java.util.Collections
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
@@ -61,7 +61,7 @@ class TranscodeRefusalChainTest {
     /** Une demande de flux reçue, à l'heure de l'horloge du lecteur. */
     private data class Demande(val format: String?, val decalageMs: Long, val heureMs: Long)
 
-    private val demandes: MutableList<Demande> = Collections.synchronizedList(mutableListOf())
+    private val demandes: MutableList<Demande> = CopyOnWriteArrayList()
 
     /** Ce que le serveur répond à une demande de flux ; refuse tout par défaut. */
     @Volatile
@@ -146,7 +146,7 @@ class TranscodeRefusalChainTest {
     }
 
     @Test
-    fun `sur une liaison facturee, l'abandon arrive apres quatre relances et dit le serveur occupe`() {
+    fun `sur une liaison facturee, l'abandon arrive apres trois relances et dit le serveur occupe`() {
         // R20, R22 et R24 : jamais l'original en données mobiles.
         nonFacturee = false
         jouer()
@@ -168,7 +168,7 @@ class TranscodeRefusalChainTest {
         attendre("la demande de l'original") { demandes.any { it.format == null } }
 
         assertEquals(
-            "cinq refus, puis l'original",
+            "quatre refus, puis l'original",
             List(TranscodeRefusalPolicy.RELANCES_MAX + 1) { "opus" } + listOf(null),
             demandes.map { it.format },
         )
@@ -310,6 +310,36 @@ class TranscodeRefusalChainTest {
         attendre("la relance du saut") { transcodees.count { it.decalageMs == 133_000L } >= 2 }
 
         assertEquals("le début n'a été demandé qu'une fois", 1, transcodees.count { it.decalageMs == 0L })
+    }
+
+    @Test
+    fun `un saut apres l'abandon relance le lecteur arrete sur son erreur`() {
+        // R9 et R20 : sur une liaison facturée, le dernier refus arrête le
+        // lecteur. Le saut qui suit — ou qui attendait déjà — doit repartir,
+        // et non remplacer la piste d'un lecteur qui ne charge plus rien.
+        nonFacturee = false
+        jouer()
+        attendre("l'abandon") { lecteur.playerError != null }
+
+        lecteur.seekTo(133_000L)
+        avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+        attendre("la demande du saut") { transcodees.any { it.decalageMs == 133_000L } }
+    }
+
+    @Test
+    fun `un saut apres un arret demande ne relance rien`() {
+        // Le pendant du précédent : `stop` n'est pas une panne, le lecteur
+        // reste arrêté.
+        jouer()
+        attendre("la première demande") { demandes.isNotEmpty() }
+        lecteur.stop()
+        ecouler()
+
+        lecteur.seekTo(133_000L)
+        avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+        laisserPartir()
+
+        assertEquals(emptyList<Long>(), transcodees.map { it.decalageMs }.filter { it > 0L })
     }
 
     /**
