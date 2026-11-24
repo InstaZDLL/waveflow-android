@@ -124,8 +124,32 @@ non plus.
 traite comme la fin du morceau.
 
 **R9. Seul le dernier saut compte.** Chaque relance occupe un créneau de
-transcodage côté serveur (`per_user_limit`). Des sauts rapprochés ne doivent pas
-en empiler ; le 429 qui en résulterait relève du chantier 429.
+transcodage côté serveur (`per_user_limit`), et un flux quitté ne le rend pas
+sur-le-champ : le serveur ne s'aperçoit du départ qu'au tour de lecture suivant.
+Des sauts rapprochés ne doivent donc pas en empiler — c'est précisément ce qui
+déclenche le 429 (R17 et suivantes).
+
+Un saut qui demande une relance **attend 300 ms avant de partir**. Un autre saut
+dans l'intervalle prend sa place et relance l'attente : une rafale ne produit
+qu'**une** demande au serveur, à la cible du dernier saut. Ce qu'on doit
+observer :
+
+- pendant l'attente, la position annoncée est déjà la cible (R6), et un
+  « avancer » ou « reculer » de plus se calcule depuis elle — cinq pressions sur
+  « +10 s » partent ensemble, à +50 s ;
+- un saut natif (R7), un changement de piste, ou une piste qui n'est plus la
+  courante quand l'attente échoit, annulent la relance en attente ;
+- les relances que l'enveloppe décide seule — la répétition d'un segment (R12),
+  le marqueur rendu nu à la piste quittée (R14) — ne sont pas retardées : ce ne
+  sont pas des sauts.
+
+300 ms, c'est le délai qu'Android lui-même laisse entre deux touchers d'un même
+geste (`ViewConfiguration.getDoubleTapTimeout`). **Le prix est accepté :** tout
+saut dans un transcodage part 300 ms plus tard, et pendant ces 300 ms l'ancien
+flux continue de s'entendre alors que le curseur montre déjà la cible. Un saut
+natif ne paie rien. Le curseur de l'écran ne saute qu'au lâcher
+(`onValueChangeFinished`) : un glissement n'est qu'un saut, la rafale vient des
+pressions répétées — boutons d'un casque, d'un volant, d'un contrôleur.
 
 ### Le décalage et le cache
 
@@ -172,6 +196,72 @@ cette première version.
 aujourd'hui (pas de `onPlaybackResumption`). Celle qui viendra passera par un
 saut de l'enveloppe, et non par une position de départ posée sur l'ExoPlayer.
 
+### Quand le serveur refuse : le 429
+
+Règles ajoutées le 24/11 pour l'issue #57. Le contrat est celui du serveur
+(`waveflow-server`, `docs/guides/api-v2-guide.md`, « When a transcode is
+refused ») : honorer `Retry-After`, avec gigue et un nombre d'essais borné ; ne
+redescendre vers l'original qu'une fois les essais épuisés, seulement si la
+liaison le porte, et le dire à l'écran. Elles valent pour **toute** demande de
+transcodage : le début d'une piste comme la relance après un saut.
+
+**R17. Le refus tombe sur le flux, jamais sur le ticket.** `POST
+/api/v2/tracks/{id}/stream-ticket` ne transcode rien et n'est pas limité ; c'est
+`GET /api/v2/stream/<ticket>` qui répond `429` avec `Retry-After: 1`
+(`src/media/mod.rs`), **avant le premier octet** — le serveur prend ses créneaux
+(`listener_slots`) avant de lancer ffmpeg. Il n'existe donc pas de 429 en plein
+flux, et ce n'est pas le résolveur qui le voit : c'est la source HTTP de Media3.
+Il se traite là où Media3 décide déjà de retenter un chargement, dans une
+`LoadErrorHandlingPolicy` posée sur la fabrique de sources du lecteur.
+
+Aujourd'hui, la politique par défaut de Media3 retente déjà un 429, mais sans
+lire l'en-tête : immédiatement, puis à 1 s et 2 s, et la lecture échoue au
+quatrième refus. L'écran dit alors « Serveur injoignable », ce qui est faux.
+
+**R18. Le délai est celui qu'annonce le serveur.** `Retry-After` en secondes. Absent
+ou illisible — une date HTTP comprise —, une seconde : la valeur que le serveur
+envoie toujours. Borné à 30 s, garde-fou contre un en-tête aberrant : au-delà,
+l'application paraîtrait figée.
+
+**R19. Plus une gigue.** Un tirage uniforme entre 0 et la moitié du délai,
+**toujours ajouté**, jamais retranché : revenir avant l'heure, c'est se faire
+refuser à coup sûr. Sans gigue, dix appareils refusés à la même seconde
+reviendraient ensemble et se refuseraient de nouveau.
+
+**R20. Quatre relances au plus**, soit cinq demandes : de 4 à 6 s d'attente avec
+`Retry-After: 1`. Le compte vaut **par demande de transcodage** — chaque relance
+après un saut est une source neuve, avec ses propres essais. Une erreur qui n'est
+pas un 429 garde le comportement de Media3 : abandon au quatrième échec.
+
+**R21. Un saut pendant l'attente l'abandonne.** Le flux qu'on attendait n'est plus
+celui qu'on veut : la relance remplace la source, et le chargement en attente
+part avec elle (R9). On ne retente jamais un flux quitté.
+
+**R22. Les essais épuisés, l'original — seulement sur une liaison non
+facturée.** `NET_CAPABILITY_NOT_METERED` sur le réseau actif : le Wi-Fi ou
+l'Ethernet ordinaires, pas un Wi-Fi déclaré payant ni les données mobiles.
+Liaison facturée, ou impossible à connaître : pas de repli, l'échec remonte.
+L'original pèse plusieurs fois le transcodage refusé ; le servir en données
+mobiles coûterait plus cher que d'échouer.
+
+Le repli remplace le flux de la **piste courante** par l'original, **à la position
+logique** où elle en était, et **sans changement de piste** : même identité,
+comme une relance (R5) — sans quoi l'historique compterait deux fois le morceau.
+L'original se déplace ensuite nativement (R7). La piste suivante redemande son
+propre rendu : la saturation est passagère, la qualité choisie reste la règle.
+
+**R23. Le repli se décide avant que l'erreur n'atteigne la session.** Sinon
+l'écran dirait « injoignable » puis jouerait. Le service écoute l'erreur sur
+l'ExoPlayer, et la répare dans le même appel ; l'enveloppe ne relit l'état
+qu'ensuite (`onEvents` arrive par un message posté, voir R5), et n'y trouve plus
+d'erreur.
+
+**R24. Tout se dit à l'écran.** Le repli, par le canal des erreurs du lecteur —
+le même message bref qu'une panne, sans interrompre la lecture : « Serveur
+saturé : lecture en qualité d'origine. » L'échec sans repli se dit pour ce qu'il
+est, « serveur occupé », et non « injoignable » : ce n'est pas la même panne, ni
+le même geste à suggérer.
+
 ## Ce que cette première version ne couvre pas
 
 - **La coupure réseau pendant un transcodage.** Media3 reprend à l'octet atteint,
@@ -179,7 +269,6 @@ saut de l'enveloppe, et non par une position de départ posée sur l'ExoPlayer.
   la position logique courante — dans une PR suivante, une fois l'enveloppe en
   place.
 - **Le cache des segments** (R11).
-- **Le 429 à la relance** (R9) : chantier suivant.
 
 ## Comment l'éprouver
 
