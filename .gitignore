@@ -38,3 +38,6 @@ google-services.json
 
 # macOS
 .DS_Store
+
+# Réglages et état local des agents (Claude Code)
+.claude/
