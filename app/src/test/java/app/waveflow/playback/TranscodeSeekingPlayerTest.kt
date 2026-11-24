@@ -1,6 +1,7 @@
 package app.waveflow.playback
 
 import android.os.Looper
+import androidx.media3.common.AdPlaybackState
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -551,7 +552,15 @@ private class TimelineDeTest(private val pistes: List<Piste>, private val ordre:
 
     override fun getPeriod(periodIndex: Int, period: Period, setIds: Boolean): Period {
         val piste = pistes[periodIndex]
-        return period.set(piste.periode, piste.periode, periodIndex, piste.dureeUs, 0L)
+        return period.set(
+            /* id = */ piste.periode,
+            /* uid = */ piste.periode,
+            /* windowIndex = */ periodIndex,
+            /* durationUs = */ piste.dureeUs,
+            /* positionInWindowUs = */ 0L,
+            /* adPlaybackState = */ AdPlaybackState.NONE,
+            /* isPlaceholder = */ false,
+        )
     }
 
     override fun getIndexOfPeriod(uid: Any): Int = pistes.indexOfFirst { it.periode == uid }
