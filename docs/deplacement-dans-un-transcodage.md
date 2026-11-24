@@ -147,7 +147,8 @@ observer :
 geste (`ViewConfiguration.getDoubleTapTimeout`). **Le prix est accepté :** tout
 saut dans un transcodage part 300 ms plus tard, et pendant ces 300 ms l'ancien
 flux continue de s'entendre alors que le curseur montre déjà la cible. Un saut
-natif ne paie rien. Le curseur de l'écran ne saute qu'au lâcher
+natif ne paie rien. Chaque tour de la boucle A-B sur un transcodage (R15) paie
+ces 300 ms aussi. Le curseur de l'écran ne saute qu'au lâcher
 (`onValueChangeFinished`) : un glissement n'est qu'un saut, la rafale vient des
 pressions répétées — boutons d'un casque, d'un volant, d'un contrôleur.
 
@@ -275,14 +276,39 @@ le même geste à suggérer.
 Robolectric ne décode pas l'Opus : aucune piste n'y joue, `isPlaying` n'y est
 jamais vrai. L'enveloppe s'éprouve donc face à un **lecteur enveloppé factice**
 dont on pilote l'état : piste déplaçable ou non, position, durée, identifiants,
-fin de flux. Les règles R2 à R8 et R10 à R14 s'y vérifient une à une. **R9 fait exception :
-rien ne garantit encore qu'un saut chasse le précédent.** Remplacer la piste fait
-bien abandonner le chargement en cours à l'ExoPlayer, mais cette coalescence
-n'est ni écrite ni éprouvée ici ; elle vient avec le 429, où elle a son sens. **R1 se vérifie en plus sur la
+fin de flux. Les règles R2 à R8 et R10 à R14 s'y vérifient une à une. **R1 se vérifie en plus sur la
 vraie chaîne** service + `MediaController` (`PlaybackServiceSeekTest`) : c'est la
 session qui doit annoncer la durée du catalogue et la commande de saut, pas
 seulement l'enveloppe. R10 et R11 s'éprouvent sur la chaîne de
 lecture réelle face à un `MockWebServer`, comme `RemoteMediaCacheTest`.
 
+**R9 et R17 à R24 s'éprouvent sur la vraie chaîne de lecture**
+(`TranscodeRefusalChainTest`) : ExoPlayer, cache, résolveur, enveloppe et repli,
+assemblés par la même fonction que le service (`assemblerLeLecteur`), face à un
+`MockWebServer` qui refuse comme le serveur. Chaque demande reçue note l'heure de
+l'horloge du lecteur, que le test seul fait avancer : c'est elle qui dit si le
+lecteur a attendu le délai annoncé, combien de fois il a redemandé, et quand
+l'original est venu. Des sauts rapprochés s'y comptent en demandes reçues.
+`TranscodeRefusalPolicyTest` éprouve les bornes de la politique sur des refus
+**levés par la vraie source HTTP** — c'est ainsi qu'est apparue la clé `null` que
+`HttpURLConnection` donne à la ligne de statut, et qu'un refus construit à la
+main aurait cachée.
+
+Ce qui n'est **pas** éprouvé :
+
+- **R21 n'a pas de garde à nous** : c'est Media3 qui abandonne le chargement
+  d'une source remplacée. Le test le constate, il ne protège aucun code d'ici.
+- **Le saut en attente quand le lecteur est relâché, ou quand le segment finit
+  et se répète (R12)** : les deux annulations sont posées, aucun test ne les
+  vise.
+- **La liaison au moment du refus** : le test injecte la réponse ; seule la
+  lecture des capacités du réseau est éprouvée à part (`UnmeteredLinkTest`),
+  sur les ombres de Robolectric.
+- **Un 429 sur la piste suivante, pendant son préchargement** : le repli vise la
+  piste courante, ce qui suppose qu'ExoPlayer ne rende l'erreur d'une piste
+  qu'une fois celle-ci devenue la courante. C'est ce que disent ses sources
+  (`ExoPlayerImplInternal.handleIoException`, 1.11.1) ; aucun test ne le montre.
+
 Le jeu réel — un saut entendu au bon endroit, la notification et la voiture qui
-suivent — reste **à valider sur appareil**.
+suivent, l'original qui prend le relais d'un transcodage refusé — reste **à
+valider sur appareil**, face à un serveur dont on aura abaissé `per_user_limit`.

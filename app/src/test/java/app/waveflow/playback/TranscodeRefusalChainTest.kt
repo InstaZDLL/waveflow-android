@@ -274,6 +274,31 @@ class TranscodeRefusalChainTest {
     }
 
     @Test
+    fun `une file reposee pendant l'attente rend la relance caduque`() {
+        // R9 : poser une autre file n'est pas un saut, et n'annule rien en
+        // passant ; c'est au départ que l'attente doit voir que sa piste n'est
+        // plus là. Sinon la nouvelle piste partirait au milieu.
+        jouer()
+        attendre("la première demande") { demandes.isNotEmpty() }
+
+        lecteur.seekTo(133_000L)
+        ecouler()
+        lecteur.setMediaItems(
+            listOf(
+                remoteSong(
+                    id = "autre",
+                    durationMs = DUREE_MS,
+                ).toMediaItem().withRendering(StreamRendering("opus", 96)),
+            ),
+        )
+        lecteur.prepare()
+        avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+        laisserPartir()
+
+        assertEquals(emptyList<Long>(), transcodees.map { it.decalageMs }.filter { it > 0L })
+    }
+
+    @Test
     fun `un flux quitte pendant l'attente n'est jamais relance`() {
         // R21 : le début de la piste, refusé, attendait sa relance quand le
         // saut l'a remplacé.
