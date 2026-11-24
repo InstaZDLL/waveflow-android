@@ -10,6 +10,8 @@ import app.waveflow.model.PlaybackSpeed
 import app.waveflow.playback.AbLoop
 import app.waveflow.playback.AbLoopState
 import app.waveflow.playback.PlaybackFailure
+import app.waveflow.playback.PlaybackNotice
+import app.waveflow.playback.PlaybackNotices
 import app.waveflow.playback.PlaybackState
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.SleepTimer
@@ -47,6 +49,7 @@ class PlayerViewModelTest {
     private val controller = FakePlaybackController()
     private val preferences = FakePreferencesStore()
     private val abLoop = AbLoop()
+    private val notices = PlaybackNotices()
 
     /** Une piste chargée dans le lecteur, à laquelle des bornes peuvent tenir. */
     private val piste = PlayingTrack(
@@ -73,6 +76,7 @@ class PlayerViewModelTest {
         sleepTimer = SleepTimer(backgroundScope) { testScheduler.currentTime },
         preferencesStore = preferencesStore,
         abLoop = abLoop,
+        playbackNotices = notices,
     )
 
     @Test
@@ -201,6 +205,37 @@ class PlayerViewModelTest {
         controller.emit(PlaybackState(failure = PlaybackFailure.Unplayable))
 
         assertEquals(listOf("Ce morceau n'a pas pu être lu."), messages)
+        job.cancel()
+    }
+
+    @Test
+    fun `un transcodage refuse dit le serveur occupe et non injoignable`() = runTest {
+        // R24 de `docs/deplacement-dans-un-transcodage.md`.
+        val viewModel = playerViewModel()
+        val messages = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { messages += it }
+        }
+
+        controller.emit(PlaybackState(failure = PlaybackFailure.Busy))
+
+        assertEquals(listOf("Serveur occupé : réessayez dans un instant."), messages)
+        job.cancel()
+    }
+
+    @Test
+    fun `le repli sur l'original se dit par le canal des erreurs`() = runTest {
+        // R24 : la lecture continue, rien ne passe par l'état du lecteur ; sans
+        // l'annonce, la qualité changerait en silence.
+        val viewModel = playerViewModel()
+        val messages = mutableListOf<String>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.errors.collect { messages += it }
+        }
+
+        notices.announce(PlaybackNotice.OriginalAfterRefusal)
+
+        assertEquals(listOf("Serveur saturé : lecture en qualité d'origine."), messages)
         job.cancel()
     }
 

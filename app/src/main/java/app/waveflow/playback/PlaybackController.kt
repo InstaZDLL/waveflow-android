@@ -29,6 +29,12 @@ enum class PlaybackFailure {
 
     /** La piste elle-même n'a pu être ni ouverte ni décodée. */
     Unplayable,
+
+    /**
+     * Le serveur a refusé de transcoder, essais épuisés, et la liaison ne
+     * portait pas l'original. Il répond : il est occupé, pas injoignable.
+     */
+    Busy,
 }
 
 /**

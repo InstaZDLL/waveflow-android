@@ -19,6 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import java.time.Duration
 
 /**
  * L'enveloppe face à un lecteur factice dont on pilote l'état.
@@ -44,7 +45,9 @@ class TranscodeSeekingPlayerTest {
         ecouler()
     }
 
-    private fun ecouler() = shadowOf(Looper.getMainLooper()).idle()
+    /** Jusqu'au départ d'une relance différée (R9), que `TranscodeSeekCoalescenceTest` éprouve à part. */
+    private fun ecouler() =
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(TranscodeSeekingPlayer.COALESCENCE_MS))
 
     private val Player.fenetreCourante: Timeline.Window
         get() = currentTimeline.getWindow(currentMediaItemIndex, Timeline.Window())

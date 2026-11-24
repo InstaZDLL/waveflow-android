@@ -24,6 +24,7 @@ import app.waveflow.data.remote.ServerSessionRepository
 import app.waveflow.playback.AbLoop
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
+import app.waveflow.playback.PlaybackNotices
 import app.waveflow.playback.RemoteMediaCache
 import app.waveflow.playback.SleepTimer
 import coil.ImageLoader
@@ -132,6 +133,13 @@ class AppContainer(app: Application) {
      * lecteur.
      */
     val abLoop = AbLoop()
+
+    /**
+     * Ce que le service fait de lui-même pendant la lecture et que l'écran doit
+     * dire — aujourd'hui, le repli sur l'original après un transcodage refusé.
+     * Partagé comme la minuterie : le service annonce, l'écran affiche.
+     */
+    val playbackNotices = PlaybackNotices()
 
     /**
      * Cache des pistes distantes, unique pour le processus.

@@ -2,12 +2,9 @@ package app.waveflow.playback
 
 import android.content.Intent
 import android.os.SystemClock
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -92,26 +89,16 @@ class PlaybackService : MediaLibraryService() {
             RemoteStreamResolver(container.catalogRepository),
         )
 
-        val exoPlayer = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-            // Route audio "musique" + gestion du focus audio (pause si un appel
-            // arrive, etc.).
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                /* handleAudioFocus = */ true,
-            )
-            // Met en pause quand le casque est débranché.
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-
         // Tout ce qui suit parle à l'enveloppe, jamais à l'ExoPlayer : dans un
         // morceau transcodé relancé à 2:13, lui compte depuis zéro, et la
         // notification, la voiture, l'historique ou la boucle A-B s'y
         // tromperaient. Voir `docs/deplacement-dans-un-transcodage.md`, R1.
-        val player: Player = TranscodeSeekingPlayer(exoPlayer)
+        val player: Player = assemblerLeLecteur(
+            context = this,
+            dataSourceFactory = dataSourceFactory,
+            liaisonNonFacturee = ::surLiaisonNonFacturee,
+            annoncerRepli = { container.playbackNotices.announce(PlaybackNotice.OriginalAfterRefusal) },
+        )
 
         // Sans ce chargeur, Media3 irait chercher les pochettes avec son propre
         // client HTTP, qui ne porte pas le jeton de session : `/api/v2/artwork/`
