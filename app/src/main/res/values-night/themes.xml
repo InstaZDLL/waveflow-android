@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Le sombre, Fluid Editorial : son fond `bg`. Voir `values/themes.xml`.
+-->
+<resources>
+
+    <style name="Theme.WaveFlow" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fond_fenetre</item>
+    </style>
+</resources>
