@@ -45,8 +45,10 @@ n'agiraient pas.
 
 **A3. Les réglages sont bornés à l'écriture et à la relecture**, comme la vitesse
 de lecture. Une valeur non finie relit 0 dB. Un mode inconnu (écrit par une
-version future) relit Automatique, comme `GainMode::from_setting`. Le nombre de
-bandes relu qui n'est pas six relit l'égaliseur plat.
+version future) relit Automatique, comme `GainMode::from_setting`. Des bandes
+illisibles, ou qui ne sont pas six, relisent l'égaliseur plat ; l'interrupteur
+garde sa valeur. Un préréglage inconnu relit un réglage *Personnalisé*, qui
+garde ses bandes.
 
 **A4. Un réglage s'applique au tampon suivant**, sans attendre la piste
 suivante : le service observe les préférences, comme pour la vitesse, et les
@@ -89,6 +91,9 @@ flux reçu : un original servi tel quel porte les siens.
 - `R128_*` est un entier Q7.8 en LU par rapport à −23 LUFS. Divisé par 256 et
   augmenté de 5, il passe sur l'échelle ReplayGain (−18 LUFS) : `0` donne
   +5 dB, `-1536` donne −1 dB.
+- Un nombre s'écrit comme le bureau le lit (`f64::from_str`) : signe, chiffres,
+  point décimal, exposant. L'hexadécimal (`0x1p3`) et un suffixe de type
+  (`2.5d`), que Kotlin accepterait, sont écartés.
 - Quand un fichier porte les deux, `REPLAYGAIN_*` l'emporte sur `R128_*`.
 - Un pic est linéaire, strictement positif et au plus 4 : `0`, un négatif,
   `120` ou du texte sont écartés.
