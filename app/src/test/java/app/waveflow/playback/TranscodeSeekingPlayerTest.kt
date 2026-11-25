@@ -352,6 +352,23 @@ class TranscodeSeekingPlayerTest {
     }
 
     @Test
+    fun `une repetition annule le saut en attente`() {
+        // R9 : le morceau qui recommence est un changement de piste. Le saut
+        // demandé dans les 300 ms d'avant la fin ne doit pas tirer la nouvelle
+        // écoute au milieu, même sans segment ni repli à défaire.
+        faux.dureeUs = { Util.msToUs(DUREE_MS) }
+        jouer(transcode())
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+        ecouler()
+        lecteur.seekTo(133_000L)
+
+        faux.finirLeFlux()
+        ecouler()
+
+        assertEquals(0, faux.remplacements.size)
+    }
+
+    @Test
     fun `l'original d'un repli repete redemande le rendu choisi`() {
         // R22 : le repli ne vaut que pour l'écoute refusée. Répété, le morceau
         // redemande le rendu choisi — et l'original en données mobiles, jamais.

@@ -137,13 +137,16 @@ observer :
 - pendant l'attente, la position annoncée est déjà la cible (R6), et un
   « avancer » ou « reculer » de plus se calcule depuis elle — cinq pressions sur
   « +10 s » partent ensemble, à +50 s ;
-- un saut natif (R7), un changement de piste, ou une piste qui n'est plus la
-  courante quand l'attente échoit, annulent la relance en attente ;
+- un saut natif (R7), un changement de piste — la répétition d'un titre en est
+  un —, ou une piste qui n'est plus la courante quand l'attente échoit, annulent
+  la relance en attente ;
 - la cible annoncée est **constante** : l'ancien flux qui joue encore ne la fait
   pas dériver ;
 - si le lecteur s'est arrêté **sur une erreur** — le dernier refus d'une liaison
-  facturée, avant le geste ou pendant l'attente —, la relance le prépare de
-  nouveau : sans cela le saut resterait sans suite. Un arrêt demandé (`stop`)
+  facturée, avant le geste ou pendant l'attente —, le saut le prépare de
+  nouveau, qu'il soit natif ou relancé : sans cela il resterait sans suite, et
+  revenir au début, natif, ne ferait pas ce que fait un saut plus loin. Un arrêt
+  demandé (`stop`)
   se respecte, même après une panne : le lecteur en garde l'erreur, et
   l'enveloppe retient donc elle-même d'où vient l'arrêt ;
 - les relances que l'enveloppe décide seule — la répétition d'un segment (R12),
@@ -182,12 +185,14 @@ viendra éventuellement plus tard — pas dans cette première version.
 segment. Laisser `REPEAT_MODE_ONE` à ExoPlayer pendant un segment rejouerait ses
 dernières secondes sans fin — le piège payé par Resonus (`applyLoop`).
 
-Toute relance de la piste courante, sous `REPEAT_MODE_ONE`, suspend la
-répétition le temps du remplacement. L'ExoPlayer remplace une source dont l'URI
-change en ajoutant la nouvelle puis en retirant l'ancienne, et retirer la piste
-courante lui fait chercher la suivante dans l'ordre de la répétition : la
-piste elle-même, retirée. Il s'arrêtait alors (`STATE_ENDED`, constaté face à
-un vrai ExoPlayer 1.11.1).
+Toute relance de la piste courante suspend la répétition et l'ordre aléatoire
+le temps du remplacement. L'ExoPlayer remplace une source dont l'URI change en
+ajoutant la nouvelle juste après l'ancienne, puis en retirant l'ancienne ; et
+retirer la piste courante lui fait chercher la suivante, selon la répétition et
+l'ordre aléatoire. Sous `REPEAT_MODE_ONE`, c'était la piste elle-même, retirée :
+il s'arrêtait (`STATE_ENDED`). En aléatoire, c'était la piste tirée après elle :
+il changeait de morceau. Les deux constatés face à un vrai ExoPlayer 1.11.1.
+Suspendus, la suivante est la nouvelle source.
 
 **R13. « Précédent », « reculer » et « avancer » jugent sur la position
 logique.** `ForwardingSimpleBasePlayer.handleSeek` les transmet tels quels
@@ -296,12 +301,10 @@ le même geste à suggérer.
   la position logique courante — dans une PR suivante, une fois l'enveloppe en
   place.
 - **Le cache des segments** (R11).
-- **Une relance sous l'ordre aléatoire.** Pour la même raison qu'en R12, retirer
-  la piste courante fait chercher à l'ExoPlayer la suivante — ici dans l'ordre
-  aléatoire, où la nouvelle source vient d'être insérée à une place tirée au
-  hasard. Le lecteur saute alors vers une autre piste, ou s'arrête. Constaté
-  face à un vrai ExoPlayer 1.11.1 ; le corriger demande de garder l'ordre
-  aléatoire d'avant le remplacement (R1) — une carte à part.
+- **L'ordre aléatoire après une relance (#86).** La relance reste sur la piste
+  (R12), mais l'ExoPlayer insère la nouvelle source à une place tirée au hasard
+  dans son ordre aléatoire : ce qui suit la piste relancée n'est plus ce qui la
+  suivait. Garder l'ordre d'avant le remplacement (R1) est une carte à part.
 
 ## Comment l'éprouver
 

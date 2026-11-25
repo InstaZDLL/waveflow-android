@@ -259,6 +259,27 @@ class TranscodeRefusalChainTest {
     }
 
     @Test
+    fun `une relance en aleatoire reste sur la piste`() {
+        // R5 : en aléatoire, retirer la piste courante faisait passer
+        // l'ExoPlayer à la piste tirée après elle. Plusieurs relances, pour
+        // qu'un tirage chanceux ne fasse pas passer le test sans le correctif.
+        lecteur.setMediaItems(listOf(transcode()) + List(4) { transcode("autre-$it") })
+        lecteur.shuffleModeEnabled = true
+        lecteur.prepare()
+        lecteur.play()
+        attendre("la première demande") { demandes.isNotEmpty() }
+
+        for (cible in listOf(60_000L, 133_000L, 200_000L)) {
+            lecteur.seekTo(cible)
+            avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+            attendre("la relance à $cible") { demandes.any { it.piste == PISTE && it.decalageMs == cible } }
+
+            assertEquals(transcode().mediaId, lecteur.currentMediaItem?.mediaId)
+        }
+        assertTrue("l'aléatoire est rétabli", lecteur.shuffleModeEnabled)
+    }
+
+    @Test
     fun `des sauts rapproches ne demandent qu'un transcodage, a la cible du dernier`() {
         // R9. Entre deux sauts, on laisse au réseau le temps de partir — sans
         // avancer l'horloge du lecteur : sans coalescence, chaque saut aurait
@@ -396,6 +417,38 @@ class TranscodeRefusalChainTest {
         laisserPartir()
 
         assertEquals(emptyList<Long>(), transcodees.map { it.decalageMs }.filter { it > 0L })
+    }
+
+    @Test
+    fun `un saut natif apres l'abandon relance le lecteur`() {
+        // R9 : revenir au début d'un transcodage se fait nativement. Arrêté
+        // sur son erreur, le lecteur doit repartir comme pour un saut relancé.
+        nonFacturee = false
+        jouer()
+        attendre("l'abandon") { lecteur.playerError != null }
+        val avant = demandes.size
+
+        lecteur.seekTo(0L)
+        attendre("une nouvelle demande") { demandes.size > avant }
+
+        assertEquals(0L, demandes.toList()[avant].decalageMs)
+    }
+
+    @Test
+    fun `un saut natif apres l'abandon puis un arret demande ne relance rien`() {
+        // Le pendant du précédent : `stop` laisse l'erreur, et se respecte.
+        nonFacturee = false
+        jouer()
+        attendre("l'abandon") { lecteur.playerError != null }
+        lecteur.stop()
+        ecouler()
+        val avant = demandes.size
+
+        lecteur.seekTo(0L)
+        avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+        laisserPartir()
+
+        assertEquals(avant, demandes.size)
     }
 
     /**
