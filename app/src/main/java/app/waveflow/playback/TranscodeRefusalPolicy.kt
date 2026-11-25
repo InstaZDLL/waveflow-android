@@ -21,6 +21,11 @@ import kotlin.random.Random
  * l'on cesse après [RELANCES_MAX] relances (R20). Ce qui suit l'abandon — le
  * repli sur l'original — se décide plus haut, voir [TranscodeRefusalFallback].
  *
+ * Un transcodage **coupé en route** n'est pas retenté du tout (R25) : Media3
+ * le rouvrirait à l'octet atteint, ce que le serveur refuse, ou du début, ce
+ * qui rejouerait ce qu'on a déjà entendu. L'erreur remonte, et
+ * [TranscodeCutRecovery] le reprend où le son s'est tu.
+ *
  * Toute autre erreur garde le comportement de Media3, délais et abandon compris.
  *
  * @param hasard la source de la gigue ; remplaçable pour qu'un test en
@@ -31,6 +36,15 @@ internal class TranscodeRefusalPolicy(
 ) : DefaultLoadErrorHandlingPolicy() {
 
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long {
+        // R25 : un transcodage coupé en route ne se reprend ni à l'octet
+        // atteint — le serveur refuse la plage — ni du début, ce que Media3
+        // ferait d'un flux sans longueur ni durée. L'erreur est définitive pour
+        // lui ; la reprise la répare plus haut, voir [TranscodeCutRecovery].
+        if (loadErrorInfo.exception.estUneLectureCoupee() &&
+            loadErrorInfo.loadEventInfo.dataSpec.uri.estUnTranscodage()
+        ) {
+            return C.TIME_UNSET
+        }
         val refus = loadErrorInfo.exception.refusDeTranscodage()
             ?: return super.getRetryDelayMsFor(loadErrorInfo)
         // Media3 rendrait de toute façon l'erreur au lecteur à ce compte-là ;

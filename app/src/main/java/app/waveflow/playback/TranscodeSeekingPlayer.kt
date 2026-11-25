@@ -1,5 +1,6 @@
 package app.waveflow.playback
 
+import android.net.Uri
 import android.os.Handler
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingSimpleBasePlayer
@@ -626,7 +627,11 @@ internal fun logicalPositionMs(streamPositionMs: Long, offsetMs: Long, durationM
 }
 
 /** Une piste du serveur servie transcodée : la seule dont le flux peut devoir être relancé. */
-internal fun MediaItem.isRemoteTranscode(): Boolean {
-    val uri = localConfiguration?.uri ?: return false
-    return trackIdOfRemoteUri(uri) != null && !renderingOfRemoteUri(uri).isOriginal
-}
+internal fun MediaItem.isRemoteTranscode(): Boolean = localConfiguration?.uri?.estUnTranscodage() == true
+
+/**
+ * Le même jugement sur le marqueur seul, tel que le voit la chaîne de lecture —
+ * une politique de chargement ne connaît que l'URI qu'elle charge.
+ */
+internal fun Uri.estUnTranscodage(): Boolean =
+    trackIdOfRemoteUri(this) != null && !renderingOfRemoteUri(this).isOriginal

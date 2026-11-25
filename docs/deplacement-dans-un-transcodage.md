@@ -309,26 +309,42 @@ le même geste à suggérer.
 
 Règles ajoutées le 25/11 pour l'issue #60.
 
-Ce qui se passe sans elles, constaté sur la vraie chaîne de lecture : le flux
-s'interrompt, et Media3 le rouvre **à l'octet atteint** (`Range: bytes=N-`). Le
-serveur refuse toute plage d'un transcodage en cours : `416`, `Accept-Ranges:
-none`, sans `Content-Range` (`waveflow-server`, `src/media/mod.rs`). Media3 range
-l'erreur sous `ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE` (2008) — dans les causes,
-l'erreur du lecteur portant le code de l'en-tête, `ERROR_CODE_IO_BAD_HTTP_STATUS`
-— et la classe **jamais retentable**. Ce qui était déjà reçu se joue jusqu'au
-bout ; à la dernière seconde tamponnée, le lecteur s'arrête sur son erreur, pour
-de bon : une coupure de deux secondes dans le métro faisait tomber le morceau.
+Ce qui se passe sans elles, constaté sur la vraie chaîne de lecture. Le flux
+s'interrompt en pleine lecture, et Media3 décide de la suite selon ce qu'il sait
+du flux (`ProgressiveMediaPeriod.configureRetry`, 1.11.1) :
 
-**R25. Une coupure se reprend par une relance, là où le son s'est tu.** Une
-plage refusée sur un transcodage de la piste courante se répare en redemandant
-le flux, même rendu, à `offset_ms` = la **position logique** au moment de
-l'erreur. C'est l'instant exact où le tampon s'est vidé : rien de ce qui a été
-entendu ne se rejoue, rien de ce qui ne l'a pas été ne se perd.
+- **il en connaît la longueur ou la durée** : il le rouvre **à l'octet atteint**
+  (`Range: bytes=N-`). Le serveur refuse toute plage d'un transcodage en cours —
+  `416`, `Accept-Ranges: none`, sans `Content-Range` (`waveflow-server`,
+  `src/media/mod.rs`) —, refus que Media3 tient pour définitif : ce qui était
+  reçu se joue, puis le lecteur s'arrête sur son erreur, pour de bon ;
+- **il n'en connaît ni l'une ni l'autre** — c'est le cas de **tout transcodage
+  en direct** : un Ogg Opus sans longueur n'a pas de durée non plus — : il le
+  tient pour un direct, joue ce qui était reçu, puis **recharge le même flux
+  depuis le début**, sans erreur. On réentend le segment depuis son début, ou le
+  morceau depuis 0:00.
+
+Ni l'un ni l'autre ne reprend là où le son s'est tu. Le second est le cas réel ;
+le premier est celui qu'avait décrit l'issue, et qu'un banc à durée connue
+aurait seul montré.
+
+**R25. Une coupure se reprend par une relance, là où le son s'est tu.** Un
+transcodage coupé **en pleine lecture** — la liaison cède une fois des octets
+reçus — n'est pas retenté par Media3 : la politique de chargement rend l'erreur
+définitive, avant qu'il ne choisisse entre l'octet atteint et le début. Ce qui
+était reçu se joue jusqu'au bout ; puis l'erreur arrive au lecteur, et se répare
+en redemandant le flux, même rendu, à `offset_ms` = la **position logique** à cet
+instant — celui où le tampon s'est vidé : rien de ce qui a été entendu ne se
+rejoue, rien de ce qui ne l'a pas été ne se perd.
+
+Un transcodage que le serveur aurait déjà entier, et qu'il servirait avec sa
+longueur, accepterait la plage ; la reprise demande quand même un segment, que
+le serveur produit à nouveau. Le cas est rare et l'écart ne coûte qu'un
+transcodage : une règle de plus ne le vaut pas.
 
 **R26. Seul un transcodage se reprend.** L'original accepte les plages : Media3
-le rouvre à l'octet atteint et la lecture continue, comme avant. Un `416` sur
-l'original n'est pas une coupure — le fichier a changé de taille — et l'erreur
-remonte. L'original d'un repli (R22) est un original.
+le rouvre à l'octet atteint et la lecture continue, comme avant. L'original d'un
+repli (R22) est un original.
 
 **R27. La reprise est une relance comme une autre.** Ni la session ni les
 écouteurs du service n'y voient de changement de piste (R5) : l'historique ne
@@ -399,13 +415,21 @@ mille la chance qu'un ordre dérangé retombe sur l'ancien.
 **R25 à R30 s'éprouvent sur la même chaîne**, face à un serveur factice qui
 coupe le flux en son milieu et refuse la plage comme le vrai. Robolectric ne
 décode pas l'Opus, mais le moteur audio lit du PCM sans décodeur : les
-« transcodages » y sont servis en WAV — la chaîne les traite en transcodages,
-c'est le marqueur qui en décide. La lecture y avance, le tampon s'y vide, et
-l'erreur tombe là où elle tomberait sur un appareil : c'est ce qui permet de
-vérifier que la reprise part de l'instant de la coupure, et que l'original d'un
-repli est rouvert à l'octet de cet instant. Ce qui dépend d'un instant précis —
-une coupure pendant les 300 ms d'un saut (R28) — et le compte des reprises
-entendues (R30) s'éprouvent face au lecteur factice.
+« transcodages » y sont servis en **Matroska PCM sans durée ni index**, en
+morceaux — la chaîne les traite en transcodages, c'est le marqueur qui en
+décide, et Media3 n'en connaît ni la longueur ni la durée, **comme d'un Opus en
+direct**. C'est ce qui décide de son geste après une coupure : un premier banc
+servait du WAV, dont l'en-tête annonce la durée ; Media3 y rouvrait à l'octet
+atteint, et la reprise passait ses tests sur un chemin que la production ne
+prend pas. Sur le Matroska, sans le correctif, il recharge le flux depuis le
+début. La lecture y avance, le tampon s'y vide, et l'erreur tombe là où elle
+tomberait sur un appareil : c'est ce qui permet de vérifier que la reprise part
+de l'instant de la coupure, et que l'original d'un repli est rouvert à l'octet
+de cet instant — l'original, lui, est servi en WAV. Ce qui dépend d'un instant
+précis — une coupure pendant les 300 ms d'un saut (R28) — et le compte des
+reprises entendues (R30) s'éprouvent face au lecteur factice ; ce que décide la
+politique, sur des coupures levées par la vraie source HTTP
+(`TranscodeRefusalPolicyTest`).
 
 `TranscodeRefusalPolicyTest` éprouve les bornes de la politique sur des refus
 **levés par la vraie source HTTP** — c'est ainsi qu'est apparue la clé `null` que
@@ -426,10 +450,9 @@ Ce qui n'est **pas** éprouvé :
   piste courante, ce qui suppose qu'ExoPlayer ne rende l'erreur d'une piste
   qu'une fois celle-ci devenue la courante. C'est ce que disent ses sources
   (`ExoPlayerImplInternal.handleIoException`, 1.11.1) ; aucun test ne le montre.
-- **Une coupure sur un vrai flux Opus.** Le WAV du banc annonce sa longueur :
-  l'ExoPlayer y tient pour déplaçable le flux d'un transcodage commencé au
-  début, ce que n'est pas un flux Opus en direct. La coupure n'en dépend pas,
-  mais rien n'a coupé un Opus.
+- **Une coupure sur un vrai flux Opus.** Le Matroska du banc reproduit ce qui
+  décide du geste de Media3 — ni longueur ni durée —, mais l'extracteur Ogg n'y
+  passe pas : rien n'a coupé un Opus.
 - **La coupure d'un original servi avec sa longueur.** Le banc sert l'original en
   morceaux : coupé en son milieu, un corps à longueur fixe n'y a pas fait
   rouvrir le flux, cause non élucidée. R26 n'est éprouvée que sur un original

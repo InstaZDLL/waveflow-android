@@ -48,12 +48,13 @@ import kotlin.random.Random
  *
  * La coupure réseau s'y joue pour de bon. Robolectric ne décode pas l'Opus, mais
  * le moteur audio lit du PCM sans décodeur : le serveur factice sert donc ses
- * « transcodages » en WAV, que la chaîne aiguille comme un transcodage puisque
- * c'est le marqueur qui en décide. La lecture y avance, le tampon s'y vide, et
- * l'erreur d'une plage refusée tombe là où elle tomberait sur un appareil.
- * Seule différence : un WAV annonce sa longueur, si bien que l'ExoPlayer tient
- * pour déplaçable le flux d'un transcodage commencé au début — ce qui ne touche
- * pas à la coupure, mais fait qu'un saut y serait natif (R7).
+ * « transcodages » en Matroska PCM, que la chaîne aiguille comme un transcodage
+ * puisque c'est le marqueur qui en décide. Sans durée ni index, et en morceaux :
+ * Media3 n'en connaît ni la longueur ni la durée, comme d'un Opus en direct, et
+ * c'est ce qui décide de son geste après une coupure — un WAV, dont l'en-tête
+ * dit la durée, le lui faisait rouvrir à l'octet atteint, chemin que la
+ * production ne prend pas. La lecture y avance, le tampon s'y vide, et l'erreur
+ * tombe là où elle tomberait sur un appareil. L'original est servi en WAV.
  *
  * Les renvois R1 à R30 pointent vers `docs/deplacement-dans-un-transcodage.md`.
  */
@@ -203,7 +204,7 @@ class TranscodeRelaunchChainTest {
     private fun flux(secondes: Int, coupe: Boolean): MockResponse =
         MockResponse()
             .setHeader("Accept-Ranges", "none")
-            .setChunkedBody(Buffer().write(wav(secondes)), TAILLE_DES_MORCEAUX)
+            .setChunkedBody(Buffer().write(mkv(secondes)), TAILLE_DES_MORCEAUX)
             .apply { if (coupe) setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY) }
 
     /** Ce que le serveur répond à une plage sur un transcodage en cours (`src/media/mod.rs`). */
@@ -212,9 +213,10 @@ class TranscodeRelaunchChainTest {
     private fun Demande.rouvreEnRoute(): Boolean = plage != null && plage != "bytes=0-"
 
     /**
-     * Le premier flux de la piste se coupe en son milieu, à 30 s ; Media3 le
-     * rouvre à l'octet atteint, et le serveur refuse la plage d'un transcodage.
-     * [reprise] dit ce que reçoivent les demandes suivantes, l'original compris.
+     * Le premier flux de la piste se coupe en son milieu, à 30 s, chaque fois
+     * qu'on le redemande du début ; une plage sur un transcodage est refusée,
+     * comme le fait le serveur. [reprise] dit ce que reçoivent les demandes
+     * décalées et l'original.
      */
     private fun couperPuis(reprise: (Demande) -> MockResponse) {
         repondre = { demande ->
@@ -234,8 +236,8 @@ class TranscodeRelaunchChainTest {
 
     @Test
     fun `une coupure dans un transcodage reprend la ou le son s'est tu`() {
-        // R25 : sans reprise, le lecteur s'arrêtait sur la plage refusée, pour
-        // de bon, à la fin de ce qui avait été reçu.
+        // R25 : sans reprise, Media3 rechargeait le flux depuis le début — et,
+        // le serveur factice coupant de nouveau, sans fin.
         couperPuis { flux(PREMIER_FLUX_S, coupe = false) }
         jouer()
 
@@ -473,3 +475,66 @@ private fun wav(secondes: Int): ByteArray {
 private const val FREQUENCE = 8_000
 private const val OCTETS_PAR_ECHANTILLON = 2
 private const val TAILLE_ENTETE = 44
+
+/**
+ * Un flux Matroska PCM 16 bits mono à 8 kHz, muet, de [secondes] secondes,
+ * **sans durée ni index** : comme un Opus en direct pour Media3, qui n'en
+ * connaît ni la longueur ni la durée et le tient pour non déplaçable ; mais
+ * lisible par le moteur audio sous Robolectric, sans décodeur.
+ */
+private fun mkv(secondes: Int): ByteArray {
+    val sortie = java.io.ByteArrayOutputStream()
+    sortie.write(
+        ebml(
+            0x1A45DFA3,
+            uint(0x4286, 1) + uint(0x42F7, 1) + uint(0x42F2, 4) + uint(0x42F3, 8) +
+                ebml(0x4282, "matroska".toByteArray()) + uint(0x4287, 4) + uint(0x4285, 2),
+        ),
+    )
+    // Le segment, de taille inconnue, comme un flux qu'on écrit encore.
+    sortie.write(id(0x18538067) + byteArrayOf(0x01) + ByteArray(7) { 0xFF.toByte() })
+    sortie.write(ebml(0x1549A966, uint(0x2AD7B1, 1_000_000)))
+    val audio = ebml(0xB5, ByteBuffer.allocate(8).putDouble(FREQUENCE.toDouble()).array()) +
+        uint(0x9F, 1) + uint(0x6264, 16)
+    sortie.write(
+        ebml(
+            0x1654AE6B,
+            ebml(
+                0xAE,
+                uint(0xD7, 1) + uint(0x73C5, 1) + uint(0x83, 2) +
+                    ebml(0x86, "A_PCM/INT/LIT".toByteArray()) + ebml(0xE1, audio),
+            ),
+        ),
+    )
+    val bloc = FREQUENCE * OCTETS_PAR_ECHANTILLON / BLOCS_PAR_SECONDE
+    repeat(secondes) { s ->
+        var grappe = uint(0xE7, s * 1_000L)
+        repeat(BLOCS_PAR_SECONDE) { b ->
+            val decalage = (b * 1_000 / BLOCS_PAR_SECONDE).toShort()
+            val entete = ByteBuffer.allocate(4).put(0x81.toByte()).putShort(decalage).put(0x80.toByte()).array()
+            grappe += ebml(0xA3, entete + ByteArray(bloc))
+        }
+        sortie.write(ebml(0x1F43B675, grappe))
+    }
+    return sortie.toByteArray()
+}
+
+private const val BLOCS_PAR_SECONDE = 10
+
+private fun id(valeur: Int): ByteArray {
+    val octets = ByteBuffer.allocate(4).putInt(valeur).array()
+    return octets.dropWhile { it == 0.toByte() }.toByteArray()
+}
+
+/** Un élément EBML : son identifiant, sa taille sur huit octets, son contenu. */
+private fun ebml(identifiant: Int, contenu: ByteArray): ByteArray =
+    id(identifiant) + byteArrayOf(0x01) +
+        ByteBuffer.allocate(8).putLong(contenu.size.toLong()).array().copyOfRange(1, 8) +
+        contenu
+
+private fun uint(identifiant: Int, valeur: Long): ByteArray = ebml(
+    identifiant,
+    ByteBuffer.allocate(8).putLong(valeur).array(),
+)
+
+private fun uint(identifiant: Int, valeur: Int): ByteArray = uint(identifiant, valeur.toLong())

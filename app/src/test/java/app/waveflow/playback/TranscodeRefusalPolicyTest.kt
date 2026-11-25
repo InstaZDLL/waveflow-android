@@ -170,7 +170,78 @@ class TranscodeRefusalPolicyTest {
         assertEquals(0L, politique.getRetryDelayMsFor(echec(introuvable, 1)))
     }
 
+    /**
+     * Une coupure telle que la vraie source HTTP la lève : le serveur ferme la
+     * liaison au milieu d'un flux sans longueur, et la lecture échoue.
+     */
+    private fun coupure(): IOException {
+        server.enqueue(
+            MockResponse()
+                .setChunkedBody(okio.Buffer().write(ByteArray(64 * 1_024)), 4_096)
+                .setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY),
+        )
+        val source = DefaultHttpDataSource.Factory().createDataSource()
+        return try {
+            source.open(DataSpec(server.url("/api/v2/stream/t?format=opus").toString().toUri()))
+            val tampon = ByteArray(4_096)
+            while (source.read(tampon, 0, tampon.size) != C.RESULT_END_OF_INPUT) Unit
+            throw AssertionError("le serveur factice devait couper")
+        } catch (coupure: IOException) {
+            coupure
+        } finally {
+            source.close()
+        }
+    }
+
+    /** Une coupure vue par le lecteur : sur le flux d'un marqueur, et non sur l'URL résolue. */
+    private fun echecSur(marqueur: String, erreur: IOException, numero: Int = 1) = LoadErrorInfo(
+        LoadEventInfo.Builder(0L, DataSpec.Builder().setUri(marqueur).build(), 0L).build(),
+        MediaLoadData(C.DATA_TYPE_MEDIA),
+        erreur,
+        numero,
+    )
+
+    @Test
+    fun `un transcodage coupe en route n'est pas retente`() {
+        // R25 : Media3 le rouvrirait à l'octet atteint, ce que le serveur
+        // refuse, ou du début, ce qui rejouerait ce qu'on a entendu.
+        assertEquals(C.TIME_UNSET, politique.getRetryDelayMsFor(echecSur(TRANSCODE, coupure())))
+    }
+
+    @Test
+    fun `un original coupe en route garde les delais de Media3`() {
+        // R26 : l'original accepte les plages, Media3 le rouvre à l'octet atteint.
+        val erreur = coupure()
+
+        assertEquals(
+            DefaultLoadErrorHandlingPolicy().getRetryDelayMsFor(echecSur(ORIGINAL, erreur)),
+            politique.getRetryDelayMsFor(echecSur(ORIGINAL, erreur)),
+        )
+    }
+
+    @Test
+    fun `un transcodage qui ne s'ouvre pas garde les delais de Media3`() {
+        // R30 : une coupure qui dure fait échouer la demande à l'ouverture, une
+        // panne réseau ordinaire, que Media3 retente puis rend.
+        val adresse = server.url("/api/v2/stream/t?format=opus").toString().toUri()
+        server.shutdown()
+        val muet = DefaultHttpDataSource.Factory().createDataSource()
+        val erreur = try {
+            muet.open(DataSpec(adresse))
+            throw AssertionError("le serveur arrêté devait refuser la connexion")
+        } catch (erreur: IOException) {
+            erreur
+        }
+
+        assertEquals(
+            DefaultLoadErrorHandlingPolicy().getRetryDelayMsFor(echecSur(TRANSCODE, erreur, 2)),
+            politique.getRetryDelayMsFor(echecSur(TRANSCODE, erreur, 2)),
+        )
+    }
+
     private companion object {
+        const val TRANSCODE = "waveflow://track/c07f8d98?format=opus&bitrate=96"
+        const val ORIGINAL = "waveflow://track/c07f8d98"
         const val SEMENCE = 57
         const val TIRAGES = 50
     }
