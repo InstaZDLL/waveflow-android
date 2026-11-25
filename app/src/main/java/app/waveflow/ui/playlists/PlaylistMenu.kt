@@ -7,6 +7,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,7 +40,14 @@ fun PlaylistMenu(
         )
     }
 
-    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+    // Le menu est au niveau flottant des documents, celui des dialogues :
+    // DropdownMenu prendrait sinon le fond des barres et la forme du champ.
+    DropdownMenu(
+        expanded = menuExpanded,
+        onDismissRequest = { menuExpanded = false },
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
         DropdownMenuItem(
             text = { Text("Renommer") },
             onClick = {

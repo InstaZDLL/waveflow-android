@@ -25,6 +25,11 @@ import androidx.compose.ui.graphics.Color
 // Le palier 400 se lit sur le sombre et prend une encre sombre ; le palier 600
 // se lit sur le clair et prend une encre blanche. Le suivi de la pochette
 // viendra avec les composants.
+//
+// L'encre blanche sur le palier 600 ne donne que 3,77:1 : assez pour un grand
+// texte ou une icône, pas pour le libellé d'un bouton (4,5:1). C'est su et
+// voulu, à l'identique du bureau ; la question se tranche pour toutes les
+// plateformes avec le suivi de la pochette (#78).
 
 /** Émeraude, palier 400 : l'accent du sombre. */
 val Emerald400 = Color(0xFF34D399)
@@ -82,7 +87,10 @@ val FluidGlowDeep = Color(0xFF0F2B22)
 /** `ground` — la page, fraîche et légèrement bleutée ; jamais blanche. */
 val LiquidGround = Color(0xFFECEEF5)
 
-/** Niveau `canvas` (blanc 90 % sur le fond) : cartes et régions de contenu. */
+/**
+ * Niveau `canvas` (blanc 90 % sur le fond) : cartes et régions de contenu.
+ * L'overlay — menus, dialogues — a la même teinte : seule l'ombre les sépare.
+ */
 val LiquidCanvas = Color(0xFFFDFDFE)
 
 /** Niveau `elevated` (blanc 74 % sur le fond) : bande de suggestion, carte survolée. */

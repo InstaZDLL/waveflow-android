@@ -63,18 +63,20 @@ internal val LiquidShapes = WaveFlowShapes(
 )
 
 /*
- * Les rôles de Material 3, que ses composants lisent seuls — un champ prend
- * `extraSmall`, une carte `medium`, une feuille du bas ou un dialogue
- * `extraLarge`. Chaque rôle reçoit la valeur que le document donne à la même
- * intention :
+ * Les rôles de Material 3, que ses composants lisent seuls. Chaque rôle reçoit
+ * la valeur que le document donne à la même intention. Ce qui le lit est
+ * relevé dans les jetons de material3 1.5, pour les composants employés :
  *
- * | Rôle         | Composants Material      | Sombre | Clair | Intention dans les documents          |
- * |--------------|--------------------------|--------|-------|---------------------------------------|
- * | `extraSmall` | champ, menu, snackbar    | 10     | 10    | le champ (`input radius`)             |
- * | `small`      | puce, petit conteneur    | 10     | 12    | la petite tuile ; le module de Liquid |
- * | `medium`     | carte                    | 14     | 20    | la carte ; la feuille de verre        |
- * | `large`      | grand conteneur          | 20     | 20    | la grande pochette                    |
- * | `extraLarge` | feuille du bas, dialogue | 14     | 20    | le menu flottant ; le niveau overlay  |
+ * | Rôle         | Ce qui le lit                               | Sombre | Clair | Intention                   |
+ * |--------------|---------------------------------------------|--------|-------|-----------------------------|
+ * | `extraSmall` | `OutlinedTextField`, `Snackbar`             | 10     | 10    | le champ                    |
+ * | `small`      | les puces, que l'application n'emploie pas  | 10     | 12    | la petite tuile ; le module |
+ * | `medium`     | `Card`                                      | 14     | 20    | la carte ; la feuille       |
+ * | `large`      | aucun des composants employés               | 20     | 20    | la grande pochette          |
+ * | `extraLarge` | `AlertDialog`, `ModalBottomSheet` ; le menu | 14     | 20    | le flottant                 |
+ *
+ * `DropdownMenu` lit `extraSmall`, la forme du champ : l'écran qui l'ouvre lui
+ * donne `extraLarge`, celle du flottant.
  *
  * `extraLarge` est plus petit que `large` en sombre, et c'est voulu : Fluid
  * donne 14 px à ses menus et fenêtres flottantes et réserve son plus grand

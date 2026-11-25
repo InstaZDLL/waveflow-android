@@ -1,12 +1,17 @@
 package app.waveflow.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.dp
 import app.waveflow.model.ThemeChoice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -36,9 +41,13 @@ class WaveFlowThemeTest {
         val scheme: ColorScheme,
         val colors: WaveFlowColors,
         val shapes: WaveFlowShapes,
+        val materialShapes: Shapes,
         val editorial: TextStyle,
+        val ripple: RippleAlpha?,
     )
 
+    // `rippleAlpha` est déprécié sans remplaçant ; voir WaveFlowRippleAlpha.
+    @Suppress("DEPRECATION")
     private fun habiller(choix: ThemeChoice): Habit {
         var habit: Habit? = null
         compose.setContent {
@@ -47,7 +56,9 @@ class WaveFlowThemeTest {
                     scheme = MaterialTheme.colorScheme,
                     colors = WaveFlowTheme.colors,
                     shapes = WaveFlowTheme.shapes,
+                    materialShapes = MaterialTheme.shapes,
                     editorial = WaveFlowTheme.editorial,
+                    ripple = LocalRippleConfiguration.current?.rippleAlpha,
                 )
             }
         }
@@ -92,6 +103,57 @@ class WaveFlowThemeTest {
         assertEquals(LiquidGround, habiller(ThemeChoice.System).scheme.background)
     }
 
+    /**
+     * Les valeurs elles-mêmes, recopiées des documents, et non les constantes
+     * qui les portent : une constante modifiée, ou les deux matières
+     * échangées sur un rôle, doivent faire tomber quelque chose.
+     */
+    @Test
+    fun `les valeurs du sombre sont celles de Fluid Editorial`() {
+        val habit = habiller(ThemeChoice.Dark)
+
+        assertEquals(Color(0xFF0B0B0E), habit.scheme.background)
+        assertEquals(Color(0xFF34D399), habit.scheme.primary)
+        // La carte est la `surface` ; menus et dialogues, `surface-2`.
+        assertEquals(Color(0xFF121216), habit.scheme.surfaceContainerHighest)
+        assertEquals(Color(0xFF17171D), habit.scheme.surfaceContainerHigh)
+        assertEquals(RoundedCornerShape(14.dp), habit.materialShapes.medium)
+        assertEquals(RoundedCornerShape(14.dp), habit.materialShapes.extraLarge)
+    }
+
+    @Test
+    fun `les valeurs du clair sont celles de Liquid Aurora Glass`() {
+        val habit = habiller(ThemeChoice.Light)
+
+        assertEquals(Color(0xFFECEEF5), habit.scheme.background)
+        assertEquals(Color(0xFF059669), habit.scheme.primary)
+        // Carte et overlay : le blanc 90 % posé sur le fond, plus clair que lui.
+        assertEquals(Color(0xFFFDFDFE), habit.scheme.surfaceContainerHighest)
+        assertEquals(Color(0xFFFDFDFE), habit.scheme.surfaceContainerHigh)
+        assertEquals(RoundedCornerShape(20.dp), habit.materialShapes.medium)
+        assertEquals(RoundedCornerShape(20.dp), habit.materialShapes.extraLarge)
+    }
+
+    @Test
+    fun `les calques d'etat sont les tons des documents`() {
+        val alpha = checkNotNull(habiller(ThemeChoice.Dark).ripple)
+
+        assertEquals(0.04f, alpha.hoveredAlpha)
+        assertEquals(0.06f, alpha.pressedAlpha)
+        assertEquals(0.06f, alpha.focusedAlpha)
+        assertEquals(0.08f, alpha.draggedAlpha)
+    }
+
+    @Test
+    fun `une piste se voit sur la carte et sur la barre du sombre`() {
+        assertPistesVisibles(habiller(ThemeChoice.Dark).scheme)
+    }
+
+    @Test
+    fun `une piste se voit sur la carte et sur la barre du clair`() {
+        assertPistesVisibles(habiller(ThemeChoice.Light).scheme)
+    }
+
     @Test
     fun `un seul accent dans le sombre`() {
         assertUnSeulAccent(habiller(ThemeChoice.Dark).scheme)
@@ -127,15 +189,28 @@ class WaveFlowThemeTest {
     }
 
     /**
+     * Material pose un ton (`secondaryContainer`) sur une surface : la piste
+     * d'une barre de progression sur la carte (`surfaceContainerHighest`) —
+     * celle du cache, dans les réglages —, l'indicateur de l'onglet ouvert sur
+     * la barre de navigation (`surfaceContainer`). Le ton doit s'en détacher
+     * d'au moins une marche : le blanc 8 % que Fluid pose sur sa `surface`
+     * donne 1,22:1, et c'est le seuil.
+     */
+    private fun assertPistesVisibles(scheme: ColorScheme) {
+        assertContraste(scheme.secondaryContainer, scheme.surfaceContainerHighest, MARCHE)
+        assertContraste(scheme.secondaryContainer, scheme.surfaceContainer, MARCHE)
+    }
+
+    /**
      * Le seuil du texte courant (WCAG AA, 4,5:1) pour les trois encres, sur
-     * chaque fond où un écran pose du texte. Deux exceptions, mesurées :
+     * chaque fond où un écran pose du texte. Une exception, mesurée et voulue :
+     * l'encre posée sur l'accent ne tient que le seuil des grands textes et des
+     * composants (3:1) en clair — le palier 600 sous une encre blanche donne
+     * 3,77, comme le bureau (suivi dans #78).
      *
-     * - la troisième encre n'est pas tenue sur le ton le plus profond
-     *   (`surfaceContainerHighest`, 4,49 en sombre, 4,05 en clair) : une
-     *   étiquette ne se pose pas sur une piste ou un ton enfoncé ;
-     * - l'encre posée sur l'accent ne tient que le seuil des grands textes et
-     *   des composants (3:1) en clair : le palier 600 sous une encre blanche
-     *   donne 3,77, comme l'ancien thème clair.
+     * Les tons (`secondaryContainer`) ne sont pas des fonds de texte : la
+     * troisième encre n'y tient pas (4,49 en sombre, 4,05 en clair), et une
+     * étiquette ne se pose pas sur une piste ou un indicateur.
      */
     private fun assertEncresLisibles(habit: Habit) {
         val s = habit.scheme
@@ -147,12 +222,11 @@ class WaveFlowThemeTest {
             s.surfaceContainerLow,
             s.surfaceContainer,
             s.surfaceContainerHigh,
+            s.surfaceContainerHighest,
         )
-        for (fond in fonds + s.surfaceContainerHighest) {
+        for (fond in fonds) {
             assertContraste(s.onSurface, fond, TEXTE)
             assertContraste(s.onSurfaceVariant, fond, TEXTE)
-        }
-        for (fond in fonds) {
             assertContraste(habit.colors.ink3, fond, TEXTE)
         }
         assertContraste(s.onPrimary, s.primary, COMPOSANT)
@@ -173,6 +247,9 @@ class WaveFlowThemeTest {
     private companion object {
         const val TEXTE = 4.5f
         const val COMPOSANT = 3f
+
+        /** Une marche de ton : blanc 8 % sur la `surface` de Fluid, 1,22:1. */
+        const val MARCHE = 1.2f
 
         /** Les tons des documents sont des gris froids : `#252529`, `#DCDEE6`. */
         const val ECART_GRIS = 0.05f
