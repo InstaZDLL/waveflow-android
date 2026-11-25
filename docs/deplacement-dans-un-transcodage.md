@@ -194,6 +194,17 @@ il s'arrêtait (`STATE_ENDED`). En aléatoire, c'était la piste tirée après e
 il changeait de morceau. Les deux constatés face à un vrai ExoPlayer 1.11.1.
 Suspendus, la suivante est la nouvelle source.
 
+**L'ordre aléatoire tiré survit au remplacement (#86).** L'ajout place la
+nouvelle source à un rang tiré au hasard dans l'ordre aléatoire — que l'aléatoire
+soit actif ou suspendu : ce qui suivait la piste relancée ne la suivait plus, et
+ce qui la précédait non plus. L'enveloppe relit donc l'ordre de l'ExoPlayer avant
+le remplacement et le repose après (`setShuffleOrder`) : un remplacement ne change
+ni le nombre de pistes ni leur index, l'ordre d'avant vaut tel quel. Cela vaut
+pour **toute** piste remplacée, courante ou non : la piste quittée qui retrouve
+son marqueur nu (R14) ou son rendu (R22) dérangeait l'ordre de la même façon.
+Reposer l'ordre ne dispense pas de suspendre l'aléatoire : la suivante se choisit
+pendant le remplacement, avant que l'ordre ne puisse être reposé.
+
 **R13. « Précédent », « reculer » et « avancer » jugent sur la position
 logique.** `ForwardingSimpleBasePlayer.handleSeek` les transmet tels quels
 (`seekToPrevious`, `seekBack`, `seekForward`), et l'ExoPlayer les calcule sur sa
@@ -301,10 +312,6 @@ le même geste à suggérer.
   la position logique courante — dans une PR suivante, une fois l'enveloppe en
   place.
 - **Le cache des segments** (R11).
-- **L'ordre aléatoire après une relance (#86).** La relance reste sur la piste
-  (R12), mais l'ExoPlayer insère la nouvelle source à une place tirée au hasard
-  dans son ordre aléatoire : ce qui suit la piste relancée n'est plus ce qui la
-  suivait. Garder l'ordre d'avant le remplacement (R1) est une carte à part.
 
 ## Comment l'éprouver
 
@@ -328,6 +335,11 @@ Ce qui suppose une fin de flux — l'original d'un repli qui se répète — ou 
 refus tombé à un instant précis — pendant les 300 ms d'un saut en attente —
 s'éprouve face au lecteur factice (`TranscodeSeekingPlayerTest`), qui appelle le
 repli lui-même.
+L'ordre aléatoire après un remplacement (R12, R14) s'éprouve sur la même
+chaîne, `TranscodeRelaunchChainTest` : le lecteur factice remplace une piste sur
+place et ne peut pas le déranger. L'ExoPlayer tire son ordre sans graine ; une
+file de trente pistes et trois remplacements par test ramènent à moins d'un sur
+mille la chance qu'un ordre dérangé retombe sur l'ancien.
 `TranscodeRefusalPolicyTest` éprouve les bornes de la politique sur des refus
 **levés par la vraie source HTTP** — c'est ainsi qu'est apparue la clé `null` que
 `HttpURLConnection` donne à la ligne de statut, et qu'un refus construit à la

@@ -8,6 +8,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.ExoPlayer
 import app.waveflow.model.StreamRendering
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -365,14 +366,23 @@ internal class TranscodeSeekingPlayer(
         // s'arrête. En aléatoire, c'est la piste tirée après elle : il change de
         // morceau. Les deux sont suspendus le temps du remplacement, et la
         // suivante est alors la nouvelle source.
+        //
+        // L'ajout, lui, place la nouvelle source à un rang tiré au hasard dans
+        // l'ordre aléatoire, que celui-ci soit actif ou non : ce qui suivait la
+        // piste ne la suivrait plus (R1). Un remplacement ne change pas le
+        // nombre de pistes, et chacune garde son index : l'ordre d'avant se
+        // repose tel quel. Toute piste remplacée y passe, courante ou non (R14).
         val courante = index == player.currentMediaItemIndex
         val repetition = player.repeatMode
         val melange = player.shuffleModeEnabled
+        val exoPlayer = player as? ExoPlayer
+        val ordre = exoPlayer?.shuffleOrder
         if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = REPEAT_MODE_OFF
         if (courante && melange) player.shuffleModeEnabled = false
         try {
             player.replaceMediaItem(index, item)
         } finally {
+            if (ordre != null && exoPlayer.shuffleOrder.length == ordre.length) exoPlayer.shuffleOrder = ordre
             if (courante && melange) player.shuffleModeEnabled = true
             if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = repetition
         }
