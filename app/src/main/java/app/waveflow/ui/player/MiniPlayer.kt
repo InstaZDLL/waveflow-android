@@ -53,9 +53,9 @@ fun MiniPlayer(
 
     Surface(
         shape = WaveFlowTheme.shapes.plate,
-        // Teinte discrète reprise de la pochette, façon carte flottante.
+        // Teinte discrète reprise de la pochette. Ni ombre ni bordure : la
+        // plaque se détache par son ton, comme toute surface des documents.
         color = lerp(accent, MaterialTheme.colorScheme.surface, MINI_ACCENT_BLEND),
-        shadowElevation = 6.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 8.dp),
