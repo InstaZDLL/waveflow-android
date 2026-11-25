@@ -108,9 +108,9 @@ internal class Egaliseur {
         for (bande in 0 until NOMBRE_DE_BANDES) {
             val c = bande * COEFFS_PAR_BANDE
             val m = bande * 2
-            val y = coefficients[c] * x + memoire[m]
-            memoire[m] = coefficients[c + 1] * x - coefficients[c + 3] * y + memoire[m + 1]
-            memoire[m + 1] = coefficients[c + 2] * x - coefficients[c + 4] * y
+            val y = coefficients[c + B0] * x + memoire[m]
+            memoire[m] = coefficients[c + B1] * x - coefficients[c + A1] * y + memoire[m + 1]
+            memoire[m + 1] = coefficients[c + B2] * x - coefficients[c + A2] * y
             x = y
         }
         return x
@@ -140,6 +140,13 @@ internal class Egaliseur {
         const val MARGE_TRANSITOIRES = 0.891_250_9f
 
         private const val COEFFS_PAR_BANDE = 5
+
+        /** Le rang de chaque coefficient dans le jeu d'une bande, `b0 b1 b2 a1 a2`. */
+        private const val B0 = 0
+        private const val B1 = 1
+        private const val B2 = 2
+        private const val A1 = 3
+        private const val A2 = 4
         private const val POINTS_DE_MESURE = 1024
         private const val MESURE_BASSE_HZ = 20.0
         private const val MESURE_HAUTE_HZ = 20_000.0
@@ -166,10 +173,10 @@ internal class Egaliseur {
             val alpha = sinW / (2f * q)
 
             val b0 = 1f + alpha * a
-            val b1 = -2f * cosW
+            val b1 = -(2f * cosW)
             val b2 = 1f - alpha * a
             val a0 = 1f + alpha / a
-            val a1 = -2f * cosW
+            val a1 = -(2f * cosW)
             val a2 = 1f - alpha / a
             return floatArrayOf(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0)
         }
@@ -203,11 +210,11 @@ internal class Egaliseur {
                 var gain = 1.0
                 for (bande in 0 until NOMBRE_DE_BANDES) {
                     val o = bande * COEFFS_PAR_BANDE
-                    val b0 = coefficients[o].toDouble()
-                    val b1 = coefficients[o + 1].toDouble()
-                    val b2 = coefficients[o + 2].toDouble()
-                    val a1 = coefficients[o + 3].toDouble()
-                    val a2 = coefficients[o + 4].toDouble()
+                    val b0 = coefficients[o + B0].toDouble()
+                    val b1 = coefficients[o + B1].toDouble()
+                    val b2 = coefficients[o + B2].toDouble()
+                    val a1 = coefficients[o + A1].toDouble()
+                    val a2 = coefficients[o + A2].toDouble()
                     val numRe = b0 + b1 * c1 + b2 * c2
                     val numIm = -(b1 * s1 + b2 * s2)
                     val denRe = 1.0 + a1 * c1 + a2 * c2
@@ -249,7 +256,7 @@ internal class Egaliseur {
         }
 
         private fun identite(coefficients: FloatArray) {
-            for (bande in 0 until NOMBRE_DE_BANDES) coefficients[bande * COEFFS_PAR_BANDE] = 1f
+            for (bande in 0 until NOMBRE_DE_BANDES) coefficients[bande * COEFFS_PAR_BANDE + B0] = 1f
         }
     }
 }

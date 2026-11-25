@@ -87,7 +87,6 @@ import app.waveflow.ui.server.catalog.CatalogViewModel
 import app.waveflow.ui.server.catalog.RemoteAlbumDetailScreen
 import app.waveflow.ui.server.catalog.RemoteArtistDetailScreen
 import app.waveflow.ui.server.catalog.ServerCatalogScreen
-import app.waveflow.ui.settings.GesteSon
 import app.waveflow.ui.settings.SettingsScreen
 import app.waveflow.ui.settings.SettingsViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
@@ -119,7 +118,6 @@ class MainActivity : ComponentActivity() {
                 WaveFlowRoot(
                     preferences = preferences,
                     onThemeChange = settingsViewModel::setTheme,
-                    onSonChange = settingsViewModel::regler,
                 )
             }
         }
@@ -172,7 +170,6 @@ private val DETAIL_ROUTES = setOf(
 private fun WaveFlowRoot(
     preferences: AppPreferences,
     onThemeChange: (ThemeChoice) -> Unit,
-    onSonChange: (GesteSon) -> Unit,
 ) {
     val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory)
     val playerViewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory)
@@ -182,6 +179,9 @@ private fun WaveFlowRoot(
     val catalogViewModel: CatalogViewModel = viewModel(factory = CatalogViewModel.Factory)
     val cacheViewModel: CacheViewModel = viewModel(factory = CacheViewModel.Factory)
     val qualityViewModel: StreamQualityViewModel = viewModel(factory = StreamQualityViewModel.Factory)
+    // La même instance que celle qui habille le thème : demandée ici, au-dessus
+    // du NavHost, elle est rangée chez l'activité comme l'autre.
+    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
 
     val library by libraryViewModel.library.collectAsStateWithLifecycle()
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
@@ -555,7 +555,7 @@ private fun WaveFlowRoot(
                             serverSummary = serverState.connected?.serverUrl,
                             appVersion = BuildConfig.VERSION_NAME,
                             onThemeChange = onThemeChange,
-                            onSonChange = onSonChange,
+                            onSonChange = settingsViewModel::regler,
                             // Connecté, la ligne mène au compte ; sinon à
                             // l'écran qui permet de s'y connecter. Une seule
                             // ligne pour les deux : c'est le même sujet.

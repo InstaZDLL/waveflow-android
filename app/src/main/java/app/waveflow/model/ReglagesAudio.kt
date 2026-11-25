@@ -150,7 +150,11 @@ class ReglagesEgaliseur private constructor(
  *
  * Écrits par leur [cle], celle du bureau : un renommage de l'entrée ne perd pas
  * le choix enregistré.
+ *
+ * Les gains sont ceux du bureau, recopiés : ils sont le préréglage, pas des
+ * réglages à baptiser un par un.
  */
+@Suppress("MagicNumber")
 enum class Prereglage(val cle: String, val label: String, val bandesDb: List<Float>) {
     Plat("flat", "Plat", listOf(0f, 0f, 0f, 0f, 0f, 0f)),
     Acoustique("acoustic", "Acoustique", listOf(5f, 4.5f, 3.5f, 1f, 1.5f, 3f)),
