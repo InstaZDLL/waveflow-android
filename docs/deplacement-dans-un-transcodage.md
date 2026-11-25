@@ -305,12 +305,66 @@ saturé : lecture en qualité d'origine. » L'échec sans repli se dit pour ce q
 est, « serveur occupé », et non « injoignable » : ce n'est pas la même panne, ni
 le même geste à suggérer.
 
+### Quand le réseau coupe : la reprise
+
+Règles ajoutées le 25/11 pour l'issue #60.
+
+Ce qui se passe sans elles, constaté sur la vraie chaîne de lecture : le flux
+s'interrompt, et Media3 le rouvre **à l'octet atteint** (`Range: bytes=N-`). Le
+serveur refuse toute plage d'un transcodage en cours : `416`, `Accept-Ranges:
+none`, sans `Content-Range` (`waveflow-server`, `src/media/mod.rs`). Media3 range
+l'erreur sous `ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE` (2008) — dans les causes,
+l'erreur du lecteur portant le code de l'en-tête, `ERROR_CODE_IO_BAD_HTTP_STATUS`
+— et la classe **jamais retentable**. Ce qui était déjà reçu se joue jusqu'au
+bout ; à la dernière seconde tamponnée, le lecteur s'arrête sur son erreur, pour
+de bon : une coupure de deux secondes dans le métro faisait tomber le morceau.
+
+**R25. Une coupure se reprend par une relance, là où le son s'est tu.** Une
+plage refusée sur un transcodage de la piste courante se répare en redemandant
+le flux, même rendu, à `offset_ms` = la **position logique** au moment de
+l'erreur. C'est l'instant exact où le tampon s'est vidé : rien de ce qui a été
+entendu ne se rejoue, rien de ce qui ne l'a pas été ne se perd.
+
+**R26. Seul un transcodage se reprend.** L'original accepte les plages : Media3
+le rouvre à l'octet atteint et la lecture continue, comme avant. Un `416` sur
+l'original n'est pas une coupure — le fichier a changé de taille — et l'erreur
+remonte. L'original d'un repli (R22) est un original.
+
+**R27. La reprise est une relance comme une autre.** Ni la session ni les
+écouteurs du service n'y voient de changement de piste (R5) : l'historique ne
+compte pas deux fois le morceau. Le décalage voyage dans le marqueur (R10), le
+segment contourne le cache (R11), répétition et ordre aléatoire tiennent (R12).
+Elle se décide, comme le repli, **dans le rappel d'erreur de l'ExoPlayer**, avant
+que l'enveloppe ne relise l'état (R23) : l'écran ne dit pas « injoignable »
+avant de reprendre. Elle ne se dit pas à l'écran : rien n'a changé pour qui
+écoute, hormis le silence de la relance.
+
+**R28. Un saut en attente l'emporte.** Si l'erreur tombe pendant les 300 ms d'un
+saut (R9), la reprise part à la cible du saut, et le saut en attente n'a plus
+d'objet — comme pour le repli (R22).
+
+**R29. Une reprise refusée suit les règles du 429.** C'est une demande de
+transcodage : `Retry-After`, trois relances (R17 à R20), puis l'original à la
+position de la coupure sur une liaison non facturée, « serveur occupé » sinon
+(R22, R24).
+
+**R30. Trois reprises au plus sans écoute.** Un flux qui coupe toujours au même
+endroit — ffmpeg qui tombe à la même seconde, un proxy qui ferme après tant
+d'octets — ferait relancer sans fin, et chaque relance prend un créneau de
+transcodage au serveur (R9). Une reprise compte comme **entendue** quand la
+coupure suivante tombe au moins cinq secondes après elle ; trois reprises de
+suite sans cela, et la quatrième coupure remonte comme une panne du réseau,
+« serveur injoignable ». Une reprise entendue remet le compte à zéro — une
+liaison qui coupe toutes les deux minutes se reprend à chaque fois —, de même
+qu'un saut demandé ou un changement de piste.
+
+Une coupure **qui dure** n'a pas besoin de cette borne. La demande de reprise
+échoue alors à se connecter : une panne réseau ordinaire, que Media3 retente puis
+rend au lecteur à son seuil (R20), « serveur injoignable » — comme l'original
+dans la même situation.
+
 ## Ce que cette première version ne couvre pas
 
-- **La coupure réseau pendant un transcodage.** Media3 reprend à l'octet atteint,
-  et le serveur refuse cette plage. La même relance l'y ramènera, au décalage de
-  la position logique courante — dans une PR suivante, une fois l'enveloppe en
-  place.
 - **Le cache des segments** (R11).
 
 ## Comment l'éprouver
