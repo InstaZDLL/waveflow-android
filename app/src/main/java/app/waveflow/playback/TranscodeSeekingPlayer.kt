@@ -294,8 +294,10 @@ internal class TranscodeSeekingPlayer(
         if (index == C.INDEX_UNSET || index >= timeline.windowCount) return false
         val fenetre = timeline.getWindow(index, Timeline.Window())
         val item = fenetre.mediaItem
-        if (!item.isRemoteTranscode()) return false
-        val rendu = item.localConfiguration?.uri?.let(::renderingOfRemoteUri) ?: return false
+        val rendu = item.localConfiguration?.uri
+            ?.takeIf { item.isRemoteTranscode() }
+            ?.let(::renderingOfRemoteUri)
+            ?: return false
 
         // Un saut en attente dit où l'utilisateur veut être : il l'emporte sur
         // la position du flux refusé.
