@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
@@ -23,7 +24,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.waveflow.ui.theme.LiquidGlassRim
-import app.waveflow.ui.theme.WaveFlowColors
 import app.waveflow.ui.theme.WaveFlowMaterial
 import app.waveflow.ui.theme.WaveFlowTheme
 import kotlin.math.min
@@ -37,8 +37,10 @@ import kotlin.math.roundToInt
  *
  * En Fluid la pochette est posée nue sur la page : la profondeur vient du ton,
  * pas d'une ombre que le fond presque noir mangerait. En Liquid c'est un objet
- * de verre : un liseré de lumière et, dessous, une ombre teintée de la lumière
- * de la pochette (« a rim and the glow under it »), jamais grise.
+ * de verre : un liseré de lumière et, dessous, une ombre teintée (« a rim and
+ * the glow under it »), jamais grise. Dans une grille, cette teinte est la
+ * lumière par défaut du thème : échantillonner chaque pochette coûterait une
+ * lecture d'image par tuile. La pochette d'un en-tête, seule, prend la sienne.
  */
 
 /**
@@ -67,7 +69,7 @@ fun CoverTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .glassEdge(shape, WaveFlowTheme.material, WaveFlowTheme.colors),
+                .glassEdge(shape, WaveFlowTheme.material, WaveFlowTheme.colors.glow),
         )
         Spacer(Modifier.height(if (lead) 14.dp else 10.dp))
         if (kicker != null) {
@@ -120,7 +122,7 @@ fun PortraitTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .glassEdge(shape, WaveFlowTheme.material, WaveFlowTheme.colors),
+                .glassEdge(shape, WaveFlowTheme.material, WaveFlowTheme.colors.glow),
         )
         Spacer(Modifier.height(10.dp))
         Text(
@@ -146,7 +148,7 @@ fun PortraitTile(
 
 /**
  * Le bord d'un objet de verre en Liquid : son liseré de lumière et, sous lui,
- * une ombre teintée de la lumière de la pochette. Rien en Fluid.
+ * une ombre teintée de [glow]. Rien en Fluid.
  *
  * À poser **avant** le découpage de l'objet : le liseré se dessine par-dessus
  * l'image, l'ombre en dehors de sa forme.
@@ -157,13 +159,13 @@ fun PortraitTile(
 fun Modifier.glassEdge(
     shape: Shape,
     material: WaveFlowMaterial,
-    colors: WaveFlowColors,
+    glow: Color,
     lift: Dp = TILE_LIFT,
 ): Modifier = when (material) {
     WaveFlowMaterial.Fluid -> this
     WaveFlowMaterial.Liquid ->
         this
-            .shadow(lift, shape, ambientColor = colors.glow, spotColor = colors.glow)
+            .shadow(lift, shape, ambientColor = glow, spotColor = glow)
             .border(1.dp, LiquidGlassRim, shape)
 }
 

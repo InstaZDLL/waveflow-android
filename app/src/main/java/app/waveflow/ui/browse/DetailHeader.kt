@@ -33,6 +33,7 @@ import app.waveflow.ui.components.Kicker
 import app.waveflow.ui.components.cappedWidthFraction
 import app.waveflow.ui.components.glassEdge
 import app.waveflow.ui.formatDuration
+import app.waveflow.ui.player.rememberPlayerLight
 import app.waveflow.ui.theme.WaveFlowMaterial
 import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
@@ -139,20 +140,16 @@ private fun MetaLine(subtitle: String?, trackCount: Int?, durationMs: Long) {
 /**
  * La pochette d'en-tête, sur sa lumière : une ombre teintée en Fluid — la
  * seule ombre que la direction permet, sous une pochette —, l'objet de verre
- * en Liquid.
+ * en Liquid. La teinte est la lumière de cette pochette, échantillonnée comme
+ * celle de l'accueil ; l'accent, lui, reste celui du thème.
  */
 @Composable
 private fun HeroCover(artworkUri: Uri?, shape: Shape) {
     val material = WaveFlowTheme.material
-    val colors = WaveFlowTheme.colors
+    val glow = rememberPlayerLight(artworkUri).glow
     val bord = when (material) {
-        WaveFlowMaterial.Fluid -> Modifier.shadow(
-            COVER_LIFT,
-            shape,
-            ambientColor = colors.glow,
-            spotColor = colors.glow,
-        )
-        WaveFlowMaterial.Liquid -> Modifier.glassEdge(shape, material, colors, COVER_LIFT)
+        WaveFlowMaterial.Fluid -> Modifier.shadow(COVER_LIFT, shape, ambientColor = glow, spotColor = glow)
+        WaveFlowMaterial.Liquid -> Modifier.glassEdge(shape, material, glow, COVER_LIFT)
     }
     Artwork(
         artworkUri = artworkUri,

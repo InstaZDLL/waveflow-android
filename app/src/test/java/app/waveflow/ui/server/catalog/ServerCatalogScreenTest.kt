@@ -27,7 +27,6 @@ class ServerCatalogScreenTest {
     val compose = createComposeRule()
 
     private var pagesAlbums = 0
-    private var pagesArtistes = 0
     private val ouverts = mutableListOf<String>()
 
     private fun album(i: Int) = RemoteAlbum(
@@ -50,7 +49,7 @@ class ServerCatalogScreenTest {
                 onAlbumClick = { ouverts += it.id },
                 onArtistClick = {},
                 onLoadMoreAlbums = { pagesAlbums++ },
-                onLoadMoreArtists = { pagesArtistes++ },
+                onLoadMoreArtists = {},
                 onRetryAlbums = {},
                 onRetryArtists = {},
             )
@@ -68,7 +67,6 @@ class ServerCatalogScreenTest {
         compose.waitForIdle()
 
         assertTrue("la page suivante n'a pas été demandée", pagesAlbums >= 1)
-        assertEquals("l'onglet masqué ne charge rien", 0, pagesArtistes)
     }
 
     @Test

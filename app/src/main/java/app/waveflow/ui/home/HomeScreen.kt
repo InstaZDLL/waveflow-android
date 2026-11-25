@@ -22,7 +22,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -38,6 +42,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.waveflow.model.Album
 import app.waveflow.model.Song
 import app.waveflow.ui.albumCountLabel
@@ -76,8 +81,8 @@ import java.util.Locale
  * bibliothèque neuve n'a pas d'écoutes à montrer, et un cadre vide se lit comme
  * une panne.
  *
- * @param now l'heure du salut et de la date ; lue une fois, à l'arrivée sur
- *   la page.
+ * @param now l'heure du salut et de la date ; relue à chaque retour de
+ *   l'application au premier plan.
  */
 @Composable
 fun HomeScreen(
@@ -92,7 +97,15 @@ fun HomeScreen(
         EmptyHome(modifier)
         return
     }
-    val maintenant = remember { now() }
+    // Relue à chaque retour au premier plan, et pas seulement à l'arrivée sur
+    // la page : une application laissée en arrière-plan la veille au soir
+    // dirait sinon « Bonsoir » et la date d'hier en revenant au matin.
+    var maintenant by remember { mutableStateOf(now()) }
+    val horloge by rememberUpdatedState(now)
+    LifecycleResumeEffect(Unit) {
+        maintenant = horloge()
+        onPauseOrDispose {}
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -280,7 +293,7 @@ private fun CanvasCover(song: Song, glow: Color, ground: Color) {
     }
     val bord = when (material) {
         WaveFlowMaterial.Fluid -> Modifier.shadow(COVER_LIFT, shape, ambientColor = glow, spotColor = glow)
-        WaveFlowMaterial.Liquid -> Modifier.glassEdge(shape, material, WaveFlowTheme.colors, COVER_LIFT)
+        WaveFlowMaterial.Liquid -> Modifier.glassEdge(shape, material, glow, COVER_LIFT)
     }
     Artwork(
         artworkUri = song.artworkUri,
@@ -307,11 +320,15 @@ private fun Section(title: String) {
  * (`RecentlyAdded`) ramenée à la largeur d'un téléphone. Toutes les tuiles
  * ont la largeur d'un tiers, la tête celle de deux et de l'intervalle, pour
  * que les colonnes tombent juste d'une rangée à l'autre.
+ *
+ * Le tiers est plafonné, comme les grandes pochettes : en paysage ou sur une
+ * tablette, la tuile de tête dépasserait sinon la hauteur de l'écran. La
+ * mosaïque reste alors calée à gauche, à sa taille.
  */
 @Composable
 private fun AddedMosaic(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
     BoxWithConstraints(modifier = Modifier.padding(horizontal = GUTTER)) {
-        val tiers = (maxWidth - MOSAIC_GAP * 2) / 3
+        val tiers = minOf((maxWidth - MOSAIC_GAP * 2) / 3, MOSAIC_THIRD_MAX)
         val cote = albums.drop(1).take(2)
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (cote.size == 2) {
@@ -432,6 +449,9 @@ private val GUTTER = 24.dp
 private val SECTION_GAP = 40.dp
 
 private val MOSAIC_GAP = 12.dp
+
+/** Le plus grand tiers de la mosaïque : sa tête fait alors 332 dp, la pochette du canevas 320. */
+private val MOSAIC_THIRD_MAX = 160.dp
 
 /** La pochette du canevas : un peu moins de trois quarts de la largeur. */
 private const val COVER_FRACTION = 0.72f
