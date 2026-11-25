@@ -4,19 +4,18 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-11-25**, fin de la vague 1, sur `main` = `362f63e`.
+Dernière mise à jour : **2026-11-25**, fin de la vague 2, sur `main` = `75f2d94`.
 
 ## État du dépôt
 
-- `main` = `362f63e`. **La vague 1 est fusionnée en entier** (#84, #85, #87,
-  #88, #89, #90) ; aucune PR ouverte.
-- **551 tests verts** sur la branche d'intégration de la vague 1, CI verte
-  (workflow `Build & test`, ~4 min).
-- **Cinq avertissements de compilation**, alors que la propriété du dépôt est
-  qu'il n'y en a aucun : cinq API dépréciées par Compose 1.13 — l'ancien
-  `Slider`, l'ancien `ListItem`, `PasswordVisualTransformation` —, qui partent
-  avec la direction artistique (**#78**, **#79**). `Timeline.Period.set` est
-  parti avec la #85. **Ils ne se voient pas sur un build tiède** :
+- `main` = `75f2d94`. **Les vagues 1 et 2 sont fusionnées en entier** (vague 2 :
+  #91, #92, #93) ; aucune PR ouverte.
+- **640 tests verts** sur `main`, CI verte (workflow `Build & test`, ~4 min).
+- **Deux avertissements de compilation**, alors que la propriété du dépôt est qu'il n'y en a aucun :
+  `PasswordVisualTransformation`, déprécié par Compose 1.13, dans
+  `ServerScreen`, qui part avec la recomposition des écrans (**#79**). L'ancien
+  `Slider` et l'ancien `ListItem` sont partis avec #78, `Timeline.Period.set`
+  avec la #85. **Ils ne se voient pas sur un build tiède** :
   `checks.sh avertissements` de la skill `wa-worker` recompile Kotlin, avec un
   `--rerun` **après chaque tâche** (il ne vaut que pour celle qui le précède).
   Voir aussi le piège `textReport` plus bas.
@@ -50,6 +49,19 @@ vague, l'utilisateur teste l'APK d'intégration, puis viennent les MR et les PR.
   les fichiers de versions et de verrous). Vérifier avant une MR que `main` du
   miroir est aligné sur `origin/main`. Une remarque peut encore tomber après
   l'approbation : elle se corrige sur la branche, la PR GitHub restant ouverte.
+- **L'utilisateur ne colle plus la revue** : après chaque push, le coordinateur
+  lance `~/.claude/skills/wa-worker/scripts/cr-revue.sh <MR> --attendre`, qui
+  sort le « Prompt to fix all issues » de la revue du commit de tête (ou
+  « AUCUNE REMARQUE »), et le transmet à l'ouvrier, qui vérifie avant de
+  corriger. Une remarque écartée se défend dans son fil : CodeRabbit le ferme
+  s'il est convaincu, et n'approuve qu'une fois tous ses fils fermés. Pas de
+  `@coderabbit17 fix comments` : il appliquerait sans vérifier.
+- **Une MR empilée sur une autre branche que `main` n'est pas relue d'office**
+  (`base_branches: main` dans `.coderabbit.yaml`) : la déclencher par une note
+  `@coderabbit17 review`. Les PR se fusionnent écrasées : la branche empilée se
+  rebase (`git rebase --onto origin/main <ancienne tête de la base>`) avant sa
+  PR. **Le Fedora n'a pas de clé SSH GitLab** : le coordinateur y pousse ses
+  branches depuis le PC.
 - **Un push HTTPS vers GitHub peut renvoyer « Internal Server Error »** alors que
   GitHub est vert : `git push git@github.com:InstaZDLL/waveflow-android.git <branche>`
   passe. **Ne jamais démarrer l'émulateur pendant un build Gradle** : sous la
@@ -60,9 +72,10 @@ vague, l'utilisateur teste l'APK d'intégration, puis viennent les MR et les PR.
 1. ~~Tokens, polices et icône de la DA (#77) · le 429 (#57) · la recherche vocale
    Android Auto (#59) avec l'avertissement #62 et les écarts serveur (#80).~~
    **Faite le 25/11** — voir « Ce que la vague 1 a livré ».
-2. Composants de la DA et lecteur (#78) · le profil *Automatique* (#58) · la
+2. ~~Composants de la DA et lecteur (#78) · le profil *Automatique* (#58) · la
    coupure réseau pendant un transcodage (#60), qui réutilise la relance du 429 ·
-   l'ordre aléatoire perturbé par une relance (#86).
+   l'ordre aléatoire perturbé par une relance (#86).~~ **Faite le 25/11** — voir
+   « Ce que la vague 2 a livré ».
 3. Recomposition des écrans (#79) · les paroles (#81, lot 5) · ReplayGain et
    égaliseur en Kotlin (#82, lot 6).
 
@@ -85,9 +98,8 @@ nouveau logo — le « W en onde », qui remplace les cinq barres. Trois tickets
 (#77 à #79). **Tranché depuis** : le thème clair reste, en *Liquid Aurora Glass*
 clair (le « skin liquid white » du site, `WaveFlow/docs/design/liquid-aurora-glass.md`),
 avec l'accent au palier 600 (`#059669`, encre blanche, 3,77:1 comme le bureau ;
-le contraste se règle pour toutes les plateformes avec #78). **Une décision
-attend encore l'utilisateur**, avant #78 : l'accent tiré de la pochette partout,
-seulement dans le lecteur, ou pas du tout.
+le contraste se règle pour toutes les plateformes avec #78). L'accent tiré de la
+pochette vaut **dans le lecteur seulement** (décidé le 25/11, livré par #92).
 
 **Le moteur audio Rust du bureau à la place de Media3 : écarté pour l'instant.**
 Seul le remplacement complet du lecteur apporterait ce que Media3 ne fait pas
@@ -105,14 +117,71 @@ Six lots, dans cet ordre :
 2. Navigation + identité — **fait**
 3. Lecteur : file d'attente, minuterie, vitesse, boucle A-B — **fait**
 4. Transcodage (remonté du 6ᵉ rang : meilleur rapport travail/effet, le serveur
-   est déjà prêt) — **presque fait** : qualité (#51), cache d'un transcodage
+   est déjà prêt) — **fait** : qualité (#51), cache d'un transcodage
    inachevé (#52), retrait du grisé (#53), déplacement dans un morceau
-   transcodé (#54), le 429 (#89) ; reste le profil *Automatique* (#58)
+   transcodé (#54), le 429 (#89), le profil *Automatique* (#91), la reprise
+   après une coupure et l'ordre aléatoire (#93)
 5. Paroles
 6. Audio avancé (EQ, ReplayGain, gapless, sortie)
 
 Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait deux
 lecteurs ou une chaîne audio maison.
+
+## Ce que la vague 2 a livré (25/11)
+
+Trois PR pour quatre issues, mêmes étapes que la vague 1 : intégration locale
+sans conflit (631 tests), APK d'intégration validé par l'utilisateur sur
+l'émulateur, `wa-reviewer` puis CodeRabbit sur GitLab, Greptile sur GitHub.
+
+**PR #91 — le profil *Automatique* (#58).** Un quatrième choix de qualité : un
+profil sur un réseau non facturé (affiché Wi-Fi, Original par défaut), un autre
+sur un réseau facturé (affiché Données mobiles, Économie par défaut). Au
+changement de réseau, seules les pistes **pas encore commencées** prennent le
+nouveau rendu ; la courante jamais, et la suivante est épargnée dans les dix
+dernières secondes de la courante — protégée une fois, elle est tenue pour
+commencée. La lecture du réseau vit dans `Liaison.kt`, partagée avec le repli du
+429 ; son flux ne garde que le dernier réseau annoncé (un `callbackFlow` borné
+perdait sans bruit le dernier). Règles Q1 à Q9 dans `docs/qualite-automatique.md`.
+**Non éprouvé** : rien n'a été entendu, et aucune vraie bascule Wi-Fi → données
+n'a été faite sur un appareil.
+
+**PR #93 — l'ordre aléatoire (#86) et la reprise après une coupure (#60).**
+- **Piège Media3 payé** : `replaceMediaItem(s)` envoie au fil de lecture
+  **deux** messages, ajout puis retrait, chacun avec son ordre aléatoire ; l'ordre
+  par défaut range l'ajout à un rang tiré au hasard, et l'étape intermédiaire
+  pouvait retirer la suivante déjà préparée en relançant la courante. Reposer
+  l'ordre après coup arrive trop tard : `OrdreEnPlace`, posé le temps du
+  remplacement, range chaque ajout juste derrière la piste qu'il remplace ; l'ordre
+  tiré est rétabli ensuite. Suspendre l'aléatoire n'est plus nécessaire.
+- **La coupure d'un transcodage** : un transcodage en direct n'a ni longueur ni
+  durée, et Media3, coupé en route, le tient pour un direct et **le recharge du
+  début, sans erreur** — l'issue décrivait un autre mécanisme.
+  `TranscodeRefusalPolicy` rend la coupure définitive pour une réponse qui n'a pas
+  dit accepter les plages ; `TranscodeCutRecovery` relance alors le même rendu à
+  la position logique, en silence. Trois reprises au plus sans cinq secondes
+  d'écoute. Un transcodage servi entier et l'original se rouvrent toujours à
+  l'octet atteint. Règles R25 à R30.
+- **Le banc compte** : servi en WAV, dont l'en-tête annonce la durée, le
+  transcodage factice prenait un chemin que la production ne prend pas. Il est
+  servi en **Matroska PCM sans durée ni index**, que Media3 traite comme un Opus
+  en direct, et le défaut s'y reproduit.
+
+**PR #92 — composants signature et lecteur (#78).** `WaveMark`,
+`WaveFlowSymbol` (le W qui respire pendant la lecture), `WaveFlowSheet` et
+`SheetOption`. Le lecteur sous la lumière de la pochette : accent tiré de la
+pochette **dans le lecteur seul** (`PlayerAccent`, 3:1 tenu sur tout le cercle
+des teintes, repli sur l'émeraude), nappes de lumière bornées pour que les encres
+gardent 4,5:1. En sombre, Android renforce la lumière par rapport à la recette du
+bureau (un voile de 1,1 à 1,35:1 devient un halo d'environ 2:1), et les durées et
+« EN LECTURE » passent en deuxième encre ; l'écart est noté dans `lightPools` pour
+que le bureau puisse s'aligner. `PlayerSeekBar` remplace le `Slider` : onde en
+sombre, ligne de lumière en clair, bornes A-B dessinées, gestes refaits à la main
+et pilotés sous Robolectric par `performTouchInput` (`PlayerSeekBarTest`). **Un
+`pointerInput` ne se relance que si une clé change** : l'appui et le glissement
+ont `trackKey` dans leurs clés, sinon un geste commencé sur un morceau finissait
+dans le suivant. La barre fait 40 dp, mais Compose étend le toucher d'un
+`pointerInput` jusqu'à 48 dp : mesuré, la remarque de Greptile est écartée.
+**Non vérifié** : le rendu sur un vrai écran.
 
 ## Ce que la vague 1 a livré (25/11)
 
@@ -143,7 +212,7 @@ l'ancienne — en `REPEAT_MODE_ONE` le lecteur finissait, en aléatoire il passa
 à la piste tirée suivante ; répétition et aléatoire sont donc suspendus le temps
 du remplacement. `stop()` garde `playerError`. `getMinimumLoadableRetryCount`
 vaut pour toutes les erreurs, pas seulement le 429. **Reste** : l'ordre
-aléatoire peut encore être perturbé par une relance — #86.
+aléatoire peut encore être perturbé par une relance — #86, réglée par #93.
 
 **PR #90 — la recherche vocale Android Auto (#59).** `onPlayFromSearch` arrive
 par `onAddMediaItems` en un élément au `mediaId` vide, la phrase dans
@@ -474,38 +543,32 @@ réimprime — `finalizedBy` et **non** `doLast`, parce qu'une action de tâche 
 sautée quand la tâche échoue, c'est-à-dire précisément quand le lint a trouvé
 une erreur. Ne pas rouvrir.
 
-## La suite : le lot 4, le transcodage
+## Le lot 4, le transcodage : terminé
 
 Le choix de la qualité (#51), le cache d'un transcodage inachevé (#52), le
-retrait du grisé (#53) et **le déplacement dans un morceau transcodé (#54)** sont
-faits, et **le 429 aussi (#89, le 25/11)**. Les décisions ont été **arrêtées
-avec l'utilisateur le 11/09**, après l'avis d'un agent extérieur ; il reste le
-profil *Automatique*.
+retrait du grisé (#53), **le déplacement dans un morceau transcodé (#54)**, le
+429 (#89), le profil *Automatique* (#91) et la reprise après une coupure (#93)
+sont faits. Les décisions avaient été **arrêtées avec l'utilisateur le 11/09**,
+après l'avis d'un agent extérieur.
 
 **Les règles du déplacement sont dans `docs/deplacement-dans-un-transcodage.md`**
-— R1 à R24, citées par le code et les tests. Y retourner avant d'y toucher : R9
-(un saut chasse le précédent) est couverte depuis la #89 ; R16 (la reprise d'une
-position sauvegardée) est une règle pour plus tard, aucune reprise n'existant
-encore. Ce que la note ne couvre pas est listé à sa fin : la coupure réseau
-(#60), le cache des segments, l'ordre aléatoire après une relance (#86).
+— R1 à R30, citées par le code et les tests ; celles du profil *Automatique* dans
+`docs/qualite-automatique.md` (Q1 à Q9). Y retourner avant d'y toucher : R16 (la
+reprise d'une position sauvegardée) est une règle pour plus tard, aucune reprise
+n'existant encore. Ce que la note ne couvre pas, ou n'éprouve pas, est listé à sa
+fin : le cache des segments, l'annulation d'un saut en attente quand le lecteur
+est relâché, un 429 sur la piste suivante pendant son préchargement.
 
 **Côté serveur, l'effet de bord est réglé :** un transcodage abandonné par un
 saut n'était jamais mis en cache — `InstaZDLL/waveflow-server#185`, **fermée le
 11/09** par la PR serveur #189, déjà dans la 2.0.0-beta.1. Le serveur finit
 désormais de remplir le cache en arrière-plan après un saut.
 
-### Le profil *Automatique* — issue #58
+Le profil *Automatique* suit le caractère **facturé ou non** du réseau, pas le
+Wi-Fi contre le cellulaire : l'Ethernet suit le Wi-Fi, un Wi-Fi déclaré payant
+suit le mobile. Pas de profil « itinérance » pour l'instant.
 
-Décidé : **deux profils**, affichés *Wi-Fi* et *Données mobiles*, mais choisis en
-interne sur le caractère **facturé ou non** du réseau (`NET_CAPABILITY_NOT_METERED`)
-plutôt que sur un test Wi-Fi contre cellulaire : l'Ethernet suit le Wi-Fi, un
-Wi-Fi déclaré payant suit le mobile. Pas de profil « itinérance » pour l'instant.
-
-**Une question reste à trancher en l'implémentant.** La #51 fixe la qualité d'une
-file à son lancement : une file lancée en Wi-Fi resterait en original sur les
-données mobiles. Proposé : au changement de réseau, réécrire les pistes pas
-encore commencées, jamais la courante — chaque piste garde un marqueur et une clé
-issus de son propre rendu, et la course que la #51 a écartée ne revient pas.
+### L'en-tête du lecteur
 
 **L'en-tête du lecteur est plein**, et le restera : quatre boutons — réduire,
 vitesse, veille, file — et la colonne du titre déjà serrée sur un écran étroit.
