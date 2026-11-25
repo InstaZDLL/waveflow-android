@@ -114,17 +114,26 @@ class CoverColorsTest {
     }
 
     @Test
-    fun `en sombre, la lumiere d'une pochette claire n'est plus rabattue`() {
-        // Le pendant du précédent : la limite cale la lumière sur la deuxième
-        // encre, et non plus sur la troisième, qui rabattait la nappe d'une
-        // pochette claire (blanche à 32 %, jaune ou rose à 37 %). Elle se pose
-        // désormais à l'opacité de `fluid.css`, comme celle des autres.
-        for (pochette in listOf(0xFFFFFFFF, 0xFFFFEB3B, 0xFFEC4899)) {
+    fun `en sombre, la lumiere d'une pochette coloree fait un halo`() {
+        // Le pendant du précédent : la limite qui garde la deuxième encre
+        // lisible doit laisser la lumière éclairer franchement la page. Mesurée
+        // comme l'œil la voit, par l'écart entre le centre de la nappe
+        // principale et la page nue : la recette du bureau plafonnait à
+        // 1,35:1, et la limite de `ink-3` à 1,27:1.
+        for (pochette in listOf(0xFFE53935, 0xFF2F6FD6, 0xFF7C3AED, 0xFFEC4899, 0xFFFFEB3B, 0xFFFFFFFF)) {
             val echantillon = CoverSample(pochette.toInt(), pochette.toInt())
-            val nappes =
-                lightPools(playerLightFor(echantillon, WaveFlowMaterial.Fluid), WaveFlowMaterial.Fluid, FluidBg)
-            assertEquals("pochette ${hex(pochette.toInt())}", FLUID_GLOW_VOULUE, nappes.first().alpha, 0.005f)
+            val nappe = lightPools(playerLightFor(echantillon, WaveFlowMaterial.Fluid), WaveFlowMaterial.Fluid, FluidBg)
+                .first()
+            val ecart = contrast(nappe.color.copy(alpha = nappe.alpha).compositeOver(FluidBg), FluidBg)
+            assertTrue("pochette ${hex(pochette.toInt())} : $ecart", ecart >= HALO)
         }
+    }
+
+    @Test
+    fun `en clair, la lumiere reste celle du bureau`() {
+        // Le renfort ne vaut que pour le sombre : le clair garde `useCoverGlow`.
+        val rouge = 0xFFE53935.toInt()
+        assertEquals(shade(rouge, 0.62f), playerLightFor(CoverSample(rouge, rouge), WaveFlowMaterial.Liquid).glow)
     }
 
     @Test
@@ -266,7 +275,7 @@ class CoverColorsTest {
         const val ECART_TEINTE = 3f
         const val NAPPE_VISIBLE = 0.08f
 
-        /** L'opacité de la lumière du sombre, `fluid.css` : `--fe-glow` 40 %. */
-        const val FLUID_GLOW_VOULUE = 0.40f
+        /** L'écart minimal d'un halo du sombre avec la page nue. */
+        const val HALO = 1.8f
     }
 }

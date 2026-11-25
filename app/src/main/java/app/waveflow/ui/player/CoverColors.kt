@@ -81,8 +81,9 @@ fun playerLightFor(sample: CoverSample?, material: WaveFlowMaterial): PlayerLigh
     val defaut = defaultPlayerLight(material)
     if (sample == null) return defaut
     val accent = sample.vivid?.let { coverAccent(it, material) } ?: defaut.accent
-    val glow = sample.average?.let { shade(it, GLOW_SHADE) } ?: defaut.glow
-    val glowDeep = sample.average?.let { shade(it, GLOW_DEEP_SHADE) } ?: defaut.glowDeep
+    val (k, kProfond) = if (material == WaveFlowMaterial.Fluid) FLUID_SHADES else GLOW_SHADES
+    val glow = sample.average?.let { shade(it, k) } ?: defaut.glow
+    val glowDeep = sample.average?.let { shade(it, kProfond) } ?: defaut.glowDeep
     return defaut.copy(accent = accent, glow = glow, glowDeep = glowDeep)
 }
 
@@ -172,12 +173,10 @@ fun garantirContraste(accent: Color, material: WaveFlowMaterial): Color {
  * contrastée qui y reste. C'est elle qui fixe la limite, à 4,5:1.
  *
  * En Fluid la lumière éclaircit le fond, jusqu'à 0,058 : `ink-2` y tient
- * encore 4,5:1 (décision du 25/11). Calée sur `ink-3`, elle s'arrêtait à
- * 0,018 et rabattait la nappe d'une pochette claire. Elle ne borne plus
- * aucune des pochettes essayées : la lumière du sombre reste discrète par sa
- * recette même, celle du bureau — la couleur assombrie à 62 %, posée à 40 %.
- * En Liquid elle l'assombrit, jusqu'à 0,82 ; l'aurore du clair reste celle
- * qui a été validée.
+ * encore 4,5:1 (décision du 25/11). C'est elle, et non plus la recette, qui
+ * borne la lumière d'une pochette colorée : voir [lightPools]. En Liquid
+ * elle l'assombrit, jusqu'à 0,82 ; l'aurore du clair reste celle qui a été
+ * validée.
  */
 fun groundLimit(material: WaveFlowMaterial): Color = when (material) {
     WaveFlowMaterial.Fluid -> greyOfLuminance(FLUID_GROUND_LIMIT)
@@ -201,10 +200,27 @@ data class LightPool(
 /**
  * Les nappes du lecteur, reprises des feuilles de style du bureau.
  *
- * Fluid (`fluid.css`, `body::before`) : deux nappes, la lumière à 40 % en
- * haut à droite, la lumière profonde à 70 % en bas à gauche. Liquid
- * (`liquid.css`, l'aurore) : trois nappes pastel, lavande et glace mêlées à la
- * lumière (74/26), menthe (70/30), en haut à gauche, en haut à droite, en bas.
+ * Fluid (`fluid.css`, `body::before`) : deux nappes, la lumière en haut à
+ * droite, la lumière profonde en bas à gauche. Liquid (`liquid.css`,
+ * l'aurore) : trois nappes pastel, lavande et glace mêlées à la lumière
+ * (74/26), menthe (70/30), en haut à gauche, en haut à droite, en bas.
+ *
+ * **Écart au bureau, en Fluid seulement** (décision du 25/11) :
+ *
+ * | | bureau | Android |
+ * |---|---|---|
+ * | `glow` : pochette ramenée à | 62 % | 100 % (pas assombrie) |
+ * | `glow-deep` : pochette ramenée à | 30 % | 55 % |
+ * | opacité de `glow` | 40 % | 65 % |
+ * | opacité de `glow-deep` | 70 % | 85 % |
+ *
+ * Avec la recette du bureau, une pochette colorée ne s'écartait de la page
+ * que de 1,1 à 1,35:1 : un voile, pas un halo. Celle d'Android porte la
+ * lumière jusqu'à [groundLimit] — environ 2:1, où `ink-2` tient encore
+ * 4,5:1 — si bien que c'est la limite, et non la recette, qui la borne. Une
+ * pochette très sombre reste sombre : sa lumière n'a rien à éclaircir. Le
+ * bureau peut s'aligner en reprenant ces quatre valeurs et la limite ; il n'y
+ * a pas d'autre différence.
  *
  * Chaque nappe est bornée par [groundLimit] : son opacité est rabattue jusqu'à
  * ce que, posée pleine sur [ground], elle n'y dépasse pas la limite. Une
@@ -320,14 +336,17 @@ const val POOL_FADE = 0.7f
 private const val FLUID_GROUND_LIMIT = 0.058f
 private const val LIQUID_GROUND_LIMIT = 0.82f
 
-private const val FLUID_GLOW_ALPHA = 0.40f
-private const val FLUID_GLOW_DEEP_ALPHA = 0.70f
+/** Opacités des nappes du sombre : 40 % et 70 % sur le bureau (voir [lightPools]). */
+private const val FLUID_GLOW_ALPHA = 0.65f
+private const val FLUID_GLOW_DEEP_ALPHA = 0.85f
 private const val LIQUID_POOL_MIX = 0.26f
 private const val LIQUID_MINT_MIX = 0.30f
 
-/** `glow` et `glow-deep` : la pochette ramenée à 62 % et à 30 %. */
-private const val GLOW_SHADE = 0.62f
-private const val GLOW_DEEP_SHADE = 0.30f
+/** `glow` et `glow-deep` : la pochette ramenée à 62 % et à 30 % (`useCoverGlow`), en clair. */
+private val GLOW_SHADES = 0.62f to 0.30f
+
+/** En sombre, la lumière gardée plus claire que sur le bureau (voir [lightPools]). */
+private val FLUID_SHADES = 1.0f to 0.55f
 private const val SHADE_BRIGHT = 0.6f
 private const val SHADE_BRIGHT_FACTOR = 0.55f
 private const val SHADE_DARK = 0.12f
