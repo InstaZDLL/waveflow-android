@@ -349,7 +349,19 @@ internal class TranscodeSeekingPlayer(
         val periodeBrute = avant.getUidOfPeriod(fenetre.firstPeriodIndex)
         val periodeLogique = periodesLogiques[periodeBrute] ?: periodeBrute
 
-        player.replaceMediaItem(index, item)
+        // L'ExoPlayer ajoute la nouvelle source, puis retire l'ancienne ; retirer
+        // la piste courante lui fait chercher la suivante, dans l'ordre de la
+        // répétition. Sous `REPEAT_MODE_ONE`, la suivante est l'ancienne
+        // elle-même, retirée : il s'arrête (`STATE_ENDED`, éprouvé en 1.11.1).
+        // La répétition est donc suspendue le temps du remplacement.
+        val repetition = player.repeatMode
+        val suspendre = index == player.currentMediaItemIndex && repetition == REPEAT_MODE_ONE
+        if (suspendre) player.repeatMode = REPEAT_MODE_OFF
+        try {
+            player.replaceMediaItem(index, item)
+        } finally {
+            if (suspendre) player.repeatMode = repetition
+        }
 
         val apres = player.currentTimeline
         val nouvelle = apres.getWindow(index, Timeline.Window())

@@ -182,6 +182,13 @@ viendra éventuellement plus tard — pas dans cette première version.
 segment. Laisser `REPEAT_MODE_ONE` à ExoPlayer pendant un segment rejouerait ses
 dernières secondes sans fin — le piège payé par Resonus (`applyLoop`).
 
+Toute relance de la piste courante, sous `REPEAT_MODE_ONE`, suspend la
+répétition le temps du remplacement. L'ExoPlayer remplace une source dont l'URI
+change en ajoutant la nouvelle puis en retirant l'ancienne, et retirer la piste
+courante lui fait chercher la suivante dans l'ordre de la répétition : la
+piste elle-même, retirée. Il s'arrêtait alors (`STATE_ENDED`, constaté face à
+un vrai ExoPlayer 1.11.1).
+
 **R13. « Précédent », « reculer » et « avancer » jugent sur la position
 logique.** `ForwardingSimpleBasePlayer.handleSeek` les transmet tels quels
 (`seekToPrevious`, `seekBack`, `seekForward`), et l'ExoPlayer les calcule sur sa
@@ -289,6 +296,12 @@ le même geste à suggérer.
   la position logique courante — dans une PR suivante, une fois l'enveloppe en
   place.
 - **Le cache des segments** (R11).
+- **Une relance sous l'ordre aléatoire.** Pour la même raison qu'en R12, retirer
+  la piste courante fait chercher à l'ExoPlayer la suivante — ici dans l'ordre
+  aléatoire, où la nouvelle source vient d'être insérée à une place tirée au
+  hasard. Le lecteur saute alors vers une autre piste, ou s'arrête. Constaté
+  face à un vrai ExoPlayer 1.11.1 ; le corriger demande de garder l'ordre
+  aléatoire d'avant le remplacement (R1) — une carte à part.
 
 ## Comment l'éprouver
 

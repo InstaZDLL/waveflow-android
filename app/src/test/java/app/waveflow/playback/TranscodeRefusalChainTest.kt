@@ -18,6 +18,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -238,6 +239,23 @@ class TranscodeRefusalChainTest {
         attendre("le retour sur la piste") { demandes.drop(avant).any { it.piste == PISTE } }
 
         assertEquals("opus", demandes.drop(avant).first { it.piste == PISTE }.format)
+    }
+
+    @Test
+    fun `une relance sous la repetition d'un titre n'arrete pas la lecture`() {
+        // R5 et R12 : l'ExoPlayer remplace la piste en ajoutant puis en
+        // retirant ; sous `REPEAT_MODE_ONE`, retirer la piste courante
+        // l'arrêtait, et le saut restait sans suite.
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+        jouer()
+        attendre("la première demande") { demandes.isNotEmpty() }
+
+        lecteur.seekTo(133_000L)
+        avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+        attendre("la demande du saut") { transcodees.any { it.decalageMs == 133_000L } }
+
+        assertNotEquals(Player.STATE_ENDED, lecteur.playbackState)
+        assertEquals(Player.REPEAT_MODE_ONE, lecteur.repeatMode)
     }
 
     @Test
