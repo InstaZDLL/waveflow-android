@@ -122,8 +122,8 @@ private val FluidColorScheme: ColorScheme = darkColorScheme(
  * | `onSurfaceVariant`        | la seconde ligne                                | encre du corps               |
  * | `outline`, `outlineVariant` | anneaux, séparateurs                          | `hairline-strong`, `hairline` |
  *
- * Le niveau `tone` (blanc 42 %) est celui des puces et des pilules, que
- * l'application ne dessine pas encore : aucun rôle ne le porte.
+ * Le niveau `tone` (blanc 42 %) est celui des puces et des pilules : aucun
+ * rôle Material ne le porte, les pilules le lisent dans [WaveFlowColors.ghost].
  */
 private val LiquidColorScheme: ColorScheme = lightColorScheme(
     primary = Emerald600,
@@ -169,6 +169,8 @@ private val LiquidColorScheme: ColorScheme = lightColorScheme(
  * @property glow la lumière de la pochette, à sa valeur par défaut tant que
  *   rien n'a été échantillonné.
  * @property glowDeep la seconde nappe de cette lumière.
+ * @property ghost le fond d'une pilule secondaire : blanc 6 % en Fluid, le
+ *   niveau `tone` du verre en Liquid.
  */
 @Immutable
 class WaveFlowColors(
@@ -177,6 +179,7 @@ class WaveFlowColors(
     val hairlineStrong: Color,
     val glow: Color,
     val glowDeep: Color,
+    val ghost: Color,
 )
 
 private val FluidColors = WaveFlowColors(
@@ -185,6 +188,7 @@ private val FluidColors = WaveFlowColors(
     hairlineStrong = FluidHairlineStrong,
     glow = FluidGlow,
     glowDeep = FluidGlowDeep,
+    ghost = FluidGhost,
 )
 
 private val LiquidColors = WaveFlowColors(
@@ -193,6 +197,7 @@ private val LiquidColors = WaveFlowColors(
     hairlineStrong = LiquidHairlineStrong,
     glow = LiquidGlow,
     glowDeep = LiquidGlowDeep,
+    ghost = LiquidTone,
 )
 
 /**
