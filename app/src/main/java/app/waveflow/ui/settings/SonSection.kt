@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -178,10 +179,11 @@ private fun LigneCurseur(
     onChange: (Float) -> Unit,
 ) {
     val etat = remember(valeur) {
-        // Sans crans : Material en dessine un par pas, soixante points sur ±15 dB
-        // qui brouillent la piste. Le pas est tenu par l'arrondi de
-        // `onValueChange`, au même effet.
-        SliderState(valeur, 0, -borne..borne)
+        // Les crans intérieurs : de −borne à +borne par pas, sans les deux bouts.
+        // Ils tiennent le pas au doigt comme au clavier et au lecteur d'écran,
+        // qui avancent d'un cran à la fois ; seul leur dessin est retiré, plus
+        // bas.
+        SliderState(valeur, (2 * borne / pas).roundToInt() - 1, -borne..borne)
     }
     val affichee = formatDb(etat.value)
     Column(
@@ -196,12 +198,15 @@ private fun LigneCurseur(
         }
         Slider(
             state = etat,
-            onValueChange = { etat.value = (it / pas).roundToInt() * pas },
+            onValueChange = { etat.value = it },
             onValueChangeFinished = { if (etat.value != valeur) onChange(etat.value) },
             modifier = Modifier.semantics {
                 contentDescription = titre
                 stateDescription = affichee
             },
+            // Soixante points sur ±15 dB brouilleraient la piste : les crans ne
+            // se dessinent pas.
+            track = { SliderDefaults.Track(sliderState = it, drawTick = { _, _ -> }) },
         )
     }
 }

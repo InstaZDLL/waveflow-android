@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -14,9 +15,11 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
 import app.waveflow.model.ModeDeGain
 import app.waveflow.model.Prereglage
 import app.waveflow.model.ReglagesEgaliseur
@@ -125,7 +128,7 @@ class SonSectionTest {
         assertTrue(gestes.single().toString(), (gestes.single() as GesteSon.Preampli).db > 0f)
     }
 
-    /** Le curseur est continu, sans crans dessinés : le demi-dB est tenu par l'arrondi. */
+    /** Les crans, même non dessinés, tiennent le pas : une valeur entre deux se pose sur le plus proche. */
     @Test
     fun `un curseur s'arrondit au demi-decibel`() {
         afficher()
@@ -135,6 +138,23 @@ class SonSectionTest {
             .performSemanticsAction(SemanticsActions.SetProgress) { it(-3.3f) }
 
         assertEquals(listOf<GesteSon>(GesteSon.GainParDefaut(-3.5f)), gestes)
+    }
+
+    /**
+     * Au clavier, une flèche avance d'un cran, un demi-dB. Sans crans, le
+     * curseur avancerait d'un centième de sa course, 0,24 dB sur ±12, et
+     * l'arrondi le ramènerait sur place.
+     */
+    @Test
+    fun `une fleche du clavier deplace une bande d'un demi-decibel`() {
+        afficher(egaliseur = ReglagesEgaliseur.PAR_DEFAUT.avecActif(true))
+        val bande = compose.onNodeWithContentDescription("60 Hz").performScrollTo()
+
+        bande.performSemanticsAction(SemanticsActions.RequestFocus)
+        bande.performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForIdle()
+
+        assertEquals(listOf<GesteSon>(GesteSon.Bande(0, 0.5f)), gestes)
     }
 
     @Test
