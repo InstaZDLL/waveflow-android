@@ -23,7 +23,7 @@ import com.google.common.util.concurrent.ListenableFuture
  * morceau tel qu'il est : commencé à 0:00, de sa durée entière.
  *
  * Les règles sont dans `docs/deplacement-dans-un-transcodage.md` ; les renvois
- * R1 à R24 ci-dessous y pointent.
+ * R1 à R30 ci-dessous y pointent.
  *
  * @param coalescenceMs ce qu'une relance demandée par un saut attend avant de
  *   partir, pour qu'un saut suivant la remplace (R9).
@@ -67,6 +67,9 @@ internal class TranscodeSeekingPlayer(
 
     /** La relance qu'un saut a demandée et qui n'est pas encore partie (R9). */
     private var sautEnAttente: SautEnAttente? = null
+
+    /** La dernière série de reprises après une coupure (R30) ; un saut l'efface. */
+    private var reprises: Reprises? = null
 
     /**
      * Vrai quand une relance différée vient de partir : le saut a été annoncé au
@@ -182,6 +185,9 @@ internal class TranscodeSeekingPlayer(
         // R9 : un saut chasse le précédent. S'il demande à son tour une
         // relance, [allerA] la remet en attente à sa propre cible.
         annulerSautEnAttente()
+        // R30 : la lecture repart d'où l'on a voulu, les reprises d'avant ne
+        // disent plus rien du flux à venir.
+        reprises = null
         val courant = player.currentMediaItemIndex
         when (seekCommand) {
             COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, COMMAND_SEEK_BACK, COMMAND_SEEK_FORWARD ->
@@ -324,6 +330,48 @@ internal class TranscodeSeekingPlayer(
         return true
     }
 
+    /**
+     * R25 : reprend le transcodage de la piste courante là où le son s'est tu,
+     * après une coupure que le serveur refuse de reprendre à l'octet atteint.
+     *
+     * Une relance comme une autre (R27) : même rendu, même identité, au décalage
+     * de la position logique — ou à la cible d'un saut en attente (R28). Le
+     * lecteur, arrêté sur son erreur, est préparé de nouveau ; il reprend s'il
+     * jouait.
+     *
+     * @return faux, sans rien changer, si la piste courante n'est pas un
+     *   transcodage du serveur (R26), ou après trois reprises de suite sans
+     *   écoute (R30) : l'erreur suit alors son cours.
+     */
+    fun reprendreApresCoupure(): Boolean {
+        val index = player.currentMediaItemIndex
+        val timeline = player.currentTimeline
+        if (index == C.INDEX_UNSET || index >= timeline.windowCount) return false
+        val fenetre = timeline.getWindow(index, Timeline.Window())
+        val item = fenetre.mediaItem
+        if (!item.isRemoteTranscode()) return false
+
+        val position = sautEnAttente?.takeIf { it.fenetre == fenetre.uid }?.cibleMs
+            ?: logicalPositionMs(
+                streamPositionMs = player.currentPosition,
+                offsetMs = decalages[fenetre.uid] ?: 0L,
+                durationMs = item.mediaMetadata.durationMs ?: C.TIME_UNSET,
+            ).coerceAtLeast(0L)
+
+        // R30 : la série se compte sur l'écoute, identifiée par sa fenêtre
+        // logique, que les relances ne changent pas.
+        val ecoute = fenetresLogiques[fenetre.uid] ?: fenetre.uid
+        val serie = reprises?.takeIf { it.ecoute == ecoute && position < it.positionMs + REPRISE_ENTENDUE_MS }
+        val nombre = (serie?.nombre ?: 0) + 1
+        if (nombre > REPRISES_SANS_ECOUTE_MAX) return false
+        reprises = Reprises(ecoute, position, nombre)
+
+        annulerSautEnAttente()
+        relancer(index, fenetre, bornerAuMorceau(position, item))
+        player.prepare()
+        return true
+    }
+
     private fun relancer(index: Int, fenetre: Timeline.Window, decalageMs: Long) {
         remplacer(index, fenetre, decalageMs)
 
@@ -446,9 +494,11 @@ internal class TranscodeSeekingPlayer(
         val fenetre = courante.getWindow(courant, Timeline.Window())
 
         // R9 : le morceau recommence, comme un changement de piste ; un saut
-        // demandé dans l'écoute qui vient de finir n'a plus de sens.
+        // demandé dans l'écoute qui vient de finir n'a plus de sens, ni les
+        // reprises de cette écoute-là (R30).
         val attendait = sautEnAttente != null
         annulerSautEnAttente()
+        reprises = null
         val rendu = rendusAvantRepli.remove(fenetre.uid)
         when {
             // R22 : l'original répété, c'est une nouvelle écoute ; elle
@@ -495,7 +545,21 @@ internal class TranscodeSeekingPlayer(
     /** Une relance demandée, par l'identifiant brut de la fenêtre qu'elle vise. */
     private data class SautEnAttente(val fenetre: Any, val cibleMs: Long)
 
+    /**
+     * La dernière reprise d'une écoute, et combien l'ont précédée sans qu'on ait
+     * rien entendu entre deux (R30).
+     *
+     * @param ecoute l'identifiant logique de la fenêtre reprise.
+     */
+    private data class Reprises(val ecoute: Any, val positionMs: Long, val nombre: Int)
+
     companion object {
+        /** R30 : au-delà, la coupure remonte comme une panne du réseau. */
+        const val REPRISES_SANS_ECOUTE_MAX = 3
+
+        /** R30 : ce qu'une reprise doit avoir rendu pour compter comme entendue. */
+        const val REPRISE_ENTENDUE_MS = 5_000L
+
         /**
          * Le délai qu'Android laisse entre deux touchers d'un même geste
          * (`ViewConfiguration.getDoubleTapTimeout`) : deux pressions plus

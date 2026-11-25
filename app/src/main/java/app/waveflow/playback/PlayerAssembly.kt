@@ -78,6 +78,9 @@ internal fun assemblerLaLecture(
     // Sur l'ExoPlayer, et non sur l'enveloppe : l'erreur doit être réparée
     // avant que l'enveloppe ne la relise et ne l'annonce à la session (R23).
     exoPlayer.addListener(TranscodeRefusalFallback(enveloppe, liaisonNonFacturee, annoncerRepli))
+    // Au même titre : une coupure se reprend avant que la session ne la voie
+    // (R27).
+    exoPlayer.addListener(TranscodeCutRecovery(enveloppe))
 
     return LectureAssemblee(enveloppe, PistesAVenir(exoPlayer, enveloppe))
 }

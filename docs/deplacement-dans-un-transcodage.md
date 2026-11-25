@@ -394,6 +394,18 @@ chaîne, `TranscodeRelaunchChainTest` : le lecteur factice remplace une piste su
 place et ne peut pas le déranger. L'ExoPlayer tire son ordre sans graine ; une
 file de trente pistes et trois remplacements par test ramènent à moins d'un sur
 mille la chance qu'un ordre dérangé retombe sur l'ancien.
+
+**R25 à R30 s'éprouvent sur la même chaîne**, face à un serveur factice qui
+coupe le flux en son milieu et refuse la plage comme le vrai. Robolectric ne
+décode pas l'Opus, mais le moteur audio lit du PCM sans décodeur : les
+« transcodages » y sont servis en WAV — la chaîne les traite en transcodages,
+c'est le marqueur qui en décide. La lecture y avance, le tampon s'y vide, et
+l'erreur tombe là où elle tomberait sur un appareil : c'est ce qui permet de
+vérifier que la reprise part de l'instant de la coupure, et que l'original d'un
+repli est rouvert à l'octet de cet instant. Ce qui dépend d'un instant précis —
+une coupure pendant les 300 ms d'un saut (R28) — et le compte des reprises
+entendues (R30) s'éprouvent face au lecteur factice.
+
 `TranscodeRefusalPolicyTest` éprouve les bornes de la politique sur des refus
 **levés par la vraie source HTTP** — c'est ainsi qu'est apparue la clé `null` que
 `HttpURLConnection` donne à la ligne de statut, et qu'un refus construit à la
@@ -413,7 +425,21 @@ Ce qui n'est **pas** éprouvé :
   piste courante, ce qui suppose qu'ExoPlayer ne rende l'erreur d'une piste
   qu'une fois celle-ci devenue la courante. C'est ce que disent ses sources
   (`ExoPlayerImplInternal.handleIoException`, 1.11.1) ; aucun test ne le montre.
+- **Une coupure sur un vrai flux Opus.** Le WAV du banc annonce sa longueur :
+  l'ExoPlayer y tient pour déplaçable le flux d'un transcodage commencé au
+  début, ce que n'est pas un flux Opus en direct. La coupure n'en dépend pas,
+  mais rien n'a coupé un Opus.
+- **La coupure d'un original servi avec sa longueur.** Le banc sert l'original en
+  morceaux : coupé en son milieu, un corps à longueur fixe n'y a pas fait
+  rouvrir le flux, cause non élucidée. R26 n'est éprouvée que sur un original
+  servi en morceaux.
+- **Une coupure qui dure** n'est simulée que par une liaison qui tombe sitôt la
+  demande partie ; ni l'absence de réseau ni un nom qui ne se résout plus.
+- **La série de reprises remise à zéro par un changement de piste ou par la
+  répétition du titre (R30)** : posée, aucun test ne la vise ; le saut et la
+  reprise entendue sont éprouvés.
 
 Le jeu réel — un saut entendu au bon endroit, la notification et la voiture qui
-suivent, l'original qui prend le relais d'un transcodage refusé — reste **à
+suivent, l'original qui prend le relais d'un transcodage refusé, une coupure
+reprise sans rien d'autre à entendre que le silence de la relance — reste **à
 valider sur appareil**, face à un serveur dont on aura abaissé `per_user_limit`.
