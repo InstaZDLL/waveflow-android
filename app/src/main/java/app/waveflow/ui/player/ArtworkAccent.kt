@@ -11,11 +11,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.palette.graphics.Palette
+import app.waveflow.ui.theme.WaveFlowMaterial
 import app.waveflow.ui.theme.WaveFlowTheme
 import coil.imageLoader
 import coil.request.ImageRequest
@@ -24,55 +28,108 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Couleur d'accent extraite de la pochette courante, animée à chaque
- * changement de morceau.
+ * La lumière du lecteur pour la pochette courante : son accent et ses deux
+ * tons de lumière, fondus en 900 ms à chaque changement de pochette.
  *
- * C'est ce qui donne au lecteur son fond qui « prend la couleur » de l'album.
- * En l'absence de pochette exploitable, on retombe sur la teinte du thème.
+ * Elle ne dépend que de la pochette et de la matière, jamais de l'état de
+ * lecture : en pause, quand [PlayerUiState] ne se reconstruit plus, un
+ * changement de morceau rallume tout de même sa lumière — le fondu tourne sur
+ * l'horloge d'images, pas sur les tics de position.
+ *
+ * L'accent fondu est repassé par [garantirContraste] à chaque image : deux
+ * accents lisibles ne garantissent pas que leur mélange le soit.
  */
 @Composable
-fun rememberArtworkAccent(artworkUri: Uri?): Color {
+fun rememberPlayerLight(artworkUri: Uri?): PlayerLight {
     val context = LocalContext.current
-    val fallback = MaterialTheme.colorScheme.surfaceVariant
+    val material = WaveFlowTheme.material
 
-    // Une couleur déjà extraite sert de valeur initiale : en passant du
-    // mini-player au plein écran, le fond est bon dès la première frame au
-    // lieu de repartir du gris du thème.
-    var target by remember { mutableStateOf(artworkUri?.let { accentCache[it] } ?: fallback) }
+    // Un échantillon déjà lu sert de valeur initiale : en passant du
+    // mini-lecteur au plein écran, la lumière est bonne dès la première image
+    // au lieu de repartir de celle du thème.
+    var sample by remember { mutableStateOf(artworkUri?.let { sampleCache[it] }) }
 
-    LaunchedEffect(artworkUri, fallback) {
-        if (artworkUri == null) {
-            target = fallback
-            return@LaunchedEffect
+    LaunchedEffect(artworkUri) {
+        sample = if (artworkUri == null) {
+            null
+        } else {
+            sampleCache[artworkUri]
+                ?: sampleCover(context, artworkUri)?.also { sampleCache[artworkUri] = it }
         }
-        target = accentCache[artworkUri]
-            ?: extractAccent(context, artworkUri)?.also { accentCache[artworkUri] = it }
-            ?: fallback
     }
 
-    val accent by animateColorAsState(
-        targetValue = target,
-        // Une lumière qui s'allume : la plus lente des trois durées.
-        animationSpec = WaveFlowTheme.motion.light(),
-        label = "artworkAccent",
+    // La cible ne change qu'avec la pochette ou la matière : pas à chaque
+    // image du fondu, qui recompose cette fonction.
+    val cible = remember(sample, material) { playerLightFor(sample, material) }
+    val accent by animateColorAsState(cible.accent, WaveFlowTheme.motion.light(), label = "accentPochette")
+    val glow by animateColorAsState(cible.glow, WaveFlowTheme.motion.light(), label = "lumierePochette")
+    val glowDeep by animateColorAsState(cible.glowDeep, WaveFlowTheme.motion.light(), label = "lumiereProfonde")
+
+    return PlayerLight(
+        accent = garantirContraste(accent, material),
+        onAccent = cible.onAccent,
+        glow = glow,
+        glowDeep = glowDeep,
     )
-    return accent
 }
 
 /**
- * Dégradé de fond du lecteur : l'accent en haut, fondu vers le fond du thème
- * à mi-hauteur pour que le texte du bas reste lisible.
+ * Pose l'accent de la pochette sur [content], et sur lui seul.
+ *
+ * Tout ce que le lecteur colore passe par les rôles de Material — le bouton
+ * plein, les bascules allumées, l'indicateur d'attente, le W, la progression :
+ * les remplacer ici suffit, sans qu'aucun composant ait à connaître la
+ * pochette. `secondary` et `tertiary` suivent, comme dans le thème, pour
+ * qu'aucun composant ne retrouve l'accent fixe par un autre rôle.
  */
 @Composable
-fun artworkGradient(accent: Color): Brush {
-    val background = MaterialTheme.colorScheme.background
-    return Brush.verticalGradient(
-        0f to lerp(accent, background, ACCENT_BLEND),
-        GRADIENT_END_STOP to background,
+fun PlayerAccent(light: PlayerLight, content: @Composable () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    MaterialTheme(
+        colorScheme = scheme.copy(
+            primary = light.accent,
+            onPrimary = light.onAccent,
+            secondary = light.accent,
+            onSecondary = light.onAccent,
+            tertiary = light.accent,
+            onTertiary = light.onAccent,
+        ),
+        shapes = MaterialTheme.shapes,
+        typography = MaterialTheme.typography,
+        content = content,
     )
 }
 
-private suspend fun extractAccent(context: Context, artworkUri: Uri): Color? {
+/**
+ * Peint la page du lecteur : le fond du thème, et par-dessus les nappes de
+ * lumière de la pochette ([lightPools]), bornées pour que le texte et
+ * l'accent restent lisibles. Les nappes sont des ellipses floues : un disque
+ * à dégradé radial, étiré à la mesure de l'écran.
+ */
+fun Modifier.playerLight(light: PlayerLight, material: WaveFlowMaterial, ground: Color): Modifier =
+    drawBehind {
+        drawRect(ground)
+        for (nappe in lightPools(light, material, ground)) {
+            val centre = Offset(size.width * nappe.x, size.height * nappe.y)
+            val rx = size.width * nappe.rx
+            val ry = size.height * nappe.ry
+            // Un disque de rayon rx, aplati verticalement par l'échelle.
+            scale(scaleX = 1f, scaleY = ry / rx, pivot = centre) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        0f to nappe.color.copy(alpha = nappe.alpha),
+                        POOL_FADE to Color.Transparent,
+                        center = centre,
+                        radius = rx,
+                    ),
+                    radius = rx,
+                    center = centre,
+                )
+            }
+        }
+    }
+
+private suspend fun sampleCover(context: Context, artworkUri: Uri): CoverSample? {
     val request = ImageRequest.Builder(context)
         .data(artworkUri)
         // Palette lit les pixels : un bitmap matériel n'est pas accessible en CPU.
@@ -86,35 +143,39 @@ private suspend fun extractAccent(context: Context, artworkUri: Uri): Color? {
 
     val palette = withContext(Dispatchers.Default) { Palette.from(bitmap).generate() }
 
-    // Vibrant d'abord (le plus caractéristique de la pochette), puis des
-    // solutions de repli de plus en plus neutres.
-    val swatch = palette.vibrantSwatch
+    // La teinte de l'accent : la plus caractéristique d'abord, puis des
+    // replis de plus en plus neutres — une teinte trop grise sera écartée par
+    // la règle du palier, qui rendra l'accent du thème.
+    val vive = palette.vibrantSwatch
         ?: palette.darkVibrantSwatch
+        ?: palette.lightVibrantSwatch
         ?: palette.mutedSwatch
         ?: palette.dominantSwatch
-        ?: return null
 
-    return Color(swatch.rgb)
+    // Le ton d'ensemble, celui que le bureau éclaire : la couleur qui couvre
+    // le plus de pochette.
+    val ensemble = palette.dominantSwatch
+
+    if (vive == null && ensemble == null) return null
+    return CoverSample(vivid = vive?.rgb, average = ensemble?.rgb)
 }
 
 /**
- * Couleurs déjà extraites, partagées entre le mini-player et le plein écran.
+ * Pochettes déjà lues, partagées entre le mini-lecteur et le plein écran.
+ *
+ * L'échantillon est gardé brut, avant toute décision de matière : passer du
+ * clair au sombre ne relit pas la pochette.
  *
  * Lu pendant la composition et écrit depuis [LaunchedEffect], tous deux sur le
  * thread principal : aucune synchronisation nécessaire. Borné en taille (ordre
  * d'accès) pour ne pas retenir les URI d'une bibliothèque entière.
  */
-private val accentCache = object : LinkedHashMap<Uri, Color>(ACCENT_CACHE_SIZE, 0.75f, true) {
-    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Uri, Color>): Boolean =
-        size > ACCENT_CACHE_SIZE
+private val sampleCache = object : LinkedHashMap<Uri, CoverSample>(SAMPLE_CACHE_SIZE, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Uri, CoverSample>): Boolean =
+        size > SAMPLE_CACHE_SIZE
 }
 
-private const val ACCENT_CACHE_SIZE = 32
+private const val SAMPLE_CACHE_SIZE = 32
 
 /** Taille d'échantillonnage : inutile de décoder la pochette en pleine résolution. */
 private const val SAMPLE_SIZE = 128
-
-/** Part de fond mélangée à l'accent : plus c'est haut, plus le fond est sobre. */
-private const val ACCENT_BLEND = 0.55f
-
-private const val GRADIENT_END_STOP = 0.6f

@@ -52,10 +52,11 @@ app/src/main/java/app/waveflow/
 │  ├─ PlayingTrack.kt             What the player holds, whatever its source
 │  └─ RemoteStreamResolver.kt     Marker URI → ticketed stream URL
 └─ ui/
-   ├─ theme/                Colours, type, shapes, motion of both materials
+   ├─ theme/                Colours, type, shapes, motion of both materials; OKLCH
    ├─ DurationFormat.kt     m:ss / h:mm:ss
    ├─ Labels.kt             Unknown artist / album fallbacks
-   ├─ components/           Artwork, MediaRow, SongRow, LibraryStateContainer
+   ├─ components/           Artwork, MediaRow, SongRow, LibraryStateContainer,
+   │                        WaveMark, WaveFlowSymbol (the breathing W), WaveFlowSheet
    ├─ navigation/
    │  └─ WaveFlowNavigation.kt    Routes + bottom bar
    ├─ browse/
@@ -86,8 +87,11 @@ app/src/main/java/app/waveflow/
    ├─ player/
    │  ├─ PlayerViewModel.kt    Owns the MediaController; playback commands
    │  ├─ PlayerUiState.kt      Player state
-   │  ├─ ArtworkAccent.kt      Dominant colour from cover (Palette)
-   │  ├─ MiniPlayer.kt         Compact bar above the library
+   │  ├─ ArtworkAccent.kt      Cover light: sampled (Palette), faded, scoped to the player
+   │  ├─ CoverColors.kt        Cover accent at the theme's stop, contrast guard, light pools
+   │  ├─ PlayerProgress.kt     Progress: the wave (dark) or the light line (light)
+   │  ├─ PlayerSeekBar.kt      Tap / drag / screen-reader seeking, A-B loop button
+   │  ├─ MiniPlayer.kt         Compact plate above the library
    │  └─ NowPlayingScreen.kt   Full-screen player
    └─ library/
       ├─ LibraryViewModel.kt   Thin access point to LibraryStore
@@ -134,6 +138,9 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `SearchViewModelTest` | query → results, clearing, following the library |
 | `GroupingTest` | album / artist derivation, sorting, missing tags |
 | `DurationFormatTest` | `m:ss` / `h:mm:ss` formatting |
+| `CoverColorsTest` | cover accent over the whole hue wheel, contrast against ink and grounds, bounded light pools |
+| `PlayerSeekBarTest` | tap, drag-then-release, screen-reader seeking, A-B marks |
+| `WaveFlowSymbolTest` | the W's breath: when, how deep, settling on pause |
 | `HttpServerApiTest` | request shapes, error classes, URL handling, unknown fields |
 | `ServerSessionRepositoryTest` | token refresh and rotation, session lifetime, sign-out |
 | `ServerViewModelTest` | validation, error wording, connection progress |

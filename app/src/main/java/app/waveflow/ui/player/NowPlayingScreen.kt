@@ -1,6 +1,5 @@
 package app.waveflow.ui.player
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
@@ -32,9 +32,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,28 +44,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.waveflow.model.PlaybackSpeed
 import app.waveflow.model.orUnknownArtist
-import app.waveflow.playback.AbLoopState
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
 import app.waveflow.ui.components.Artwork
-import app.waveflow.ui.formatDuration
+import app.waveflow.ui.components.WaveFlowSymbol
 import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
  * Lecteur plein écran.
  *
- * Le fond reprend la couleur dominante de la pochette (voir
- * [rememberArtworkAccent]), fondue vers le fond du thème : c'est ce qui donne
- * l'impression que l'écran « habite » l'album en cours.
+ * La pochette éclaire la page : sa lumière, en nappes derrière tout
+ * ([playerLight]), et son accent, qui remplace celui du thème sur la
+ * progression, le W et les commandes ([PlayerAccent]). C'est ce qui donne
+ * l'impression que l'écran « habite » l'album en cours — et seulement ici : le
+ * reste de l'application garde l'accent fixe (décision du 25/11).
+ *
+ * La lumière, la respiration du W et l'ondulation tournent sur l'horloge
+ * d'images, jamais sur les tics de position : ceux-ci s'arrêtent en pause.
  */
 @Composable
 fun NowPlayingScreen(
@@ -106,114 +107,127 @@ fun NowPlayingScreen(
     }
 
     val track = state.track ?: lastKnownTrack ?: return
-    val accent = rememberArtworkAccent(track.artworkUri)
+    val light = rememberPlayerLight(track.artworkUri)
+    val material = WaveFlowTheme.material
+    val ground = MaterialTheme.colorScheme.background
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(artworkGradient(accent))
-            // Le lecteur recouvre la bibliothèque : on absorbe les taps pour
-            // qu'ils n'atteignent pas la liste en dessous.
-            .pointerInput(Unit) { detectTapGestures {} },
-    ) {
-        Column(
-            modifier = Modifier
+    PlayerAccent(light) {
+        Box(
+            modifier = modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars)
-                .padding(horizontal = 24.dp),
+                .playerLight(light, material, ground)
+                // Le lecteur recouvre la bibliothèque : on absorbe les taps pour
+                // qu'ils n'atteignent pas la liste en dessous.
+                .pointerInput(Unit) { detectTapGestures {} },
         ) {
-            PlayerHeader(
-                track = track,
-                onCollapse = onCollapse,
-                queueShown = queueShown,
-                upNextCount = state.upNextCount,
-                onToggleQueue = { queueShown = !queueShown },
-                sleepTimerActive = state.sleepTimerActive,
-                onOpenSleepTimer = { sleepSheetShown = true },
-                playbackSpeed = state.playbackSpeed,
-                onOpenPlaybackSpeed = { speedSheetShown = true },
-            )
-
-            if (queueShown) {
-                // La file prend la place de la pochette et non celle de tout
-                // l'écran : on garde sous les yeux ce qui joue et de quoi
-                // l'arrêter pendant qu'on remanie la suite.
-                QueueScreen(
-                    state = state,
-                    onPlayAt = onPlayQueueItem,
-                    onMove = onMoveQueueItem,
-                    onRemove = onRemoveQueueItem,
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                Spacer(Modifier.weight(1f))
-
-                Artwork(
-                    artworkUri = track.artworkUri,
-                    shape = WaveFlowTheme.shapes.cover,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .shadow(elevation = 24.dp, shape = WaveFlowTheme.shapes.cover),
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .padding(horizontal = 24.dp),
+            ) {
+                PlayerHeader(
+                    track = track,
+                    playing = state.isPlaying,
+                    onCollapse = onCollapse,
+                    queueShown = queueShown,
+                    upNextCount = state.upNextCount,
+                    onToggleQueue = { queueShown = !queueShown },
+                    sleepTimerActive = state.sleepTimerActive,
+                    onOpenSleepTimer = { sleepSheetShown = true },
+                    playbackSpeed = state.playbackSpeed,
+                    onOpenPlaybackSpeed = { speedSheetShown = true },
                 )
 
-                Spacer(Modifier.weight(1f))
+                if (queueShown) {
+                    // La file prend la place de la pochette et non celle de tout
+                    // l'écran : on garde sous les yeux ce qui joue et de quoi
+                    // l'arrêter pendant qu'on remanie la suite.
+                    QueueScreen(
+                        state = state,
+                        onPlayAt = onPlayQueueItem,
+                        onMove = onMoveQueueItem,
+                        onRemove = onRemoveQueueItem,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+
+                    // La seule ombre que la direction permet : sous une
+                    // pochette, et teintée de sa lumière plutôt que grise.
+                    Artwork(
+                        artworkUri = track.artworkUri,
+                        shape = WaveFlowTheme.shapes.cover,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .shadow(
+                                elevation = 24.dp,
+                                shape = WaveFlowTheme.shapes.cover,
+                                ambientColor = light.glow,
+                                spotColor = light.glow,
+                            ),
+                    )
+
+                    Spacer(Modifier.weight(1f))
+                }
+
+                TrackTitle(track = track)
+
+                Spacer(Modifier.height(12.dp))
+
+                PlayerSeekBar(
+                    positionMs = state.positionMs,
+                    durationMs = state.durationMs,
+                    trackKey = track.mediaId,
+                    playing = state.isPlaying,
+                    abLoop = state.abLoop,
+                    onSeek = onSeek,
+                    onMarkAbLoop = onMarkAbLoop,
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                PlayerControls(
+                    isPlaying = state.isPlaying,
+                    isBuffering = state.isBuffering,
+                    shuffleEnabled = state.shuffleEnabled,
+                    repeatMode = state.repeatMode,
+                    onTogglePlayPause = onTogglePlayPause,
+                    onSkipNext = onSkipNext,
+                    onSkipPrevious = onSkipPrevious,
+                    onToggleShuffle = onToggleShuffle,
+                    onCycleRepeat = onCycleRepeat,
+                )
+
+                Spacer(Modifier.height(32.dp))
             }
 
-            TrackTitle(track = track)
+            if (sleepSheetShown) {
+                SleepTimerSheet(
+                    remainingMs = onSleepTimerRemainingMs,
+                    onPick = { duree ->
+                        onStartSleepTimer(duree)
+                        sleepSheetShown = false
+                    },
+                    onCancelTimer = {
+                        onCancelSleepTimer()
+                        sleepSheetShown = false
+                    },
+                    onDismiss = { sleepSheetShown = false },
+                )
+            }
 
-            Spacer(Modifier.height(16.dp))
-
-            SeekBar(
-                positionMs = state.positionMs,
-                durationMs = state.durationMs,
-                trackKey = track.mediaId,
-                onSeek = onSeek,
-                abLoop = state.abLoop,
-                onMarkAbLoop = onMarkAbLoop,
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            PlayerControls(
-                isPlaying = state.isPlaying,
-                isBuffering = state.isBuffering,
-                shuffleEnabled = state.shuffleEnabled,
-                repeatMode = state.repeatMode,
-                onTogglePlayPause = onTogglePlayPause,
-                onSkipNext = onSkipNext,
-                onSkipPrevious = onSkipPrevious,
-                onToggleShuffle = onToggleShuffle,
-                onCycleRepeat = onCycleRepeat,
-            )
-
-            Spacer(Modifier.height(32.dp))
-        }
-
-        if (sleepSheetShown) {
-            SleepTimerSheet(
-                remainingMs = onSleepTimerRemainingMs,
-                onPick = { duree ->
-                    onStartSleepTimer(duree)
-                    sleepSheetShown = false
-                },
-                onCancelTimer = {
-                    onCancelSleepTimer()
-                    sleepSheetShown = false
-                },
-                onDismiss = { sleepSheetShown = false },
-            )
-        }
-
-        if (speedSheetShown) {
-            PlaybackSpeedSheet(
-                speed = state.playbackSpeed,
-                onPick = { vitesse ->
-                    onSetPlaybackSpeed(vitesse)
-                    speedSheetShown = false
-                },
-                onDismiss = { speedSheetShown = false },
-            )
+            if (speedSheetShown) {
+                PlaybackSpeedSheet(
+                    speed = state.playbackSpeed,
+                    onPick = { vitesse ->
+                        onSetPlaybackSpeed(vitesse)
+                        speedSheetShown = false
+                    },
+                    onDismiss = { speedSheetShown = false },
+                )
+            }
         }
     }
 }
@@ -221,6 +235,7 @@ fun NowPlayingScreen(
 @Composable
 private fun PlayerHeader(
     track: PlayingTrack,
+    playing: Boolean,
     onCollapse: () -> Unit,
     queueShown: Boolean,
     upNextCount: Int,
@@ -238,6 +253,7 @@ private fun PlayerHeader(
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
                 contentDescription = "Réduire le lecteur",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -245,12 +261,22 @@ private fun PlayerHeader(
             modifier = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = if (queueShown) "FILE D'ATTENTE" else "EN LECTURE",
-                style = MaterialTheme.typography.labelSmall,
-                letterSpacing = 1.5.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Le symbole avant l'étiquette, comme sur le rail du bureau :
+                // il respire pendant la lecture et retombe en pause. Décoratif,
+                // l'étiquette dit ce qu'il marque. Sa taille est fixe : grossi
+                // avec la police, il prenait à police doublée la place de
+                // l'étiquette, qui se tronquait — c'est elle qui se lit.
+                WaveFlowSymbol(playing = playing, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (queueShown) "FILE D'ATTENTE" else "EN LECTURE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = WaveFlowTheme.colors.ink3,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 text = track.album ?: track.source.label,
                 style = MaterialTheme.typography.labelLarge,
@@ -305,18 +331,21 @@ private fun PlayerHeader(
     }
 }
 
+/**
+ * Le titre en voix d'affichage — serré, deux lignes au plus —, l'artiste en
+ * seconde encre dessous : la page d'un album plutôt qu'une fiche.
+ */
 @Composable
 private fun TrackTitle(track: PlayingTrack) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = track.title,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.displaySmall,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = track.artist.orUnknownArtist(),
             style = MaterialTheme.typography.titleMedium,
@@ -324,63 +353,6 @@ private fun TrackTitle(track: PlayingTrack) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-@Composable
-private fun SeekBar(
-    positionMs: Long,
-    durationMs: Long,
-    trackKey: String,
-    onSeek: (Long) -> Unit,
-    abLoop: AbLoopState,
-    onMarkAbLoop: () -> Unit,
-) {
-    // Pendant un glissement, la position affichée suit le doigt et non le
-    // lecteur ; remise à zéro dès qu'on change de morceau.
-    var scrubProgress by remember(trackKey) { mutableStateOf<Float?>(null) }
-
-    val hasDuration = durationMs > 0L
-    val playedProgress = if (hasDuration) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val displayedProgress = scrubProgress ?: playedProgress
-    val displayedPositionMs = if (scrubProgress != null) {
-        (displayedProgress * durationMs).toLong()
-    } else {
-        positionMs
-    }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Slider(
-            value = displayedProgress,
-            onValueChange = { scrubProgress = it },
-            onValueChangeFinished = {
-                scrubProgress?.let { onSeek((it * durationMs).toLong()) }
-                scrubProgress = null
-            },
-            enabled = hasDuration,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = formatDuration(displayedPositionMs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            // Entre les deux durées, et non dans l'en-tête : A et B sont des
-            // positions, et se posent en regardant celle qui défile. L'en-tête
-            // est par ailleurs plein.
-            AbLoopButton(abLoop = abLoop, onClick = onMarkAbLoop)
-
-            Text(
-                text = if (hasDuration) formatDuration(durationMs) else "--:--",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 
@@ -419,7 +391,8 @@ private fun PlayerControls(
         }
 
         // Le bouton reste en place et garde sa taille pendant l'attente : sa
-        // disparition ferait sauter toute la rangée de commandes.
+        // disparition ferait sauter toute la rangée de commandes. Plein, dans
+        // l'accent : c'est l'action principale, la seule que l'accent remplit.
         FilledIconButton(
             onClick = onTogglePlayPause,
             enabled = !isBuffering,
@@ -501,53 +474,13 @@ private fun PlaybackSpeedButton(speed: Float, onClick: () -> Unit) {
 }
 
 /**
- * La boucle A-B : un seul bouton pour les trois temps.
- *
- * D'abord A, puis B, puis efface — c'est ce qu'on attend de quelque chose qu'on
- * presse en écoutant, sans quitter la musique des yeux. Le libellé dit où en est
- * la pose plutôt que ce que fera le prochain appui : « A-… » se lit comme une
- * phrase laissée en suspens, ce qu'est précisément une boucle dont B manque.
- *
- * Une boucle active et muette serait le même défaut que la vitesse invisible —
- * on chercherait longtemps pourquoi le morceau se répète. D'où la teinte, et une
- * description qui donne les deux bornes.
+ * Bouton secondaire dont la teinte signale l'état actif : l'accent quand il
+ * est allumé, la seconde encre au repos — jamais l'accent sous le doigt d'un
+ * bouton éteint.
  */
 @Composable
-private fun AbLoopButton(abLoop: AbLoopState, onClick: () -> Unit) {
-    val libelle = when (abLoop) {
-        is AbLoopState.Started -> "A-…"
-        else -> "A-B"
-    }
-
-    val description = when (abLoop) {
-        AbLoopState.Off -> "Boucle A-B : poser le début"
-        is AbLoopState.Started -> "Boucle A-B : poser la fin"
-        is AbLoopState.Armed ->
-            "Boucle active de ${formatDuration(abLoop.startMs)} " +
-                "à ${formatDuration(abLoop.endMs)} — appuyer pour l'effacer"
-    }
-
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier.semantics { contentDescription = description },
-    ) {
-        Text(
-            text = libelle,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            color = if (abLoop == AbLoopState.Off) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.primary
-            },
-        )
-    }
-}
-
-/** Bouton secondaire dont la teinte signale l'état actif. */
-@Composable
 private fun ToggleControl(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     contentDescription: String,
     active: Boolean,
     onClick: () -> Unit,
