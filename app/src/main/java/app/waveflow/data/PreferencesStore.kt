@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -12,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
 import kotlinx.coroutines.delay
@@ -52,8 +54,18 @@ interface PreferencesStore {
      *
      * Comme la vitesse, c'est le service qui l'observe : une file lancée depuis
      * Android Auto doit partir dans la qualité choisie, écran fermé.
+     *
+     * Choisir un profil fixe quitte la qualité automatique ; ses deux profils
+     * par réseau restent pour la prochaine fois (Q1 de
+     * `docs/qualite-automatique.md`).
      */
     suspend fun setStreamQuality(quality: StreamQuality)
+
+    /** Fait suivre le réseau à la qualité de lecture, avec les profils déjà choisis pour chacun. */
+    suspend fun setAutomaticQuality()
+
+    /** Change le profil que la qualité automatique prend sur ce réseau. */
+    suspend fun setQualityOn(network: StreamNetwork, quality: StreamQuality)
 }
 
 /**
@@ -123,9 +135,27 @@ class DataStorePreferencesStore(
     override suspend fun setPlaybackSpeed(speed: Float) =
         ecrire("Vitesse de lecture") { it[PLAYBACK_SPEED] = PlaybackSpeed.borner(speed) }
 
-    /** Écrite par son nom, comme le thème : voir [StreamQuality] pour ce que cela interdit. */
+    /**
+     * Écrite par son nom, comme le thème : voir [StreamQuality] pour ce que cela
+     * interdit. Le profil et la sortie de la qualité automatique tiennent dans
+     * une seule écriture : l'écran ne doit jamais relire l'un sans l'autre.
+     */
     override suspend fun setStreamQuality(quality: StreamQuality) =
-        ecrire("Qualité de lecture") { it[STREAM_QUALITY] = quality.name }
+        ecrire("Qualité de lecture") {
+            it[STREAM_QUALITY] = quality.name
+            it[AUTOMATIC_QUALITY] = false
+        }
+
+    /**
+     * Une clé à part plutôt qu'un quatrième nom sous [STREAM_QUALITY] : une
+     * version antérieure, qui ne la connaît pas, retrouve le dernier profil fixe
+     * au lieu de retomber sur l'original.
+     */
+    override suspend fun setAutomaticQuality() =
+        ecrire("Qualité automatique") { it[AUTOMATIC_QUALITY] = true }
+
+    override suspend fun setQualityOn(network: StreamNetwork, quality: StreamQuality) =
+        ecrire("Qualité sur ${network.label}") { it[network.cle()] = quality.name }
 
     /**
      * Écrit une préférence sans faire tomber celui qui la demande.
@@ -183,10 +213,23 @@ class DataStorePreferencesStore(
             // Un profil inconnu retombe sur l'original, jamais sur un autre
             // profil transcodé : ne pas savoir ce qu'on a choisi ne doit pas
             // décider à la place de l'utilisateur de ce qu'il perd en fidélité.
-            streamQuality = (valeurs[STREAM_QUALITY] as? String)
-                ?.let { name -> StreamQuality.entries.firstOrNull { it.name == name } }
+            streamQuality = (valeurs[STREAM_QUALITY] as? String)?.enProfil()
                 ?: AppPreferences().streamQuality,
+            automaticQuality = valeurs[AUTOMATIC_QUALITY] as? Boolean
+                ?: AppPreferences().automaticQuality,
+            unmeteredQuality = (valeurs[StreamNetwork.Unmetered.cle()] as? String)?.enProfil()
+                ?: AppPreferences().unmeteredQuality,
+            meteredQuality = (valeurs[StreamNetwork.Metered.cle()] as? String)?.enProfil()
+                ?: AppPreferences().meteredQuality,
         )
+    }
+
+    private fun String.enProfil(): StreamQuality? = StreamQuality.entries.firstOrNull { it.name == this }
+
+    /** Chaque réseau a sa clé, nommée ici et non d'après l'entrée : la renommer ne perd rien. */
+    private fun StreamNetwork.cle(): Preferences.Key<String> = when (this) {
+        StreamNetwork.Unmetered -> UNMETERED_QUALITY
+        StreamNetwork.Metered -> METERED_QUALITY
     }
 
     private companion object {
@@ -195,6 +238,9 @@ class DataStorePreferencesStore(
         val THEME = stringPreferencesKey("theme")
         val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
         val STREAM_QUALITY = stringPreferencesKey("stream_quality")
+        val AUTOMATIC_QUALITY = booleanPreferencesKey("stream_quality_automatic")
+        val UNMETERED_QUALITY = stringPreferencesKey("stream_quality_unmetered")
+        val METERED_QUALITY = stringPreferencesKey("stream_quality_metered")
 
         /** Trois reprises : de quoi passer un incident, pas une corruption. */
         const val MAX_TENTATIVES = 3L

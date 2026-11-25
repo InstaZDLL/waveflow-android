@@ -57,7 +57,7 @@ serveur et ne sont jamais touchées.
 **Q5. Au changement de réseau, les pistes pas encore commencées prennent le
 rendu du nouveau réseau.** Marqueur et clé de cache réécrits ensemble, comme à
 l'entrée dans la file : la clé ne peut pas décrire un autre rendu que celui que
-l'URL demande. Une piste qui porte déjà ce rendu n'est pas remplacée.
+l'URL demande. Une piste qui porte déjà ce rendu est laissée telle quelle.
 
 Seul un changement de réseau réécrit la file en cours, et seulement sous
 *Automatique*. Changer le réglage lui-même — un profil fixe, ou l'un des deux

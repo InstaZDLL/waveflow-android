@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
+import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.ui.cache.CacheSection
 import app.waveflow.ui.cache.CacheUiState
@@ -87,6 +88,8 @@ fun ServerAccountScreen(
     cache: CacheUiState,
     onDisconnect: () -> Unit,
     onChooseQuality: (StreamQuality) -> Unit,
+    onChooseAutomaticQuality: () -> Unit,
+    onChooseQualityOn: (StreamNetwork, StreamQuality) -> Unit,
     onClearCache: () -> Unit,
     onDismissCacheError: () -> Unit,
     modifier: Modifier = Modifier,
@@ -97,7 +100,12 @@ fun ServerAccountScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        StreamQualitySection(state = quality, onChoose = onChooseQuality)
+        StreamQualitySection(
+            state = quality,
+            onChoose = onChooseQuality,
+            onChooseAutomatic = onChooseAutomaticQuality,
+            onChooseOn = onChooseQualityOn,
+        )
 
         Spacer(Modifier.height(16.dp))
 

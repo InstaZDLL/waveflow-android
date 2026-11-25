@@ -26,7 +26,29 @@ internal fun assemblerLeLecteur(
     liaisonNonFacturee: () -> Boolean,
     annoncerRepli: () -> Unit,
     hasard: Random = Random.Default,
-): TranscodeSeekingPlayer {
+): TranscodeSeekingPlayer =
+    assemblerLaLecture(context, dataSourceFactory, liaisonNonFacturee, annoncerRepli, hasard).lecteur
+
+/**
+ * Ce que tient [PlaybackService] : le lecteur, et de quoi réécrire les pistes à
+ * venir quand le réseau change.
+ *
+ * Les deux sortent d'ici parce que [PistesAVenir] a besoin de l'ExoPlayer, que
+ * l'enveloppe ne rend pas, pour l'ordre aléatoire.
+ */
+internal class LectureAssemblee(
+    val lecteur: TranscodeSeekingPlayer,
+    val pistesAVenir: PistesAVenir,
+)
+
+/** [assemblerLeLecteur], avec la réécriture des pistes à venir branchée sur le même ExoPlayer. */
+internal fun assemblerLaLecture(
+    context: Context,
+    dataSourceFactory: DataSource.Factory,
+    liaisonNonFacturee: () -> Boolean,
+    annoncerRepli: () -> Unit,
+    hasard: Random = Random.Default,
+): LectureAssemblee {
     val exoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(dataSourceFactory)
@@ -57,5 +79,5 @@ internal fun assemblerLeLecteur(
     // avant que l'enveloppe ne la relise et ne l'annonce à la session (R23).
     exoPlayer.addListener(TranscodeRefusalFallback(enveloppe, liaisonNonFacturee, annoncerRepli))
 
-    return enveloppe
+    return LectureAssemblee(enveloppe, PistesAVenir(exoPlayer, enveloppe))
 }

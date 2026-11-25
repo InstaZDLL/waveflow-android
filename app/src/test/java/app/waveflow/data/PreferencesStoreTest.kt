@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,8 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -305,7 +308,7 @@ class PreferencesStoreTest {
         // Un profil qu'une version future aurait ajouté, puis un retour en
         // arrière. Retomber sur un autre profil transcodé déciderait à la place
         // de l'utilisateur de ce qu'il perd en fidélité.
-        val magasin = magasinFige(preferencesOf(stringPreferencesKey("stream_quality") to "Automatique"))
+        val magasin = magasinFige(preferencesOf(stringPreferencesKey("stream_quality") to "Personnalise"))
 
         assertEquals(StreamQuality.Original, magasin.preferences.first().streamQuality)
     }
@@ -322,5 +325,51 @@ class PreferencesStoreTest {
         // Un test à part, pour la raison déjà dite plus haut : une assertion
         // « rien n'est levé » ne supporte qu'un seul appel.
         magasinIncapableDEcrire().setStreamQuality(StreamQuality.Economie)
+    }
+
+    @Test
+    fun `la qualite automatique et ses deux profils survivent a la relecture`() = runTest {
+        avecUnMagasin {
+            it.setAutomaticQuality()
+            it.setQualityOn(StreamNetwork.Unmetered, StreamQuality.Haute)
+            it.setQualityOn(StreamNetwork.Metered, StreamQuality.Original)
+        }
+
+        val relues = avecUnMagasin { it.preferences.first() }
+
+        assertTrue(relues.automaticQuality)
+        assertEquals(StreamQuality.Haute, relues.unmeteredQuality)
+        assertEquals(StreamQuality.Original, relues.meteredQuality)
+    }
+
+    @Test
+    fun `choisir un profil fixe quitte l'automatique sans perdre ses profils`() = runTest {
+        // Q1 : on retrouve ses deux profils en revenant à Automatique.
+        avecUnMagasin {
+            it.setAutomaticQuality()
+            it.setQualityOn(StreamNetwork.Metered, StreamQuality.Haute)
+            it.setStreamQuality(StreamQuality.Economie)
+        }
+
+        val relues = avecUnMagasin { it.preferences.first() }
+
+        assertFalse(relues.automaticQuality)
+        assertEquals(StreamQuality.Economie, relues.streamQuality)
+        assertEquals(StreamQuality.Haute, relues.meteredQuality)
+    }
+
+    @Test
+    fun `un profil par reseau inconnu du fichier retombe sur son defaut`() = runTest {
+        val magasin = magasinFige(
+            preferencesOf(
+                stringPreferencesKey("stream_quality_unmetered") to "Personnalise",
+                stringPreferencesKey("stream_quality_metered") to "Personnalise",
+            ),
+        )
+
+        val lues = magasin.preferences.first()
+
+        assertEquals(StreamQuality.Original, lues.unmeteredQuality)
+        assertEquals(StreamQuality.Economie, lues.meteredQuality)
     }
 }

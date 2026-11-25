@@ -77,7 +77,8 @@ class PlaybackService : MediaLibraryService() {
     private val premiereLecture = MutableStateFlow<Unit?>(null)
 
     /**
-     * Le rendu de la qualité choisie, `null` tant que le réglage n'a pas été lu.
+     * Le rendu de la qualité choisie sur le réseau du moment, `null` tant que le
+     * réglage n'a pas été lu.
      *
      * `null` et non le défaut : le défaut est une valeur qu'on pourrait poser
      * par erreur sur une file. Voir [renduDemande].
@@ -100,12 +101,13 @@ class PlaybackService : MediaLibraryService() {
         // morceau transcodé relancé à 2:13, lui compte depuis zéro, et la
         // notification, la voiture, l'historique ou la boucle A-B s'y
         // tromperaient. Voir `docs/deplacement-dans-un-transcodage.md`, R1.
-        val player: Player = assemblerLeLecteur(
+        val lecture = assemblerLaLecture(
             context = this,
             dataSourceFactory = dataSourceFactory,
             liaisonNonFacturee = ::surLiaisonNonFacturee,
             annoncerRepli = { container.playbackNotices.announce(PlaybackNotice.OriginalAfterRefusal) },
         )
+        val player: Player = lecture.lecteur
 
         // Sans ce chargeur, Media3 irait chercher les pochettes avec son propre
         // client HTTP, qui ne porte pas le jeton de session : `/api/v2/artwork/`
@@ -121,7 +123,7 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(historyListener(container.playHistoryRepository))
         observeSleepTimer(container.sleepTimer, player)
         observePlaybackSpeed(container.preferencesStore, player)
-        observeStreamQuality(container.preferencesStore)
+        observeStreamQuality(container.preferencesStore, lecture.pistesAVenir)
         observeAbLoop(container.abLoop, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
@@ -130,17 +132,15 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * Tient [rendu] à jour tant que le service vit.
+     * Tient [rendu] à jour tant que le service vit, et fait suivre le réseau aux
+     * pistes à venir sous la qualité automatique. Voir [suivreLaQualite].
      *
      * Observé plutôt que lu à la demande, pour la même raison que la vitesse :
      * le service joue aussi quand aucun écran n'est ouvert.
      */
-    private fun observeStreamQuality(preferences: PreferencesStore) {
+    private fun observeStreamQuality(preferences: PreferencesStore, pistesAVenir: PistesAVenir) {
         artworkScope.launch {
-            preferences.preferences
-                .map { it.streamQuality.rendering }
-                .distinctUntilChanged()
-                .collect { rendu.value = it }
+            suivreLaQualite(preferences.preferences, reseauxSuccessifs(), rendu, pistesAVenir::reecrire)
         }
     }
 

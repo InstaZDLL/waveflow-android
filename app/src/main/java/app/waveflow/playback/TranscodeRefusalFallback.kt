@@ -1,8 +1,5 @@
 package app.waveflow.playback
 
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 
@@ -21,7 +18,7 @@ import androidx.media3.common.Player
  * donc jamais la session : l'écran ne dit pas « injoignable » avant de jouer.
  *
  * @param liaisonNonFacturee lu au moment du refus, non au démarrage : on change
- *   de réseau en cours d'écoute.
+ *   de réseau en cours d'écoute. Voir [surLiaisonNonFacturee].
  * @param annoncerRepli dit à l'écran que la qualité a changé (R24).
  */
 internal class TranscodeRefusalFallback(
@@ -35,23 +32,4 @@ internal class TranscodeRefusalFallback(
         if (!liaisonNonFacturee()) return
         if (lecteur.revenirAlOriginal()) annoncerRepli()
     }
-}
-
-/**
- * Vrai si le réseau actif n'est pas facturé au volume : Wi-Fi ou Ethernet
- * ordinaires, pas un Wi-Fi déclaré payant ni les données mobiles.
- *
- * Faux quand on ne peut pas le savoir — aucun réseau, ou l'accès à son état
- * refusé : dans le doute, on ne dépense pas le forfait de l'utilisateur.
- */
-internal fun Context.surLiaisonNonFacturee(): Boolean {
-    val connectivite = getSystemService(ConnectivityManager::class.java) ?: return false
-    val capacites = try {
-        connectivite.getNetworkCapabilities(connectivite.activeNetwork)
-    } catch (_: SecurityException) {
-        // `ACCESS_NETWORK_STATE` n'arrive aujourd'hui que par le manifeste de
-        // Media3, fusionné au nôtre.
-        null
-    }
-    return capacites?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == true
 }

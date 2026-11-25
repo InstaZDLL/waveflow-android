@@ -587,6 +587,8 @@ private fun WaveFlowRoot(
                                     navController.popBackStack()
                                 },
                                 onChooseQuality = qualityViewModel::choose,
+                                onChooseAutomaticQuality = qualityViewModel::chooseAutomatic,
+                                onChooseQualityOn = qualityViewModel::chooseOn,
                                 onClearCache = cacheViewModel::clear,
                                 onDismissCacheError = cacheViewModel::dismissError,
                                 bottomPadding = listBottomPadding,
