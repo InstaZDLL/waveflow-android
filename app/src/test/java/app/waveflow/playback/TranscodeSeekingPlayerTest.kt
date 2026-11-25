@@ -366,6 +366,17 @@ class TranscodeSeekingPlayerTest {
         ecouler()
 
         assertEquals(0, faux.remplacements.size)
+        // L'état publié pendant l'attente annonçait la cible ; il doit être
+        // relu, sans quoi le curseur resterait à 2:13 pendant la nouvelle écoute.
+        // La nouvelle écoute part de 0:00 et joue depuis les 300 ms écoulées.
+        assertTrue(
+            "position ${lecteur.currentPosition}",
+            lecteur.currentPosition <= TranscodeSeekingPlayer.COALESCENCE_MS,
+        )
+        assertTrue(
+            "tampon ${lecteur.bufferedPosition}",
+            lecteur.bufferedPosition <= TranscodeSeekingPlayer.COALESCENCE_MS,
+        )
     }
 
     @Test

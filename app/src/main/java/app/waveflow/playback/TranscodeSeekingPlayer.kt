@@ -397,30 +397,7 @@ internal class TranscodeSeekingPlayer(
 
         if (segmentRepete) {
             segmentRepete = false
-            val courant = player.currentMediaItemIndex
-            val courante = player.currentTimeline
-            // Bornée comme dans [allerA] : la file peut s'être vidée entre la
-            // discontinuité et cette salve d'événements, et il ne reste alors
-            // aucune fenêtre à lire. Garde **non éprouvée** — la fenêtre est
-            // trop étroite pour qu'un test la vise —, mais une exception ici
-            // emporterait le service de lecture.
-            if (courant != C.INDEX_UNSET && courant < courante.windowCount) {
-                val fenetre = courante.getWindow(courant, Timeline.Window())
-                // R9 : le morceau recommence, comme un changement de piste ; un
-                // saut demandé dans l'écoute qui vient de finir n'a plus de sens.
-                annulerSautEnAttente()
-                val rendu = rendusAvantRepli.remove(fenetre.uid)
-                if (rendu != null) {
-                    // R22 : l'original répété, c'est une nouvelle écoute ; elle
-                    // redemande le rendu choisi, depuis le début.
-                    remplacerPar(courant, fenetre, fenetre.mediaItem.withRendering(rendu))
-                    sautAnnonce = 0L
-                    change = true
-                } else if ((decalages[fenetre.uid] ?: 0L) > 0L) {
-                    relancer(courant, fenetre, 0L)
-                    change = true
-                }
-            }
+            change = repartirDuDebut()
         }
 
         val timeline = player.currentTimeline
@@ -439,6 +416,45 @@ internal class TranscodeSeekingPlayer(
         }
 
         if (change) invalidateState()
+    }
+
+    /**
+     * Ce que défait un morceau qui recommence : un saut en attente (R9), un
+     * segment (R12), un repli sur l'original (R22).
+     *
+     * @return vrai si l'état est à relire.
+     */
+    private fun repartirDuDebut(): Boolean {
+        val courant = player.currentMediaItemIndex
+        val courante = player.currentTimeline
+        // Bornée comme dans [allerA] : la file peut s'être vidée entre la
+        // discontinuité et cette salve d'événements, et il ne reste alors
+        // aucune fenêtre à lire. Garde **non éprouvée** — la fenêtre est
+        // trop étroite pour qu'un test la vise —, mais une exception ici
+        // emporterait le service de lecture.
+        if (courant == C.INDEX_UNSET || courant >= courante.windowCount) return false
+        val fenetre = courante.getWindow(courant, Timeline.Window())
+
+        // R9 : le morceau recommence, comme un changement de piste ; un saut
+        // demandé dans l'écoute qui vient de finir n'a plus de sens.
+        val attendait = sautEnAttente != null
+        annulerSautEnAttente()
+        val rendu = rendusAvantRepli.remove(fenetre.uid)
+        when {
+            // R22 : l'original répété, c'est une nouvelle écoute ; elle
+            // redemande le rendu choisi, depuis le début.
+            rendu != null -> {
+                remplacerPar(courant, fenetre, fenetre.mediaItem.withRendering(rendu))
+                sautAnnonce = 0L
+            }
+
+            (decalages[fenetre.uid] ?: 0L) > 0L -> relancer(courant, fenetre, 0L)
+
+            // L'état déjà relu pour cette salve annonce encore la cible de
+            // l'attente : sans relecture, le curseur y resterait.
+            else -> return attendait
+        }
+        return true
     }
 
     /** R9 : un arrêt demandé, même après une panne, n'est pas une panne à réparer. */
