@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -171,6 +172,8 @@ private fun NetworkRow(
                     onClickLabel = "Choisir la qualité en ${network.label}",
                     onClick = { expanded = true },
                 )
+                // La cible tactile minimale : le texte seul n'en donne que 36 dp.
+                .heightIn(min = 48.dp)
                 .padding(start = DECALAGE_DETAIL, end = 8.dp, top = 6.dp, bottom = 6.dp),
         ) {
             Text(

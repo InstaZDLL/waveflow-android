@@ -1,5 +1,6 @@
 package app.waveflow.ui.server
 
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
 import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
@@ -115,6 +117,15 @@ class ServerScreenTest {
         compose.onAllNodesWithText("Haute qualité").onLast().performClick()
 
         assertEquals(listOf(StreamNetwork.Metered to StreamQuality.Haute), choisis)
+    }
+
+    @Test
+    fun `chaque ligne de reseau offre une cible tactile de 48 dp`() {
+        afficherCompte(quality = StreamQualityUiState(automatic = true))
+
+        StreamNetwork.entries.forEach { reseau ->
+            compose.onNodeWithText(reseau.label).assertHeightIsAtLeast(48.dp)
+        }
     }
 
     /**

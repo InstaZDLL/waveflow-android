@@ -244,6 +244,28 @@ class PistesAVenirTest {
     }
 
     @Test
+    fun `une suivante protegee une fois le reste, meme apres un retour en arriere`() {
+        // Q8 : tenue pour commencée, elle ne se réécrit plus, quand bien même
+        // la courante, ramenée au début, ne la protégerait plus.
+        assembler()
+        file(3)
+        lecteur.seekTo(0, DUREE_MS - 3_000L)
+        ecouler()
+        pistesAVenir.reecrire(MOBILE)
+        ecouler()
+        lecteur.seekTo(0, 0L)
+        ecouler()
+
+        pistesAVenir.reecrire(WIFI)
+        ecouler()
+        pistesAVenir.reecrire(MOBILE)
+        ecouler()
+
+        // La troisième, jamais protégée, suit chaque bascule.
+        assertEquals(listOf(WIFI, WIFI, MOBILE), rendus())
+    }
+
+    @Test
     fun `la courante ne s'interrompt pas et rien n'est redemande pour elle`() {
         // Q6, sur la vraie chaîne : le serveur reçoit la demande de la
         // courante, et ne répond jamais — elle charge encore.

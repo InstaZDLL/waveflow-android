@@ -37,8 +37,8 @@ internal class PistesAVenir(
 
     /**
      * L'identité logique des pistes qui ont été la courante depuis leur entrée
-     * dans la file (Q7). Une piste retirée de la file en sort à la réécriture
-     * suivante.
+     * dans la file (Q7), ou la suivante protégée d'une réécriture (Q8). Une
+     * piste retirée de la file en sort à la réécriture suivante.
      */
     private val commencees = HashSet<Any>()
 
@@ -59,7 +59,8 @@ internal class PistesAVenir(
      * Pose [rendu] sur chaque piste distante pas encore commencée.
      *
      * La courante n'est jamais touchée (Q6), ni la suivante quand le lecteur
-     * peut déjà la lire pour l'enchaîner (Q8). Une piste qui porte déjà le rendu
+     * peut déjà la lire pour l'enchaîner (Q8) — protégée une fois, elle est
+     * tenue pour commencée et le reste. Une piste qui porte déjà le rendu
      * est laissée telle quelle : simple économie, l'ExoPlayer mettant de
      * lui-même à jour sur place un élément identique — **sans effet
      * observable**, donc non éprouvée.
@@ -73,6 +74,7 @@ internal class PistesAVenir(
         if (timeline.isEmpty) return
         val courante = enveloppe.currentMediaItemIndex
         val protegee = suivanteDejaLue(timeline, courante)
+        if (protegee != C.INDEX_UNSET) commencees += timeline.getWindow(protegee, Timeline.Window()).uid
 
         val fenetre = Timeline.Window()
         val presentes = HashSet<Any>()
@@ -80,7 +82,7 @@ internal class PistesAVenir(
         for (index in 0 until timeline.windowCount) {
             timeline.getWindow(index, fenetre)
             presentes += fenetre.uid
-            if (index == courante || index == protegee || fenetre.uid in commencees) continue
+            if (index == courante || fenetre.uid in commencees) continue
             val item = fenetre.mediaItem
             val reecrite = item.withRendering(rendu)
             if (reecrite.localConfiguration != item.localConfiguration) aReecrire += index to reecrite

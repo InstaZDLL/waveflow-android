@@ -65,8 +65,11 @@ profils par réseau — vaut pour les pistes lancées ensuite, comme l'écran le
 
 **Q6. La piste courante n'est jamais réécrite.** Changer son rendu voudrait dire
 la relancer : une coupure audible, pour un bénéfice nul — elle est déjà
-téléchargée pour l'essentiel. Le son ne s'interrompt pas, la position ne saute
-pas, et rien n'est redemandé au serveur pour elle.
+téléchargée pour l'essentiel. La réécriture ne la relance donc pas : elle ne
+fait pas sauter sa position et ne redemande rien au serveur pour elle. Ce que
+la bascule de réseau elle-même fait à son flux — une connexion coupée par le
+système, reprise par le lecteur — ne dépend pas de la réécriture, et n'est pas
+couvert ici.
 
 **Q7. Une piste commencée garde son rendu, même quittée.** *Commencée* : elle a
 été la piste courante depuis son entrée dans la file. Quittée puis rejouée, elle
@@ -87,6 +90,10 @@ compris), quand il reste moins de **10 s** d'écoute à la courante — vitesse 
 lecture comprise —, ou quand sa durée est inconnue. Ce qu'il lit d'avance est
 de l'ordre de la seconde (le tampon de l'`AudioTrack` en PCM plafonne à 750 ms,
 plus ce que tient le décodeur) ; la marge couvre le reste. Le prix : cette piste-là part dans l'ancien rendu.
+
+Protégée une fois, elle est tenue pour commencée **pour de bon**, comme en Q7 :
+un retour en arrière dans la courante ou une nouvelle bascule ne la réécrivent
+plus. Le lecteur a pu commencer à la charger sous la clé de ce rendu-là.
 
 **Q9. L'ordre aléatoire ne bouge pas.** Remplacer une piste dont l'URI change,
 l'ExoPlayer le fait en ajoutant la nouvelle source **puis** en retirant
@@ -113,7 +120,8 @@ plus, et il sert de nouveau aux pistes ajoutées ensuite.
 - **Un réseau qui bat** — Wi-Fi faible, qui va et vient — réécrit la file à chaque
   bascule. Chaque réécriture abandonne ce qui était déjà chargé de la piste
   suivante. Aucun amortissement n'est posé tant que l'usage ne le réclame pas.
-- **Rien n'a tourné sur un appareil** : Robolectric ne décode pas l'audio. Que le
-  son ne s'interrompe pas se déduit de ce qui n'est pas fait — ni relance, ni
-  saut, ni nouvelle demande pour la piste courante —, éprouvé sur un vrai
-  ExoPlayer, mais non entendu.
+- **Rien n'a tourné sur un appareil** : Robolectric ne décode pas l'audio. Ce
+  qui est éprouvé, sur un vrai ExoPlayer, c'est que **la réécriture** ne relance
+  pas la piste courante — ni saut, ni nouvelle demande pour elle. Que le son
+  continue pendant une vraie bascule de réseau, quand le système coupe la
+  connexion en cours, reste à valider sur un appareil.
