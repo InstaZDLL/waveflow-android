@@ -143,8 +143,9 @@ observer :
   pas dériver ;
 - si le lecteur s'est arrêté **sur une erreur** — le dernier refus d'une liaison
   facturée, avant le geste ou pendant l'attente —, la relance le prépare de
-  nouveau : sans cela le saut resterait sans suite. Un arrêt demandé (`stop`),
-  qui ne porte pas d'erreur, se respecte ;
+  nouveau : sans cela le saut resterait sans suite. Un arrêt demandé (`stop`)
+  se respecte, même après une panne : le lecteur en garde l'erreur, et
+  l'enveloppe retient donc elle-même d'où vient l'arrêt ;
 - les relances que l'enveloppe décide seule — la répétition d'un segment (R12),
   le marqueur rendu nu à la piste quittée (R14) — ne sont pas retardées : ce ne
   sont pas des sauts.
@@ -264,6 +265,11 @@ comme une relance (R5) — sans quoi l'historique compterait deux fois le morcea
 L'original se déplace ensuite nativement (R7). La piste suivante redemande son
 propre rendu : la saturation est passagère, la qualité choisie reste la règle.
 
+Le repli ne vaut que **pour l'écoute en cours**. La piste quittée retrouve le
+rendu qu'elle avait, comme elle retrouve son marqueur nu (R14) ; répétée (R12),
+elle le redemande depuis le début. Sans cela, « précédent » ou la file rejouée
+la serviraient en original — en données mobiles aussi.
+
 **R23. Le repli se décide avant que l'erreur n'atteigne la session.** Sinon
 l'écran dirait « injoignable » puis jouerait. Le service écoute l'erreur sur
 l'ExoPlayer, et la répare dans le même appel ; l'enveloppe ne relit l'état
@@ -302,6 +308,10 @@ assemblés par la même fonction que le service (`assemblerLeLecteur`), face à 
 l'horloge du lecteur, que le test seul fait avancer : c'est elle qui dit si le
 lecteur a attendu le délai annoncé, combien de fois il a redemandé, et quand
 l'original est venu. Des sauts rapprochés s'y comptent en demandes reçues.
+Ce qui suppose une fin de flux — l'original d'un repli qui se répète — ou un
+refus tombé à un instant précis — pendant les 300 ms d'un saut en attente —
+s'éprouve face au lecteur factice (`TranscodeSeekingPlayerTest`), qui appelle le
+repli lui-même.
 `TranscodeRefusalPolicyTest` éprouve les bornes de la politique sur des refus
 **levés par la vraie source HTTP** — c'est ainsi qu'est apparue la clé `null` que
 `HttpURLConnection` donne à la ligne de statut, et qu'un refus construit à la

@@ -4,6 +4,7 @@ import android.os.Handler
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.Timeline
@@ -43,6 +44,20 @@ internal class TranscodeSeekingPlayer(
     /** Le décalage du flux de chaque fenêtre relancée ; absente, elle part du début. */
     private val decalages = HashMap<Any, Long>()
 
+    /**
+     * Le rendu qu'avait une piste avant son repli sur l'original, par
+     * identifiant de fenêtre du lecteur enveloppé. Le repli ne vaut que pour
+     * l'écoute en cours (R22) : la piste quittée ou répétée le retrouve.
+     */
+    private val rendusAvantRepli = HashMap<Any, StreamRendering>()
+
+    /**
+     * Vrai quand le lecteur enveloppé s'est arrêté sur une erreur, faux dès
+     * qu'on le prépare ou qu'on l'arrête. Son `playerError` ne suffit pas à le
+     * dire : un `stop` demandé après une panne la lui laisse.
+     */
+    private var arreteSurErreur = false
+
     /** La cible d'une relance, à annoncer comme un saut à la place de la discontinuité qu'elle provoque. */
     private var sautAnnonce: Long? = null
 
@@ -65,8 +80,9 @@ internal class TranscodeSeekingPlayer(
     private val lancerLeSautEnAttente = Runnable { lancerSautEnAttente() }
 
     init {
-        // Deux choses ne se déduisent pas d'un état mais d'un événement : la fin
-        // d'un flux qui se répète, et une piste relancée qu'on vient de quitter.
+        // Trois choses ne se déduisent pas d'un état mais d'un événement : la fin
+        // d'un flux qui se répète, une piste relancée qu'on vient de quitter, et
+        // un arrêt causé par une panne plutôt que demandé.
         player.addListener(
             object : Player.Listener {
                 override fun onPositionDiscontinuity(
@@ -79,6 +95,15 @@ internal class TranscodeSeekingPlayer(
                     ) {
                         segmentRepete = true
                     }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    arreteSurErreur = true
+                }
+
+                override fun onPlayerErrorChanged(error: PlaybackException?) {
+                    // Préparé de nouveau, d'où qu'en vienne l'ordre.
+                    if (error == null) arreteSurErreur = false
                 }
 
                 override fun onEvents(player: Player, events: Player.Events) = veillerAuxSegments()
@@ -231,10 +256,10 @@ internal class TranscodeSeekingPlayer(
         remplacer(index, fenetre, saut.cibleMs)
         // Le flux quitté a pu échouer avant le geste ou pendant l'attente — son
         // dernier refus, sur une liaison facturée. Le lecteur s'est alors
-        // arrêté sur son erreur, et un
-        // remplacement ne le relance pas : le saut resterait sans suite. Un
-        // arrêt demandé (`stop`), lui, ne porte pas d'erreur, et se respecte.
-        if (player.playbackState == STATE_IDLE && player.playerError != null) player.prepare()
+        // arrêté sur son erreur, et un remplacement ne le relance pas : le saut
+        // resterait sans suite. Un arrêt demandé (`stop`) se respecte, même
+        // après une panne dont le lecteur garde l'erreur.
+        if (player.playbackState == STATE_IDLE && arreteSurErreur) player.prepare()
         // Le lecteur enveloppé a déjà notifié son remplacement, dans l'appel
         // même : l'état relu ici le porte. Le drapeau ne vit que le temps de
         // cette relecture, pour ne jamais taire une discontinuité étrangère.
@@ -257,7 +282,8 @@ internal class TranscodeSeekingPlayer(
      *
      * L'original se déplace nativement (R7) : sa position est celle de son flux,
      * et la piste n'a plus de décalage. Le lecteur, arrêté sur son erreur, est
-     * préparé de nouveau ; il reprend s'il jouait.
+     * préparé de nouveau ; il reprend s'il jouait. Le rendu d'avant est retenu :
+     * la piste le retrouve une fois quittée ou répétée.
      *
      * @return faux, sans rien changer, si la piste courante n'est pas un
      *   transcodage du serveur.
@@ -269,6 +295,7 @@ internal class TranscodeSeekingPlayer(
         val fenetre = timeline.getWindow(index, Timeline.Window())
         val item = fenetre.mediaItem
         if (!item.isRemoteTranscode()) return false
+        val rendu = item.localConfiguration?.uri?.let(::renderingOfRemoteUri) ?: return false
 
         // Un saut en attente dit où l'utilisateur veut être : il l'emporte sur
         // la position du flux refusé.
@@ -280,7 +307,8 @@ internal class TranscodeSeekingPlayer(
             )
         annulerSautEnAttente()
 
-        remplacerPar(index, fenetre, item.withRendering(StreamRendering.ORIGINAL))
+        val original = remplacerPar(index, fenetre, item.withRendering(StreamRendering.ORIGINAL))
+        rendusAvantRepli[original] = rendu
         player.seekTo(index, position.coerceAtLeast(0L))
         player.prepare()
         return true
@@ -309,8 +337,13 @@ internal class TranscodeSeekingPlayer(
     private fun remplacer(index: Int, fenetre: Timeline.Window, decalageMs: Long) =
         remplacerPar(index, fenetre, fenetre.mediaItem.withStreamOffset(decalageMs))
 
-    /** Échange la piste [index] contre [item] en lui gardant son identité ; voir [remplacer]. */
-    private fun remplacerPar(index: Int, fenetre: Timeline.Window, item: MediaItem) {
+    /**
+     * Échange la piste [index] contre [item] en lui gardant son identité ; voir
+     * [remplacer].
+     *
+     * @return l'identifiant brut de la fenêtre qui la remplace.
+     */
+    private fun remplacerPar(index: Int, fenetre: Timeline.Window, item: MediaItem): Any {
         val avant = player.currentTimeline
         val fenetreLogique = fenetresLogiques[fenetre.uid] ?: fenetre.uid
         val periodeBrute = avant.getUidOfPeriod(fenetre.firstPeriodIndex)
@@ -324,6 +357,7 @@ internal class TranscodeSeekingPlayer(
         periodesLogiques[apres.getUidOfPeriod(nouvelle.firstPeriodIndex)] = periodeLogique
         val decalageMs = item.localConfiguration?.uri?.let(::streamOffsetOfRemoteUri) ?: 0L
         if (decalageMs > 0L) decalages[nouvelle.uid] = decalageMs
+        return nouvelle.uid
     }
 
     /**
@@ -346,7 +380,15 @@ internal class TranscodeSeekingPlayer(
             // emporterait le service de lecture.
             if (courant != C.INDEX_UNSET && courant < courante.windowCount) {
                 val fenetre = courante.getWindow(courant, Timeline.Window())
-                if ((decalages[fenetre.uid] ?: 0L) > 0L) {
+                val rendu = rendusAvantRepli.remove(fenetre.uid)
+                if (rendu != null) {
+                    // R22 : l'original répété, c'est une nouvelle écoute ; elle
+                    // redemande le rendu choisi, depuis le début.
+                    annulerSautEnAttente()
+                    remplacerPar(courant, fenetre, fenetre.mediaItem.withRendering(rendu))
+                    sautAnnonce = 0L
+                    change = true
+                } else if ((decalages[fenetre.uid] ?: 0L) > 0L) {
                     // Le morceau recommence : un saut demandé dans le segment
                     // qui vient de finir n'a plus de sens.
                     annulerSautEnAttente()
@@ -360,13 +402,24 @@ internal class TranscodeSeekingPlayer(
         for (index in 0 until timeline.windowCount) {
             if (index == player.currentMediaItemIndex) continue
             val fenetre = timeline.getWindow(index, Timeline.Window())
-            if ((decalages[fenetre.uid] ?: 0L) > 0L) {
+            val rendu = rendusAvantRepli.remove(fenetre.uid)
+            if (rendu != null) {
+                // R22 : le repli ne valait que pour l'écoute quittée.
+                remplacerPar(index, fenetre, fenetre.mediaItem.withRendering(rendu))
+                change = true
+            } else if ((decalages[fenetre.uid] ?: 0L) > 0L) {
                 remplacer(index, fenetre, 0L)
                 change = true
             }
         }
 
         if (change) invalidateState()
+    }
+
+    /** R9 : un arrêt demandé, même après une panne, n'est pas une panne à réparer. */
+    override fun handleStop(): ListenableFuture<*> {
+        arreteSurErreur = false
+        return super.handleStop()
     }
 
     /** Une relance en attente ne doit pas survivre au lecteur qu'elle viserait. */
@@ -384,6 +437,7 @@ internal class TranscodeSeekingPlayer(
         for (i in 0 until timeline.periodCount) periodes += timeline.getUidOfPeriod(i)
         fenetresLogiques.keys.retainAll(fenetres)
         decalages.keys.retainAll(fenetres)
+        rendusAvantRepli.keys.retainAll(fenetres)
         periodesLogiques.keys.retainAll(periodes)
     }
 

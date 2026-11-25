@@ -17,6 +17,9 @@
 
     <!-- Serveur WaveFlow auto-hébergé -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- La liaison est-elle facturée ? Le repli sur l'original après un
+         transcodage refusé ne vient qu'en non facturé. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".WaveFlowApp"

@@ -59,7 +59,7 @@ class TranscodeRefusalChainTest {
     private lateinit var lecteur: TranscodeSeekingPlayer
 
     /** Une demande de flux reçue, à l'heure de l'horloge du lecteur. */
-    private data class Demande(val format: String?, val decalageMs: Long, val heureMs: Long)
+    private data class Demande(val piste: String, val format: String?, val decalageMs: Long, val heureMs: Long)
 
     private val demandes: MutableList<Demande> = CopyOnWriteArrayList()
 
@@ -79,6 +79,7 @@ class TranscodeRefusalChainTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val url = request.requestUrl!!
                 val demande = Demande(
+                    piste = url.pathSegments.last().removePrefix("ticket-"),
                     format = url.queryParameter("format"),
                     decalageMs = url.queryParameter("offset_ms")?.toLong() ?: 0L,
                     heureMs = SystemClock.uptimeMillis(),
@@ -117,8 +118,8 @@ class TranscodeRefusalChainTest {
 
     private fun refus() = MockResponse().setResponseCode(429).setHeader("Retry-After", "1")
 
-    private fun transcode(): MediaItem =
-        remoteSong(id = "c07f8d98", durationMs = DUREE_MS).toMediaItem().withRendering(StreamRendering("opus", 96))
+    private fun transcode(id: String = PISTE): MediaItem =
+        remoteSong(id = id, durationMs = DUREE_MS).toMediaItem().withRendering(StreamRendering("opus", 96))
 
     private fun jouer() {
         lecteur.setMediaItems(listOf(transcode()))
@@ -217,6 +218,26 @@ class TranscodeRefusalChainTest {
 
         assertTrue("le saut a bien été refusé", transcodees.any { it.decalageMs == 133_000L })
         assertEquals(133_000L, lecteur.currentPosition)
+    }
+
+    @Test
+    fun `l'original d'un repli quitte redemande le rendu choisi`() {
+        // R22 : le repli ne vaut que pour l'écoute refusée. Revenir sur la
+        // piste — « précédent », file rejouée — redemande la qualité choisie ;
+        // sinon, passé en données mobiles, elle repartirait en original.
+        repondre = { if (it.format == null) MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE) else refus() }
+        lecteur.setMediaItems(listOf(transcode(), transcode("suivante")))
+        lecteur.prepare()
+        lecteur.play()
+        attendre("la demande de l'original") { demandes.any { it.format == null } }
+
+        lecteur.seekToNextMediaItem()
+        attendre("la piste suivante") { demandes.any { it.piste == "suivante" } }
+        val avant = demandes.size
+        lecteur.seekToPreviousMediaItem()
+        attendre("le retour sur la piste") { demandes.drop(avant).any { it.piste == PISTE } }
+
+        assertEquals("opus", demandes.drop(avant).first { it.piste == PISTE }.format)
     }
 
     @Test
@@ -342,6 +363,23 @@ class TranscodeRefusalChainTest {
         assertEquals(emptyList<Long>(), transcodees.map { it.decalageMs }.filter { it > 0L })
     }
 
+    @Test
+    fun `un saut apres l'abandon puis un arret demande ne relance rien`() {
+        // R9 : `stop` laisse au lecteur l'erreur de l'abandon. Arrêté par la
+        // voiture ou le casque, il doit le rester, et non repartir au saut.
+        nonFacturee = false
+        jouer()
+        attendre("l'abandon") { lecteur.playerError != null }
+        lecteur.stop()
+        ecouler()
+
+        lecteur.seekTo(133_000L)
+        avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+        laisserPartir()
+
+        assertEquals(emptyList<Long>(), transcodees.map { it.decalageMs }.filter { it > 0L })
+    }
+
     /**
      * Écoule les messages de toutes les boucles encore vivantes, sans avancer
      * l'horloge : ExoPlayer tient sa machine à états sur un fil à lui.
@@ -383,6 +421,7 @@ class TranscodeRefusalChainTest {
 
     private companion object {
         const val DUREE_MS = 245_000L
+        const val PISTE = "c07f8d98"
         const val SEMENCE = 57
         const val TIMEOUT_S = 20L
         const val PAS_MS = 50L
