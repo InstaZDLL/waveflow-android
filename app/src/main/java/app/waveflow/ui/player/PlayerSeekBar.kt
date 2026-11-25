@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import app.waveflow.playback.AbLoopState
 import app.waveflow.ui.formatDuration
-import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
  * La barre de position du lecteur plein écran : la progression ([ProgressLine])
@@ -100,7 +99,10 @@ fun PlayerSeekBar(
                         chercher((part(point.x, size.width) * duree).toLong())
                     }
                 }
-                .pointerInput(hasDuration) {
+                // Relancé à chaque morceau : sans la clé, le geste en cours
+                // garde l'état du morceau précédent, et le lâcher sauterait
+                // dans le suivant à une position choisie pour l'autre.
+                .pointerInput(hasDuration, trackKey) {
                     if (!hasDuration) return@pointerInput
                     detectHorizontalDragGestures(
                         onDragStart = { point -> scrub = part(point.x, size.width) },
@@ -153,7 +155,7 @@ fun PlayerSeekBar(
             Text(
                 text = formatDuration(displayedPositionMs),
                 style = MaterialTheme.typography.labelMedium,
-                color = WaveFlowTheme.colors.ink3,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             // Entre les deux durées, et non dans l'en-tête : A et B sont des
@@ -164,7 +166,7 @@ fun PlayerSeekBar(
             Text(
                 text = if (hasDuration) formatDuration(durationMs) else "--:--",
                 style = MaterialTheme.typography.labelMedium,
-                color = WaveFlowTheme.colors.ink3,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -227,7 +229,7 @@ private fun AbLoopButton(abLoop: AbLoopState, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
             color = if (abLoop == AbLoopState.Off) {
-                WaveFlowTheme.colors.ink3
+                MaterialTheme.colorScheme.onSurfaceVariant
             } else {
                 MaterialTheme.colorScheme.primary
             },

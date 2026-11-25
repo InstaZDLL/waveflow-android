@@ -166,11 +166,18 @@ fun garantirContraste(accent: Color, material: WaveFlowMaterial): Color {
  * une limite de luminance relative, au-delà de laquelle chaque nappe s'efface.
  *
  * Les encres et l'accent sont posés sur ces nappes ; c'est contre cette limite
- * qu'ils se mesurent. La troisième encre (`ink-3`, les durées, les
- * étiquettes) est la plus exigeante, et c'est elle qui fixe la limite : 4,5:1.
- * En Fluid la lumière éclaircit le fond, jusqu'à 0,018 ; en Liquid elle
- * l'assombrit, jusqu'à 0,82. Les nappes du clair restent donc discrètes — le
- * prix de lire ses étiquettes posées dessus.
+ * qu'ils se mesurent. Dans le lecteur, rien ne s'écrit à la troisième encre
+ * (`ink-3`) : les durées, l'étiquette « EN LECTURE » et les lettres de la
+ * boucle prennent la deuxième (`ink-2`, `onSurfaceVariant`), la moins
+ * contrastée qui y reste. C'est elle qui fixe la limite, à 4,5:1.
+ *
+ * En Fluid la lumière éclaircit le fond, jusqu'à 0,058 : `ink-2` y tient
+ * encore 4,5:1 (décision du 25/11). Calée sur `ink-3`, elle s'arrêtait à
+ * 0,018 et rabattait la nappe d'une pochette claire. Elle ne borne plus
+ * aucune des pochettes essayées : la lumière du sombre reste discrète par sa
+ * recette même, celle du bureau — la couleur assombrie à 62 %, posée à 40 %.
+ * En Liquid elle l'assombrit, jusqu'à 0,82 ; l'aurore du clair reste celle
+ * qui a été validée.
  */
 fun groundLimit(material: WaveFlowMaterial): Color = when (material) {
     WaveFlowMaterial.Fluid -> greyOfLuminance(FLUID_GROUND_LIMIT)
@@ -310,7 +317,7 @@ private const val BISECTION_STEPS = 12
 /** Où une nappe s'éteint, en part de son demi-axe (« transparent 70 % » du bureau). */
 const val POOL_FADE = 0.7f
 
-private const val FLUID_GROUND_LIMIT = 0.018f
+private const val FLUID_GROUND_LIMIT = 0.058f
 private const val LIQUID_GROUND_LIMIT = 0.82f
 
 private const val FLUID_GLOW_ALPHA = 0.40f

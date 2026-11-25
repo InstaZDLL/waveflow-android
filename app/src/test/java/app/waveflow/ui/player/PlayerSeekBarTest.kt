@@ -1,5 +1,8 @@
 package app.waveflow.ui.player
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
@@ -41,13 +44,16 @@ class PlayerSeekBarTest {
 
     private val sauts = mutableListOf<Long>()
 
+    /** Le morceau à l'écran : un test peut le changer sous la barre. */
+    private var piste by mutableStateOf(PISTE)
+
     private fun afficher(durationMs: Long = DUREE, abLoop: AbLoopState = AbLoopState.Off) {
         compose.setContent {
             WaveFlowTheme {
                 PlayerSeekBar(
                     positionMs = 30_000L,
                     durationMs = durationMs,
-                    trackKey = PISTE,
+                    trackKey = piste,
                     playing = false,
                     abLoop = abLoop,
                     onSeek = { sauts += it },
@@ -156,6 +162,23 @@ class PlayerSeekBarTest {
         assertNull(loopMarks(AbLoopState.Armed("autre", 10_000L, 20_000L), PISTE, DUREE))
         assertNull(loopMarks(AbLoopState.Armed(PISTE, 10_000L, 20_000L), PISTE, 0L))
         assertNull(loopMarks(AbLoopState.Off, PISTE, DUREE))
+    }
+
+    @Test
+    fun `un glissement commence avant un changement de morceau est oublie`() {
+        afficher()
+        barre().performTouchInput {
+            down(centerLeft + Offset(width * 0.1f, 0f))
+            moveTo(centerLeft + Offset(width * 0.5f, 0f))
+        }
+
+        // Le morceau enchaîne sous le doigt : lâcher ne doit pas sauter dans
+        // le suivant à une position choisie pour le précédent.
+        compose.runOnIdle { piste = "local:2" }
+        barre().performTouchInput { up() }
+
+        assertTrue("sauts : $sauts", sauts.isEmpty())
+        barre().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "0:30 sur 3:20"))
     }
 
     private companion object {

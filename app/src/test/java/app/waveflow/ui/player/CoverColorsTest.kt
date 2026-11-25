@@ -8,7 +8,6 @@ import app.waveflow.ui.theme.Emerald600
 import app.waveflow.ui.theme.FluidBg
 import app.waveflow.ui.theme.FluidInk
 import app.waveflow.ui.theme.FluidInk2
-import app.waveflow.ui.theme.FluidInk3
 import app.waveflow.ui.theme.LiquidGround
 import app.waveflow.ui.theme.LiquidInk
 import app.waveflow.ui.theme.LiquidInk2
@@ -109,7 +108,23 @@ class CoverColorsTest {
 
     @Test
     fun `les nappes du sombre laissent lire les encres et l'accent`() {
-        assertNappesLisibles(WaveFlowMaterial.Fluid, FluidBg, listOf(FluidInk, FluidInk2, FluidInk3))
+        // `ink-3` n'est pas dans la liste : le lecteur n'écrit rien à la
+        // troisième encre sur sa lumière, ce qui laisse celle-ci se voir.
+        assertNappesLisibles(WaveFlowMaterial.Fluid, FluidBg, listOf(FluidInk, FluidInk2))
+    }
+
+    @Test
+    fun `en sombre, la lumiere d'une pochette claire n'est plus rabattue`() {
+        // Le pendant du précédent : la limite cale la lumière sur la deuxième
+        // encre, et non plus sur la troisième, qui rabattait la nappe d'une
+        // pochette claire (blanche à 32 %, jaune ou rose à 37 %). Elle se pose
+        // désormais à l'opacité de `fluid.css`, comme celle des autres.
+        for (pochette in listOf(0xFFFFFFFF, 0xFFFFEB3B, 0xFFEC4899)) {
+            val echantillon = CoverSample(pochette.toInt(), pochette.toInt())
+            val nappes =
+                lightPools(playerLightFor(echantillon, WaveFlowMaterial.Fluid), WaveFlowMaterial.Fluid, FluidBg)
+            assertEquals("pochette ${hex(pochette.toInt())}", FLUID_GLOW_VOULUE, nappes.first().alpha, 0.005f)
+        }
     }
 
     @Test
@@ -250,5 +265,8 @@ class CoverColorsTest {
         const val TEXTE = 4.5f
         const val ECART_TEINTE = 3f
         const val NAPPE_VISIBLE = 0.08f
+
+        /** L'opacité de la lumière du sombre, `fluid.css` : `--fe-glow` 40 %. */
+        const val FLUID_GLOW_VOULUE = 0.40f
     }
 }

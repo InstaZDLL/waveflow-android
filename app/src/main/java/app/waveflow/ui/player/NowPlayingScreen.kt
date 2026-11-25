@@ -272,7 +272,7 @@ private fun PlayerHeader(
                 Text(
                     text = if (queueShown) "FILE D'ATTENTE" else "EN LECTURE",
                     style = MaterialTheme.typography.labelSmall,
-                    color = WaveFlowTheme.colors.ink3,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

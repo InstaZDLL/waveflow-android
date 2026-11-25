@@ -74,7 +74,7 @@ fun ProgressLine(
     val accent = MaterialTheme.colorScheme.primary
     val ink = MaterialTheme.colorScheme.onSurface
     val tone = MaterialTheme.colorScheme.secondaryContainer
-    val label = WaveFlowTheme.colors.ink3
+    val label = MaterialTheme.colorScheme.onSurfaceVariant
     val mesureur = rememberTextMeasurer()
     val etiquette = MaterialTheme.typography.labelSmall
 
