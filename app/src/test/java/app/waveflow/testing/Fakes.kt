@@ -10,6 +10,7 @@ import app.waveflow.model.Playlist
 import app.waveflow.model.PlaylistEntry
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
 import app.waveflow.model.VoiceRequest
@@ -259,7 +260,20 @@ class FakePreferencesStore(initial: AppPreferences = AppPreferences()) : Prefere
     }
 
     override suspend fun setStreamQuality(quality: StreamQuality) {
-        flux.update { it.copy(streamQuality = quality) }
+        flux.update { it.copy(streamQuality = quality, automaticQuality = false) }
+    }
+
+    override suspend fun setAutomaticQuality() {
+        flux.update { it.copy(automaticQuality = true) }
+    }
+
+    override suspend fun setQualityOn(network: StreamNetwork, quality: StreamQuality) {
+        flux.update {
+            when (network) {
+                StreamNetwork.Unmetered -> it.copy(unmeteredQuality = quality)
+                StreamNetwork.Metered -> it.copy(meteredQuality = quality)
+            }
+        }
     }
 
     val theme: ThemeChoice get() = flux.value.theme

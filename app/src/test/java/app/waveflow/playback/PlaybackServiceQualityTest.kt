@@ -3,6 +3,8 @@ package app.waveflow.playback
 import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -13,6 +15,8 @@ import androidx.media3.session.SessionToken
 import androidx.test.core.app.ApplicationProvider
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.PreferencesStore
+import app.waveflow.model.AppPreferences
+import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.testing.remoteSong
 import com.google.common.util.concurrent.ListenableFuture
@@ -27,6 +31,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.shadows.ShadowLooper
+import org.robolectric.shadows.ShadowNetworkCapabilities
 import java.util.concurrent.TimeUnit
 
 /**
@@ -54,7 +59,11 @@ class PlaybackServiceQualityTest {
     fun tearDown() {
         controleur?.release()
         service?.destroy()
-        runBlocking { preferences.setStreamQuality(StreamQuality.Original) }
+        runBlocking {
+            preferences.setStreamQuality(StreamQuality.Original)
+            preferences.setQualityOn(StreamNetwork.Unmetered, AppPreferences().unmeteredQuality)
+            preferences.setQualityOn(StreamNetwork.Metered, AppPreferences().meteredQuality)
+        }
     }
 
     @Test
@@ -69,6 +78,61 @@ class PlaybackServiceQualityTest {
         val rendu = StreamQuality.Economie.rendering
         assertEquals(rendu, renderingOfRemoteUri(config.uri))
         assertEquals(cacheKeyOf("c07f8d98", rendu.format, rendu.bitrate), config.customCacheKey)
+    }
+
+    @Test
+    fun `sous la qualite automatique les pistes a venir suivent le reseau`() {
+        // Q4 puis Q5 de `docs/qualite-automatique.md`, du réseau jusqu'à la
+        // file : la file entre dans le profil Wi-Fi, puis le Wi-Fi devient
+        // payant. Haute qualité en Wi-Fi plutôt que l'original : un
+        // transcodage porte sa durée, et la suivante n'est pas tenue pour déjà
+        // lue (Q8) par un lecteur qui ne décode rien.
+        runBlocking {
+            preferences.setAutomaticQuality()
+            preferences.setQualityOn(StreamNetwork.Unmetered, StreamQuality.Haute)
+        }
+        reseauActif(NetworkCapabilities.NET_CAPABILITY_INTERNET, NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        val lecteur = lecteurDuService()
+        val ids = listOf("c07f8d98", "5b1e0a33", "9d2f6c71")
+
+        controleurConnecte().setMediaItems(ids.map { remoteSong(id = it, durationMs = 200_000L).toMediaItem() })
+        attendre("la file dans le service") { lecteur.mediaItemCount == ids.size }
+        assertEquals(List(ids.size) { StreamQuality.Haute.rendering }, rendus(lecteur))
+
+        annoncerAuxRappels(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        attendre("la file réécrite") { rendus(lecteur).last() == StreamQuality.Economie.rendering }
+
+        val economie = StreamQuality.Economie.rendering
+        assertEquals(listOf(StreamQuality.Haute.rendering, economie, economie), rendus(lecteur))
+        ids.forEachIndexed { index, id ->
+            val config = lecteur.getMediaItemAt(index).localConfiguration!!
+            val rendu = renderingOfRemoteUri(config.uri)
+            assertEquals(cacheKeyOf(id, rendu.format, rendu.bitrate), config.customCacheKey)
+        }
+    }
+
+    private fun rendus(lecteur: Player) = (0 until lecteur.mediaItemCount).map {
+        renderingOfRemoteUri(lecteur.getMediaItemAt(it).localConfiguration!!.uri)
+    }
+
+    private val connectivite get() = app.getSystemService(ConnectivityManager::class.java)
+
+    private fun capacites(vararg capacites: Int) = ShadowNetworkCapabilities.newInstance().also { description ->
+        shadowOf(description).addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        capacites.forEach { shadowOf(description).addCapability(it) }
+    }
+
+    private fun reseauActif(vararg capacites: Int) {
+        shadowOf(connectivite).setNetworkCapabilities(connectivite.activeNetwork, capacites(*capacites))
+    }
+
+    /** Le réseau par défaut change de capacités, comme Android le dit au service. */
+    private fun annoncerAuxRappels(vararg capacites: Int) {
+        reseauActif(*capacites)
+        val description = capacites(*capacites)
+        shadowOf(connectivite).networkCallbacks.forEach {
+            it.onCapabilitiesChanged(connectivite.activeNetwork!!, description)
+        }
     }
 
     /** Le service tel qu'Android le crée, et le lecteur qu'il tient. */

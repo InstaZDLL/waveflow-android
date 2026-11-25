@@ -60,3 +60,24 @@ enum class StreamQuality(
         rendering = StreamRendering(format = "opus", bitrate = 96),
     ),
 }
+
+/**
+ * Les deux réseaux que distingue la qualité automatique.
+ *
+ * Distingués par leur **facturation**, et non par leur nature : l'Ethernet suit
+ * le Wi-Fi, un Wi-Fi déclaré payant — un partage de connexion — suit les données
+ * mobiles. Les libellés gardent les mots que l'utilisateur comprend. Voir
+ * `docs/qualite-automatique.md`, Q2.
+ *
+ * Le nom de chaque entrée n'est écrit nulle part : chaque réseau a sa propre clé.
+ */
+enum class StreamNetwork(val label: String) {
+    Unmetered("Wi-Fi"),
+    Metered("Données mobiles"),
+    ;
+
+    companion object {
+        /** Le réseau que décrit cette facturation. */
+        fun of(unmetered: Boolean): StreamNetwork = if (unmetered) Unmetered else Metered
+    }
+}

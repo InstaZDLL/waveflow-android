@@ -1,16 +1,22 @@
 package app.waveflow.ui.server
 
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
+import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.ui.cache.CacheUiState
 import app.waveflow.ui.quality.StreamQualityUiState
@@ -58,6 +64,8 @@ class ServerScreenTest {
         cache: CacheUiState = CacheUiState(usedBytes = 0L),
         quality: StreamQualityUiState = StreamQualityUiState(),
         onChooseQuality: (StreamQuality) -> Unit = {},
+        onChooseAutomaticQuality: () -> Unit = {},
+        onChooseQualityOn: (StreamNetwork, StreamQuality) -> Unit = { _, _ -> },
     ) {
         compose.setContent {
             ServerAccountScreen(
@@ -66,6 +74,8 @@ class ServerScreenTest {
                 cache = cache,
                 onDisconnect = { deconnexions++ },
                 onChooseQuality = onChooseQuality,
+                onChooseAutomaticQuality = onChooseAutomaticQuality,
+                onChooseQualityOn = onChooseQualityOn,
                 onClearCache = { vidages++ },
                 onDismissCacheError = {},
             )
@@ -80,6 +90,42 @@ class ServerScreenTest {
         compose.onNodeWithText("Haute qualité").performClick()
 
         assertEquals(listOf(StreamQuality.Haute), choisies)
+    }
+
+    @Test
+    fun `les profils par reseau ne paraissent que sous la qualite automatique`() {
+        var automatique = 0
+        afficherCompte(onChooseAutomaticQuality = { automatique++ })
+
+        assertEquals(0, compose.occurrencesDe("Données mobiles"))
+        compose.onNodeWithText("Automatique").performClick()
+
+        assertEquals(1, automatique)
+    }
+
+    @Test
+    fun `sous la qualite automatique chaque reseau choisit son profil`() {
+        val choisis = mutableListOf<Pair<StreamNetwork, StreamQuality>>()
+        afficherCompte(
+            quality = StreamQualityUiState(automatic = true),
+            onChooseQualityOn = { reseau, profil -> choisis += reseau to profil },
+        )
+
+        // Les profils fixes ne sont plus cochés : c'est le réseau qui choisit.
+        compose.onNode(hasText(StreamQuality.Original.summary)).assertIsNotSelected()
+        compose.onNodeWithText("Données mobiles").performClick()
+        compose.onAllNodesWithText("Haute qualité").onLast().performClick()
+
+        assertEquals(listOf(StreamNetwork.Metered to StreamQuality.Haute), choisis)
+    }
+
+    @Test
+    fun `chaque ligne de reseau offre une cible tactile de 48 dp`() {
+        afficherCompte(quality = StreamQualityUiState(automatic = true))
+
+        StreamNetwork.entries.forEach { reseau ->
+            compose.onNodeWithText(reseau.label).assertHeightIsAtLeast(48.dp)
+        }
     }
 
     /**
