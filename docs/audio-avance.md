@@ -79,7 +79,10 @@ Subsonic en applique un, que ce client n'utilise pas. Le gain s'applique donc
 aussi bien à l'original qu'à une version transcodée, et une fois seulement.
 
 Un champ absent du serveur est cherché, **champ par champ**, dans les tags du
-flux reçu : un original servi tel quel porte les siens.
+flux reçu : un original servi tel quel porte les siens. Les champs du serveur
+passent par les mêmes bornes qu'un tag (G3) : le serveur ne rejette que les
+valeurs non finies, et un tag cassé qu'il aurait recopié — un gain de 89 dB, un
+pic écrit en pourcentage — compte pour absent, le tag du flux prenant le relais.
 
 **G3. Lire un tag, comme le scanner du bureau.**
 
@@ -161,11 +164,21 @@ dit**. On écoute un disque quand, à la fois :
 - toutes portent le **même album**, identifié par son identifiant (local ou
   serveur), jamais par son titre.
 
-Il en découle : un album lancé depuis sa page, par la voix ou depuis Android
-Auto, c'est un disque. Un morceau lancé seul depuis une recherche, une playlist,
-la liste des titres ou un artiste, ce n'en est pas un. Une playlist qui ne
-contiendrait qu'un album entier en serait un : le cas est rare et le gain
-d'album y est juste.
+**C'est une approximation**, et elle dit plus large que le bureau. Rien ne
+vérifie que le disque est **entier** ni **dans son ordre** : seule l'unicité de
+l'album compte. Il en découle :
+
+- un album lancé depuis sa page, par la voix ou depuis Android Auto : un disque ;
+- un morceau lancé seul (une recherche sur le serveur), une playlist ou la liste
+  des titres qui mêlent plusieurs albums : pas un disque ;
+- mais aussi, **comptés comme un disque** : la page d'un artiste qui n'a qu'un
+  album, une recherche locale qui ramène deux titres du même album, un album
+  dont on a réordonné la file, une playlist faite d'un seul album. Le gain
+  d'album y est appliqué ; il reste juste pour les titres d'un même disque, qui
+  n'y perdent que l'égalisation de titre à titre.
+
+Faire mieux demanderait que la file porte sa source, comme le `source_type` du
+bureau, depuis chaque écran qui la construit.
 
 L'écoute se réévalue à chaque changement de la file ou de l'aléatoire, et vaut
 au tampon suivant, comme sur le bureau qui la relit à chaque tampon : couper

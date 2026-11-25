@@ -62,8 +62,7 @@ internal object TagsReplayGain {
         } else {
             nettoye
         }
-        val valeur = nombre.toDoubleDecimal() ?: return null
-        return valeur.takeIf { it.isFinite() && abs(it) <= GAIN_PLAUSIBLE_MAX_DB }
+        return nombre.toDoubleDecimal()?.let(::gainPlausible)
     }
 
     /**
@@ -80,10 +79,17 @@ internal object TagsReplayGain {
      * Un pic linéaire. Zéro est écarté avec les négatifs : il donnerait une marge
      * infinie, et un fichier silencieux n'a de toute façon rien à limiter.
      */
-    fun lirePic(brut: String): Double? {
-        val valeur = brut.trim().toDoubleDecimal() ?: return null
-        return valeur.takeIf { it.isFinite() && it > 0.0 && it <= PIC_PLAUSIBLE_MAX }
-    }
+    fun lirePic(brut: String): Double? = brut.trim().toDoubleDecimal()?.let(::picPlausible)
+
+    /**
+     * Un gain, s'il est vraisemblable : fini et d'au plus ±[GAIN_PLAUSIBLE_MAX_DB].
+     * Vaut aussi pour les champs du serveur, qui ne filtre que les valeurs non
+     * finies (G2).
+     */
+    fun gainPlausible(db: Double): Double? = db.takeIf { it.isFinite() && abs(it) <= GAIN_PLAUSIBLE_MAX_DB }
+
+    /** Un pic, s'il est vraisemblable : fini, strictement positif et au plus [PIC_PLAUSIBLE_MAX]. */
+    fun picPlausible(pic: Double): Double? = pic.takeIf { it.isFinite() && it > 0.0 && it <= PIC_PLAUSIBLE_MAX }
 
     /**
      * La clé et la valeur d'une entrée qui peut porter un ReplayGain, `null`

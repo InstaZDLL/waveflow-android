@@ -102,6 +102,19 @@ class ChaineAudioTest {
         )
     }
 
+    /** G2 : un champ du serveur invraisemblable compte pour absent, et le tag du flux le remplace. */
+    @Test
+    fun `un champ du serveur invraisemblable laisse la place au tag du flux`() {
+        val chaine = ChaineAudio()
+        val piste = remoteSong(id = "s3")
+            .copy(replayGain = RemoteReplayGain(trackGainDb = 89.0, trackPeak = 98.8))
+            .toMediaItem()
+
+        val periode = configurer(chaine, piste, tagsDuFichier)
+
+        assertEquals(GainDePiste(gainDb = -3.0, pic = 0.9), chaine.gains.de(periode))
+    }
+
     @Test
     fun `une piste sans tag ni champ ne porte aucun gain`() {
         val chaine = ChaineAudio()

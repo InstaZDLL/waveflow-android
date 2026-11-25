@@ -202,15 +202,21 @@ internal object ExtrasAudio {
 internal val MediaItem.albumDeLaFile: String?
     get() = mediaMetadata.extras?.getString(ExtrasAudio.ALBUM)
 
-/** Le gain que le serveur publie pour cette piste ; vide pour une piste locale. */
+/**
+ * Le gain que le serveur publie pour cette piste ; vide pour une piste locale.
+ *
+ * Passé par les mêmes bornes qu'un tag (G2, G3) : le serveur ne rejette que les
+ * valeurs non finies, et un tag cassé qu'il a recopié — 89 dB, un pic écrit en
+ * pourcentage — compte pour absent. Le tag du flux prend alors le relais.
+ */
 internal val MediaItem.gainDuServeur: GainDePiste
     get() {
         val extras = mediaMetadata.extras ?: return GainDePiste()
         fun valeur(cle: String): Double? = if (extras.containsKey(cle)) extras.getDouble(cle) else null
         return GainDePiste(
-            gainDb = valeur(ExtrasAudio.GAIN_TITRE_DB),
-            pic = valeur(ExtrasAudio.PIC_TITRE),
-            gainAlbumDb = valeur(ExtrasAudio.GAIN_ALBUM_DB),
-            picAlbum = valeur(ExtrasAudio.PIC_ALBUM),
+            gainDb = valeur(ExtrasAudio.GAIN_TITRE_DB)?.let(TagsReplayGain::gainPlausible),
+            pic = valeur(ExtrasAudio.PIC_TITRE)?.let(TagsReplayGain::picPlausible),
+            gainAlbumDb = valeur(ExtrasAudio.GAIN_ALBUM_DB)?.let(TagsReplayGain::gainPlausible),
+            picAlbum = valeur(ExtrasAudio.PIC_ALBUM)?.let(TagsReplayGain::picPlausible),
         )
     }

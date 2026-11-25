@@ -88,7 +88,10 @@ internal object ReplayGain {
  * `lineaire(piste, reglages, true)` ne dirait pas ce qui est vrai.
  */
 internal enum class Ecoute {
-    /** Un disque joué en entier, dans son ordre. */
+    /**
+     * Un disque qu'on écoute : la file n'en contient qu'un, aléatoire coupé.
+     * Rien ne dit qu'il est entier ni dans son ordre ; voir G7.
+     */
     UnDisque,
 
     /** Un titre parmi d'autres sans rapport. */
