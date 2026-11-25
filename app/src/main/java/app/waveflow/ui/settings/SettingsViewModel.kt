@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.PreferencesStore
 import app.waveflow.model.AppPreferences
+import app.waveflow.model.Prereglage
 import app.waveflow.model.ThemeChoice
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,28 @@ class SettingsViewModel(
 
     fun setTheme(choice: ThemeChoice) {
         viewModelScope.launch { store.setTheme(choice) }
+    }
+
+    /**
+     * Applique un geste de la section *Son*.
+     *
+     * Chaque geste devient une transformation que le magasin applique à ce qu'il
+     * contient au moment d'écrire : deux gestes rapprochés ne s'écrasent pas.
+     */
+    fun regler(geste: GesteSon) {
+        viewModelScope.launch {
+            when (geste) {
+                is GesteSon.ReplayGainActif -> store.updateReplayGain { it.copy(actif = geste.actif) }
+                is GesteSon.Mode -> store.updateReplayGain { it.copy(mode = geste.mode) }
+                is GesteSon.Preampli -> store.updateReplayGain { it.copy(preampliDb = geste.db) }
+                is GesteSon.GainParDefaut -> store.updateReplayGain { it.copy(gainParDefautDb = geste.db) }
+                is GesteSon.EviterSaturation -> store.updateReplayGain { it.copy(eviterSaturation = geste.actif) }
+                is GesteSon.EgaliseurActif -> store.updateEqualizer { it.avecActif(geste.actif) }
+                is GesteSon.Choisir -> store.updateEqualizer { it.avecPrereglage(geste.prereglage) }
+                is GesteSon.Bande -> store.updateEqualizer { it.avecBande(geste.index, geste.db) }
+                GesteSon.Reinitialiser -> store.updateEqualizer { it.avecPrereglage(Prereglage.Plat) }
+            }
+        }
     }
 
     companion object {

@@ -1,10 +1,13 @@
 package app.waveflow.ui.settings
 
 import app.waveflow.model.AppPreferences
+import app.waveflow.model.ModeDeGain
+import app.waveflow.model.Prereglage
 import app.waveflow.model.ThemeChoice
 import app.waveflow.testing.FakePreferencesStore
 import app.waveflow.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -50,5 +53,36 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ThemeChoice.Light, magasin.theme)
+        }
+
+    /**
+     * Les gestes de la section *Son* arrivent au magasin. L'assertion porte sur
+     * le magasin : c'est lui que le service observe, pas le ViewModel.
+     */
+    @Test
+    fun `les gestes du son sont confies au magasin`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val magasin = FakePreferencesStore(AppPreferences())
+            val vue = SettingsViewModel(magasin)
+
+            vue.regler(GesteSon.Mode(ModeDeGain.ParTitre))
+            vue.regler(GesteSon.Preampli(20f))
+            vue.regler(GesteSon.EgaliseurActif(true))
+            vue.regler(GesteSon.Choisir(Prereglage.Pop))
+            vue.regler(GesteSon.Bande(0, 2.5f))
+            advanceUntilIdle()
+
+            val lues = magasin.preferences.first()
+            assertEquals(ModeDeGain.ParTitre, lues.replayGain.mode)
+            // Borné comme le vrai magasin : ±15 dB.
+            assertEquals(15f, lues.replayGain.preampliDb, 0f)
+            assertEquals(true, lues.equalizer.actif)
+            // Un curseur bougé quitte le préréglage, et garde ses autres bandes.
+            assertEquals(null, lues.equalizer.prereglage)
+            assertEquals(listOf(2.5f) + Prereglage.Pop.bandesDb.drop(1), lues.equalizer.bandesDb)
+
+            vue.regler(GesteSon.Reinitialiser)
+            advanceUntilIdle()
+            assertEquals(Prereglage.Plat, magasin.preferences.first().equalizer.prereglage)
         }
 }

@@ -8,6 +8,8 @@ import app.waveflow.model.AppPreferences
 import app.waveflow.model.PlaybackSpeed
 import app.waveflow.model.Playlist
 import app.waveflow.model.PlaylistEntry
+import app.waveflow.model.ReglagesEgaliseur
+import app.waveflow.model.ReglagesReplayGain
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.model.StreamNetwork
@@ -246,7 +248,10 @@ class FakePreferencesStore(initial: AppPreferences = AppPreferences()) : Prefere
     // magasin borne ce qu'il relit, et un faux plus permissif rendrait vert un
     // test décrivant une application qui n'existe pas.
     private val flux = MutableStateFlow(
-        initial.copy(playbackSpeed = PlaybackSpeed.borner(initial.playbackSpeed)),
+        initial.copy(
+            playbackSpeed = PlaybackSpeed.borner(initial.playbackSpeed),
+            replayGain = initial.replayGain.bornes(),
+        ),
     )
 
     override val preferences: Flow<AppPreferences> = flux
@@ -274,6 +279,16 @@ class FakePreferencesStore(initial: AppPreferences = AppPreferences()) : Prefere
                 StreamNetwork.Metered -> it.copy(meteredQuality = quality)
             }
         }
+    }
+
+    // Borné comme le vrai à l'écriture ; les bandes de l'égaliseur le sont déjà
+    // par construction de `ReglagesEgaliseur`.
+    override suspend fun updateReplayGain(transform: (ReglagesReplayGain) -> ReglagesReplayGain) {
+        flux.update { it.copy(replayGain = transform(it.replayGain).bornes()) }
+    }
+
+    override suspend fun updateEqualizer(transform: (ReglagesEgaliseur) -> ReglagesEgaliseur) {
+        flux.update { it.copy(equalizer = transform(it.equalizer)) }
     }
 
     val theme: ThemeChoice get() = flux.value.theme

@@ -30,8 +30,8 @@ import app.waveflow.model.ThemeChoice
 /**
  * Les réglages de l'application.
  *
- * Un seul endroit pour ce qui se décide une fois : l'apparence, le serveur, et
- * ce que l'application dit d'elle-même. Le serveur y figure comme un réglage
+ * Un seul endroit pour ce qui se décide une fois : l'apparence, le son, le
+ * serveur, et ce que l'application dit d'elle-même. Le serveur y figure comme un réglage
  * parmi d'autres et non comme une section de la bibliothèque — on écoute de la
  * musique, on n'administre pas une source.
  *
@@ -47,6 +47,7 @@ fun SettingsScreen(
     onThemeChange: (ThemeChoice) -> Unit,
     onOpenServer: () -> Unit,
     modifier: Modifier = Modifier,
+    onSonChange: (GesteSon) -> Unit = {},
     bottomPadding: Dp = 0.dp,
 ) {
     Column(
@@ -57,6 +58,15 @@ fun SettingsScreen(
     ) {
         SectionTitle("Apparence")
         ThemeChooser(current = preferences.theme, onChange = onThemeChange)
+
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+        SectionTitle("Son")
+        SonSection(
+            replayGain = preferences.replayGain,
+            egaliseur = preferences.equalizer,
+            onGeste = onSonChange,
+        )
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
 

@@ -6,6 +6,8 @@ import androidx.media3.common.C
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import app.waveflow.playback.audio.ChaineAudio
+import app.waveflow.playback.audio.RenderersAvecTraitements
 import kotlin.random.Random
 
 /**
@@ -39,6 +41,7 @@ internal fun assemblerLeLecteur(
 internal class LectureAssemblee(
     val lecteur: TranscodeSeekingPlayer,
     val pistesAVenir: PistesAVenir,
+    val chaineAudio: ChaineAudio,
 )
 
 /** [assemblerLeLecteur], avec la réécriture des pistes à venir branchée sur le même ExoPlayer. */
@@ -49,7 +52,11 @@ internal fun assemblerLaLecture(
     annoncerRepli: () -> Unit,
     hasard: Random = Random.Default,
 ): LectureAssemblee {
-    val exoPlayer = ExoPlayer.Builder(context)
+    // Le ReplayGain et l'égaliseur, dans la sortie audio : tout ce que Media3
+    // décode y passe, piste locale ou flux du serveur. Voir
+    // `docs/audio-avance.md`, C1.
+    val chaineAudio = ChaineAudio()
+    val exoPlayer = ExoPlayer.Builder(context, RenderersAvecTraitements(context, chaineAudio))
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(dataSourceFactory)
                 // Un transcodage refusé se retente quand le serveur le dit, et
@@ -81,6 +88,8 @@ internal fun assemblerLaLecture(
     // Au même titre : une coupure se reprend avant que la session ne la voie
     // (R27).
     exoPlayer.addListener(TranscodeCutRecovery(enveloppe))
+    // L'écoute d'un disque en entier, pour le mode Automatique (G7).
+    chaineAudio.suivreLEcoute(exoPlayer)
 
-    return LectureAssemblee(enveloppe, PistesAVenir(exoPlayer, enveloppe))
+    return LectureAssemblee(enveloppe, PistesAVenir(exoPlayer, enveloppe), chaineAudio)
 }

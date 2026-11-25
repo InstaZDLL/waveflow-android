@@ -3,10 +3,15 @@ package app.waveflow.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import app.waveflow.model.ModeDeGain
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.model.Prereglage
+import app.waveflow.model.ReglagesEgaliseur
+import app.waveflow.model.ReglagesReplayGain
 import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
@@ -371,5 +376,127 @@ class PreferencesStoreTest {
 
         assertEquals(StreamQuality.Original, lues.unmeteredQuality)
         assertEquals(StreamQuality.Economie, lues.meteredQuality)
+    }
+
+    // ---------------------------------------------------------------------
+    // Le son : ReplayGain et égaliseur (`docs/audio-avance.md`, A2 et A3)
+    // ---------------------------------------------------------------------
+
+    @Test
+    fun `sans rien de choisi le ReplayGain est actif en mode automatique et l'egaliseur coupe`() = runTest {
+        val lues = avecUnMagasin { it.preferences.first() }
+
+        // La décision du 25/11 : actif d'emblée, comme le `GainMode::Auto` du bureau.
+        assertEquals(ReglagesReplayGain(actif = true, mode = ModeDeGain.Automatique), lues.replayGain)
+        assertEquals(ReglagesEgaliseur.PAR_DEFAUT, lues.equalizer)
+        assertFalse(lues.equalizer.actif)
+    }
+
+    @Test
+    fun `le ReplayGain choisi survit a la relecture`() = runTest {
+        val choisi = ReglagesReplayGain(
+            actif = false,
+            mode = ModeDeGain.ParAlbum,
+            preampliDb = 4.5f,
+            gainParDefautDb = -3f,
+            eviterSaturation = false,
+        )
+        avecUnMagasin { it.updateReplayGain { choisi } }
+
+        assertEquals(choisi, avecUnMagasin { it.preferences.first().replayGain })
+    }
+
+    @Test
+    fun `l'egaliseur choisi survit a la relecture, prereglage ou personnalise`() = runTest {
+        avecUnMagasin { magasin ->
+            magasin.updateEqualizer { it.avecActif(true).avecPrereglage(Prereglage.Rock) }
+        }
+        val rock = avecUnMagasin { it.preferences.first().equalizer }
+        assertTrue(rock.actif)
+        assertEquals(Prereglage.Rock, rock.prereglage)
+        assertEquals(Prereglage.Rock.bandesDb, rock.bandesDb)
+
+        avecUnMagasin { magasin -> magasin.updateEqualizer { it.avecBande(2, -4.5f) } }
+        val perso = avecUnMagasin { it.preferences.first().equalizer }
+        assertEquals(null, perso.prereglage)
+        assertEquals(listOf(5f, 4f, -4.5f, -1f, 1f, 5f), perso.bandesDb)
+    }
+
+    /** Deux gestes à la suite : le second part de ce que le premier a écrit. */
+    @Test
+    fun `deux reglages du ReplayGain a la suite se cumulent`() = runTest {
+        val relus = avecUnMagasin { magasin ->
+            magasin.updateReplayGain { it.copy(eviterSaturation = false) }
+            magasin.updateReplayGain { it.copy(preampliDb = 3f) }
+            magasin.preferences.first().replayGain
+        }
+
+        assertFalse(relus.eviterSaturation)
+        assertEquals(3f, relus.preampliDb, 0f)
+    }
+
+    @Test
+    fun `une pre-amplification aberrante n'est pas meme ecrite dans le fichier`() = runTest {
+        // Lu sous la clé brute : `preferences` borne à la relecture, et rendrait
+        // le test vert quoi qu'on ait écrit.
+        val brut = avecUnMagasinBrut { magasin, dataStore ->
+            magasin.updateReplayGain { it.copy(preampliDb = 40f, gainParDefautDb = Float.NaN) }
+            dataStore.data.first().let {
+                it[floatPreferencesKey("replaygain_preamp_db")] to it[floatPreferencesKey("replaygain_fallback_db")]
+            }
+        }
+
+        assertEquals(15f, brut.first!!, 0f)
+        assertEquals(0f, brut.second!!, 0f)
+    }
+
+    @Test
+    fun `des reglages du son aberrants dans le fichier relisent leur borne ou leur defaut`() = runTest {
+        val magasin = magasinFige(
+            preferencesOf(
+                floatPreferencesKey("replaygain_preamp_db") to -99f,
+                floatPreferencesKey("replaygain_fallback_db") to Float.POSITIVE_INFINITY,
+                // Un mode écrit par une version future.
+                stringPreferencesKey("replaygain_mode") to "ParPiste",
+                // Une valeur au-delà de ±12 dB, une autre au-delà du dixième.
+                stringPreferencesKey("equalizer_bands_db") to "40.0,0.04,0,0,0,-3.26",
+                stringPreferencesKey("equalizer_preset") to "vaporwave",
+            ),
+        )
+
+        val lues = magasin.preferences.first()
+
+        assertEquals(-15f, lues.replayGain.preampliDb, 0f)
+        assertEquals(0f, lues.replayGain.gainParDefautDb, 0f)
+        assertEquals(ModeDeGain.Automatique, lues.replayGain.mode)
+        assertEquals(listOf(12f, 0f, 0f, 0f, 0f, -3.3f), lues.equalizer.bandesDb)
+        // Un préréglage inconnu : un réglage personnalisé, aux bandes gardées.
+        assertEquals(null, lues.equalizer.prereglage)
+    }
+
+    @Test
+    fun `des bandes qui ne sont pas six ou illisibles relisent l'egaliseur plat`() = runTest {
+        for (bandes in listOf("1,2,3", "1,2,3,4,5,6,7", "1,2,trois,4,5,6", "")) {
+            val lues = magasinFige(
+                preferencesOf(
+                    booleanPreferencesKey("equalizer") to true,
+                    stringPreferencesKey("equalizer_bands_db") to bandes,
+                ),
+            ).preferences.first().equalizer
+
+            assertEquals("« $bandes »", ReglagesEgaliseur.PAR_DEFAUT.bandesDb, lues.bandesDb)
+            // L'interrupteur, lui, reste ce qu'il était.
+            assertTrue("« $bandes »", lues.actif)
+        }
+    }
+
+    @Test
+    fun `un reglage du son qui ne s'ecrit pas ne fait pas tomber l'appelant`() = runTest {
+        magasinIncapableDEcrire().updateReplayGain { it.copy(actif = false) }
+    }
+
+    @Test
+    fun `un egaliseur qui ne s'ecrit pas ne fait pas tomber l'appelant`() = runTest {
+        magasinIncapableDEcrire().updateEqualizer { it.avecActif(true) }
     }
 }
