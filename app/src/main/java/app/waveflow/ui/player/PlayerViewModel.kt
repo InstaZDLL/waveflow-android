@@ -13,6 +13,8 @@ import app.waveflow.model.VoiceRequest
 import app.waveflow.playback.AbLoop
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackFailure
+import app.waveflow.playback.PlaybackNotice
+import app.waveflow.playback.PlaybackNotices
 import app.waveflow.playback.SleepTimer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -36,6 +39,7 @@ class PlayerViewModel(
     private val sleepTimer: SleepTimer,
     private val preferencesStore: PreferencesStore,
     private val abLoop: AbLoop,
+    private val playbackNotices: PlaybackNotices,
 ) : ViewModel() {
 
     // Plus de croisement avec la bibliothèque : le lecteur décrit lui-même sa
@@ -92,18 +96,29 @@ class PlayerViewModel(
      * une rotation redirait alors une erreur déjà lue, et à chaque rotation.
      * Le partage commence avec le ViewModel plutôt qu'au premier abonné, pour
      * ne pas se rabattre sur cette même valeur courante à chaque réabonnement.
+     *
+     * Les annonces du service passent par le même canal : un repli sur
+     * l'original ne coupe pas la lecture, mais une qualité qui change en silence
+     * serait un défaut qu'on ne pourrait pas signaler.
      */
-    val errors: Flow<String> = playbackController.state
-        .map { it.failure }
-        .distinctUntilChanged()
-        .filterNotNull()
-        .map { failure ->
-            when (failure) {
-                PlaybackFailure.Unreachable -> "Serveur injoignable : lecture impossible."
-                PlaybackFailure.Unplayable -> "Ce morceau n'a pas pu être lu."
+    val errors: Flow<String> = merge(
+        playbackController.state
+            .map { it.failure }
+            .distinctUntilChanged()
+            .filterNotNull()
+            .map { failure ->
+                when (failure) {
+                    PlaybackFailure.Unreachable -> "Serveur injoignable : lecture impossible."
+                    PlaybackFailure.Unplayable -> "Ce morceau n'a pas pu être lu."
+                    PlaybackFailure.Busy -> "Serveur occupé : réessayez dans un instant."
+                }
+            },
+        playbackNotices.notices.map { notice ->
+            when (notice) {
+                PlaybackNotice.OriginalAfterRefusal -> "Serveur saturé : lecture en qualité d'origine."
             }
-        }
-        .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 0)
+        },
+    ).shareIn(viewModelScope, SharingStarted.Eagerly, replay = 0)
 
     fun connect() = playbackController.connect()
 
@@ -229,6 +244,7 @@ class PlayerViewModel(
                     sleepTimer = app.container.sleepTimer,
                     preferencesStore = app.container.preferencesStore,
                     abLoop = app.container.abLoop,
+                    playbackNotices = app.container.playbackNotices,
                 )
             }
         }

@@ -19,13 +19,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import java.time.Duration
 
 /**
  * L'enveloppe face à un lecteur factice dont on pilote l'état.
  *
  * Robolectric ne décode pas l'Opus : aucune piste n'y joue réellement. Ce qui
  * s'éprouve ici, c'est ce que l'enveloppe fait de ce que le lecteur enveloppé
- * lui dit — et ce qu'elle lui demande. Les renvois R1 à R13 pointent vers
+ * lui dit — et ce qu'elle lui demande. Les renvois R1 à R22 pointent vers
  * `docs/deplacement-dans-un-transcodage.md`.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -44,7 +45,9 @@ class TranscodeSeekingPlayerTest {
         ecouler()
     }
 
-    private fun ecouler() = shadowOf(Looper.getMainLooper()).idle()
+    /** Jusqu'au départ d'une relance différée (R9), que `TranscodeRefusalChainTest` éprouve à part. */
+    private fun ecouler() =
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(TranscodeSeekingPlayer.COALESCENCE_MS))
 
     private val Player.fenetreCourante: Timeline.Window
         get() = currentTimeline.getWindow(currentMediaItemIndex, Timeline.Window())
@@ -132,6 +135,20 @@ class TranscodeSeekingPlayerTest {
         ecouler()
 
         assertEquals(133_000L, lecteur.currentPosition)
+    }
+
+    @Test
+    fun `pendant l'attente d'une relance, la cible ne derive pas`() {
+        // R9 : l'ancien flux joue encore, et une position posée en nombre
+        // s'extrapolerait avec lui — un « avancer » de plus partirait d'une
+        // cible déjà dépassée.
+        jouer(transcode())
+
+        lecteur.seekTo(60_000L)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(TranscodeSeekingPlayer.COALESCENCE_MS - 100L))
+
+        assertEquals("la relance attend encore", 0, faux.remplacements.size)
+        assertEquals(60_000L, lecteur.currentPosition)
     }
 
     @Test
@@ -318,6 +335,70 @@ class TranscodeSeekingPlayerTest {
     }
 
     @Test
+    fun `un refus pendant l'attente reprend l'original a la cible du saut`() {
+        // R9 et R22 : le dernier refus du flux d'avant tombe dans les 300 ms où
+        // le saut attend. L'utilisateur a dit où il voulait être ; l'original
+        // part de là, et la relance en attente n'a plus d'objet.
+        jouer(transcode())
+        lecteur.seekTo(133_000L)
+
+        lecteur.revenirAlOriginal()
+        ecouler()
+
+        val (index, item) = faux.remplacements.single()
+        assertEquals(0, index)
+        assertTrue("l'original", renderingOfRemoteUri(item.localConfiguration!!.uri).isOriginal)
+        assertEquals(0 to 133_000L, faux.sauts.last())
+    }
+
+    @Test
+    fun `une repetition annule le saut en attente`() {
+        // R9 : le morceau qui recommence est un changement de piste. Le saut
+        // demandé dans les 300 ms d'avant la fin ne doit pas tirer la nouvelle
+        // écoute au milieu, même sans segment ni repli à défaire.
+        faux.dureeUs = { Util.msToUs(DUREE_MS) }
+        jouer(transcode())
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+        ecouler()
+        lecteur.seekTo(133_000L)
+
+        faux.finirLeFlux()
+        ecouler()
+
+        assertEquals(0, faux.remplacements.size)
+        // L'état publié pendant l'attente annonçait la cible ; il doit être
+        // relu, sans quoi le curseur resterait à 2:13 pendant la nouvelle écoute.
+        // La nouvelle écoute part de 0:00 et joue depuis les 300 ms écoulées.
+        assertTrue(
+            "position ${lecteur.currentPosition}",
+            lecteur.currentPosition <= TranscodeSeekingPlayer.COALESCENCE_MS,
+        )
+        assertTrue(
+            "tampon ${lecteur.bufferedPosition}",
+            lecteur.bufferedPosition <= TranscodeSeekingPlayer.COALESCENCE_MS,
+        )
+    }
+
+    @Test
+    fun `l'original d'un repli repete redemande le rendu choisi`() {
+        // R22 : le repli ne vaut que pour l'écoute refusée. Répété, le morceau
+        // redemande le rendu choisi — et l'original en données mobiles, jamais.
+        faux.dureeUs = { Util.msToUs(DUREE_MS) }
+        jouer(transcode())
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+        lecteur.revenirAlOriginal()
+        ecouler()
+
+        faux.finirLeFlux()
+
+        val (index, item) = faux.remplacements.last()
+        assertEquals(0, index)
+        assertEquals(StreamRendering("opus", 96), renderingOfRemoteUri(item.localConfiguration!!.uri))
+        assertEquals(0L, faux.dernierDecalage)
+        assertEquals(0L, lecteur.currentPosition)
+    }
+
+    @Test
     fun `une piste relancee qu'on quitte retrouve son marqueur nu`() {
         // R14 : sinon, y revenir — piste suivante, file rejouée — la ferait
         // repartir en plein milieu.
@@ -484,6 +565,9 @@ private class FauxLecteur : SimpleBasePlayer(Looper.getMainLooper()) {
         if (fromIndex == index) positionMs = 0L
         return Futures.immediateVoidFuture()
     }
+
+    /** Le repli prépare le lecteur arrêté sur son erreur ; ce faux n'en a pas, et joue déjà. */
+    override fun handlePrepare(): ListenableFuture<*> = Futures.immediateVoidFuture()
 
     override fun handleSetShuffleModeEnabled(shuffleModeEnabled: Boolean): ListenableFuture<*> {
         melange = shuffleModeEnabled

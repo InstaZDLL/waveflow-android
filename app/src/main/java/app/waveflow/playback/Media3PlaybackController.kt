@@ -314,12 +314,18 @@ class Media3PlaybackController(
  * un `IOException` que Media3 ne peut que classer `ERROR_CODE_IO_UNSPECIFIED` —
  * indiscernable, par son seul code, d'un fichier illisible. Le type que l'appli
  * a posé elle-même en profondeur, lui, ne laisse aucun doute.
+ *
+ * Un transcodage refusé se range à part, et avant tout le reste : son code est
+ * celui d'un statut HTTP hostile, mais le serveur a bel et bien répondu — il
+ * est occupé, pas injoignable (R24 de `docs/deplacement-dans-un-transcodage.md`).
+ * Le contrôleur de l'application vit dans le processus du service : Media3 lui
+ * passe l'erreur telle quelle, causes comprises, sans la sérialiser.
  */
 internal fun PlaybackException.toPlaybackFailure(): PlaybackFailure =
-    if (errorCode in NETWORK_ERROR_CODES || hasUnreachableCause()) {
-        PlaybackFailure.Unreachable
-    } else {
-        PlaybackFailure.Unplayable
+    when {
+        refusDeTranscodage() != null -> PlaybackFailure.Busy
+        errorCode in NETWORK_ERROR_CODES || hasUnreachableCause() -> PlaybackFailure.Unreachable
+        else -> PlaybackFailure.Unplayable
     }
 
 /** Cherche un serveur injoignable sous les couches d'emballage successives. */

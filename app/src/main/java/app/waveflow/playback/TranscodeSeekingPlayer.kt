@@ -1,11 +1,14 @@
 package app.waveflow.playback
 
+import android.os.Handler
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.Timeline
+import app.waveflow.model.StreamRendering
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
@@ -19,9 +22,15 @@ import com.google.common.util.concurrent.ListenableFuture
  * morceau tel qu'il est : commencé à 0:00, de sa durée entière.
  *
  * Les règles sont dans `docs/deplacement-dans-un-transcodage.md` ; les renvois
- * R1 à R16 ci-dessous y pointent.
+ * R1 à R24 ci-dessous y pointent.
+ *
+ * @param coalescenceMs ce qu'une relance demandée par un saut attend avant de
+ *   partir, pour qu'un saut suivant la remplace (R9).
  */
-internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
+internal class TranscodeSeekingPlayer(
+    player: Player,
+    private val coalescenceMs: Long = COALESCENCE_MS,
+) : ForwardingSimpleBasePlayer(player) {
 
     /**
      * L'identifiant logique d'une fenêtre relancée, par identifiant de fenêtre du
@@ -35,15 +44,45 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
     /** Le décalage du flux de chaque fenêtre relancée ; absente, elle part du début. */
     private val decalages = HashMap<Any, Long>()
 
+    /**
+     * Le rendu qu'avait une piste avant son repli sur l'original, par
+     * identifiant de fenêtre du lecteur enveloppé. Le repli ne vaut que pour
+     * l'écoute en cours (R22) : la piste quittée ou répétée le retrouve.
+     */
+    private val rendusAvantRepli = HashMap<Any, StreamRendering>()
+
+    /**
+     * Vrai quand le lecteur enveloppé s'est arrêté sur une erreur, faux dès
+     * qu'on le prépare ou qu'on l'arrête. Son `playerError` ne suffit pas à le
+     * dire : un `stop` demandé après une panne la lui laisse.
+     */
+    private var arreteSurErreur = false
+
     /** La cible d'une relance, à annoncer comme un saut à la place de la discontinuité qu'elle provoque. */
     private var sautAnnonce: Long? = null
 
     /** Vrai quand un flux vient de finir et de reprendre sur la même piste : R12. */
     private var segmentRepete = false
 
+    /** La relance qu'un saut a demandée et qui n'est pas encore partie (R9). */
+    private var sautEnAttente: SautEnAttente? = null
+
+    /**
+     * Vrai quand une relance différée vient de partir : le saut a été annoncé au
+     * moment du geste, la discontinuité que provoque le remplacement ne doit pas
+     * l'annoncer une seconde fois.
+     */
+    private var relanceTue = false
+
+    /** Sur la boucle de l'application, celle où l'enveloppe vit et où arrivent les sauts. */
+    private val minuterie = Handler(player.applicationLooper)
+
+    private val lancerLeSautEnAttente = Runnable { lancerSautEnAttente() }
+
     init {
-        // Deux choses ne se déduisent pas d'un état mais d'un événement : la fin
-        // d'un flux qui se répète, et une piste relancée qu'on vient de quitter.
+        // Trois choses ne se déduisent pas d'un état mais d'un événement : la fin
+        // d'un flux qui se répète, une piste relancée qu'on vient de quitter, et
+        // un arrêt causé par une panne plutôt que demandé.
         player.addListener(
             object : Player.Listener {
                 override fun onPositionDiscontinuity(
@@ -56,6 +95,15 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
                     ) {
                         segmentRepete = true
                     }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    arreteSurErreur = true
+                }
+
+                override fun onPlayerErrorChanged(error: PlaybackException?) {
+                    // Préparé de nouveau, d'où qu'en vienne l'ordre.
+                    if (error == null) arreteSurErreur = false
                 }
 
                 override fun onEvents(player: Player, events: Player.Events) = veillerAuxSegments()
@@ -86,9 +134,23 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
         val decalage = decalages[brute.uid] ?: 0L
         val dureeMs = logique.getWindow(index, Timeline.Window()).durationMs
 
+        val attente = sautEnAttente?.takeIf { it.fenetre == brute.uid }
+        if (attente != null) {
+            // R9 et R6 : la relance n'est pas partie, mais la position est déjà
+            // la cible — et un « avancer » de plus se compte depuis elle.
+            // Constante : une position posée en nombre s'extrapole tant que
+            // l'ancien flux joue, et la cible dériverait pendant l'attente.
+            val cible = SimpleBasePlayer.PositionSupplier.getConstant(attente.cibleMs)
+            builder
+                .setContentPositionMs(cible)
+                .setContentBufferedPositionMs(cible)
+        } else {
+            builder
+                .setContentPositionMs(etat.contentPositionMsSupplier.logique(decalage, dureeMs))
+                .setContentBufferedPositionMs(etat.contentBufferedPositionMsSupplier.logique(decalage, dureeMs))
+        }
+
         builder
-            .setContentPositionMs(etat.contentPositionMsSupplier.logique(decalage, dureeMs))
-            .setContentBufferedPositionMs(etat.contentBufferedPositionMsSupplier.logique(decalage, dureeMs))
             // R4 : ExoPlayer retire ces commandes d'une piste non déplaçable.
             .setAvailableCommands(
                 etat.availableCommands.buildUpon()
@@ -100,6 +162,8 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
         if (saut != null) {
             sautAnnonce = null
             builder.setPositionDiscontinuity(DISCONTINUITY_REASON_SEEK, saut)
+        } else if (relanceTue) {
+            builder.clearPositionDiscontinuity()
         } else if (etat.hasPositionDiscontinuity) {
             builder.setPositionDiscontinuity(
                 etat.positionDiscontinuityReason,
@@ -114,6 +178,9 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
      * l'ExoPlayer la recalculer sur sa position brute (R13).
      */
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
+        // R9 : un saut chasse le précédent. S'il demande à son tour une
+        // relance, [allerA] la remet en attente à sa propre cible.
+        annulerSautEnAttente()
         val courant = player.currentMediaItemIndex
         when (seekCommand) {
             COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, COMMAND_SEEK_BACK, COMMAND_SEEK_FORWARD ->
@@ -150,11 +217,110 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
         val natif = !fenetre.mediaItem.isRemoteTranscode() ||
             (decalage == 0L && (fenetre.isSeekable || cible == 0L))
 
-        if (natif) {
-            player.seekTo(index, positionMs)
-        } else {
-            relancer(index, fenetre, bornerAuMorceau(cible, fenetre.mediaItem))
+        val borne = bornerAuMorceau(cible, fenetre.mediaItem)
+        when {
+            natif -> player.seekTo(index, positionMs)
+            // La relance en attente reprendra le lecteur à son départ.
+            index == player.currentMediaItemIndex && coalescenceMs > 0L -> return mettreEnAttente(fenetre, borne)
+            else -> relancer(index, fenetre, borne)
         }
+        reprendreApresUnePanne()
+    }
+
+    /**
+     * R9 : un lecteur arrêté sur une panne — le dernier refus d'une liaison
+     * facturée — reprend au saut qui suit, natif ou relancé ; sans cela le saut
+     * resterait sans suite. Un arrêt demandé (`stop`) se respecte, même après
+     * une panne dont le lecteur garde l'erreur.
+     */
+    private fun reprendreApresUnePanne() {
+        if (player.playbackState == STATE_IDLE && arreteSurErreur) player.prepare()
+    }
+
+    /**
+     * R9 : la relance attend [coalescenceMs] avant de partir, et un saut suivant
+     * prend sa place. Une rafale ne coûte ainsi qu'un transcodage au serveur.
+     *
+     * Seul le saut dans la piste courante attend : changer de piste n'est pas
+     * une rafale, et la piste visée doit commencer à charger.
+     */
+    private fun mettreEnAttente(fenetre: Timeline.Window, cibleMs: Long) {
+        sautEnAttente = SautEnAttente(fenetre.uid, cibleMs)
+        // R6 : annoncé tout de suite, le curseur ne revient pas en arrière.
+        sautAnnonce = cibleMs
+        minuterie.postDelayed(lancerLeSautEnAttente, coalescenceMs)
+    }
+
+    /**
+     * L'attente échue : relance, si la piste visée est toujours la courante. Une
+     * file reposée ou une piste quittée entre-temps la rendent caduque.
+     */
+    private fun lancerSautEnAttente() {
+        val saut = sautEnAttente ?: return
+        sautEnAttente = null
+
+        val index = player.currentMediaItemIndex
+        val timeline = player.currentTimeline
+        if (index == C.INDEX_UNSET || index >= timeline.windowCount) return
+        val fenetre = timeline.getWindow(index, Timeline.Window())
+        if (fenetre.uid != saut.fenetre) return
+
+        remplacer(index, fenetre, saut.cibleMs)
+        reprendreApresUnePanne() // Le flux quitté a pu échouer avant le geste ou pendant l'attente.
+        // Le lecteur enveloppé a déjà notifié son remplacement, dans l'appel
+        // même : l'état relu ici le porte. Le drapeau ne vit que le temps de
+        // cette relecture, pour ne jamais taire une discontinuité étrangère.
+        relanceTue = true
+        try {
+            invalidateState()
+        } finally {
+            relanceTue = false
+        }
+    }
+
+    private fun annulerSautEnAttente() {
+        sautEnAttente = null
+        minuterie.removeCallbacks(lancerLeSautEnAttente)
+    }
+
+    /**
+     * R22 : remplace le flux transcodé de la piste courante par l'original, à la
+     * position logique où elle en était, sans changement de piste.
+     *
+     * L'original se déplace nativement (R7) : sa position est celle de son flux,
+     * et la piste n'a plus de décalage. Le lecteur, arrêté sur son erreur, est
+     * préparé de nouveau ; il reprend s'il jouait. Le rendu d'avant est retenu :
+     * la piste le retrouve une fois quittée ou répétée.
+     *
+     * @return faux, sans rien changer, si la piste courante n'est pas un
+     *   transcodage du serveur.
+     */
+    fun revenirAlOriginal(): Boolean {
+        val index = player.currentMediaItemIndex
+        val timeline = player.currentTimeline
+        if (index == C.INDEX_UNSET || index >= timeline.windowCount) return false
+        val fenetre = timeline.getWindow(index, Timeline.Window())
+        val item = fenetre.mediaItem
+        val rendu = item.localConfiguration?.uri
+            ?.takeIf { item.isRemoteTranscode() }
+            ?.let(::renderingOfRemoteUri)
+            ?: return false
+
+        // Un saut en attente dit où l'utilisateur veut être : il l'emporte sur
+        // la position du flux refusé.
+        val position = sautEnAttente?.takeIf { it.fenetre == fenetre.uid }?.cibleMs
+            ?: logicalPositionMs(
+                streamPositionMs = player.currentPosition,
+                offsetMs = decalages[fenetre.uid] ?: 0L,
+                durationMs = item.mediaMetadata.durationMs ?: C.TIME_UNSET,
+            )
+        annulerSautEnAttente()
+
+        val original = remplacerPar(index, fenetre, item.withRendering(StreamRendering.ORIGINAL))
+        rendusAvantRepli[original] = rendu
+        player.seekTo(index, position.coerceAtLeast(0L))
+        player.prepare()
+        return true
     }
 
     private fun relancer(index: Int, fenetre: Timeline.Window, decalageMs: Long) {
@@ -177,19 +343,47 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
      * suffit — Media3 livre `onEvents` par un message posté, et l'enveloppe ne
      * relit donc son état qu'ensuite.
      */
-    private fun remplacer(index: Int, fenetre: Timeline.Window, decalageMs: Long) {
+    private fun remplacer(index: Int, fenetre: Timeline.Window, decalageMs: Long) =
+        remplacerPar(index, fenetre, fenetre.mediaItem.withStreamOffset(decalageMs))
+
+    /**
+     * Échange la piste [index] contre [item] en lui gardant son identité ; voir
+     * [remplacer].
+     *
+     * @return l'identifiant brut de la fenêtre qui la remplace.
+     */
+    private fun remplacerPar(index: Int, fenetre: Timeline.Window, item: MediaItem): Any {
         val avant = player.currentTimeline
         val fenetreLogique = fenetresLogiques[fenetre.uid] ?: fenetre.uid
         val periodeBrute = avant.getUidOfPeriod(fenetre.firstPeriodIndex)
         val periodeLogique = periodesLogiques[periodeBrute] ?: periodeBrute
 
-        player.replaceMediaItem(index, fenetre.mediaItem.withStreamOffset(decalageMs))
+        // L'ExoPlayer ajoute la nouvelle source juste après l'ancienne, puis
+        // retire l'ancienne ; retirer la piste courante lui fait chercher la
+        // suivante, selon la répétition et l'ordre aléatoire (éprouvé en 1.11.1).
+        // Sous `REPEAT_MODE_ONE`, c'est l'ancienne elle-même, retirée : il
+        // s'arrête. En aléatoire, c'est la piste tirée après elle : il change de
+        // morceau. Les deux sont suspendus le temps du remplacement, et la
+        // suivante est alors la nouvelle source.
+        val courante = index == player.currentMediaItemIndex
+        val repetition = player.repeatMode
+        val melange = player.shuffleModeEnabled
+        if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = REPEAT_MODE_OFF
+        if (courante && melange) player.shuffleModeEnabled = false
+        try {
+            player.replaceMediaItem(index, item)
+        } finally {
+            if (courante && melange) player.shuffleModeEnabled = true
+            if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = repetition
+        }
 
         val apres = player.currentTimeline
         val nouvelle = apres.getWindow(index, Timeline.Window())
         fenetresLogiques[nouvelle.uid] = fenetreLogique
         periodesLogiques[apres.getUidOfPeriod(nouvelle.firstPeriodIndex)] = periodeLogique
+        val decalageMs = item.localConfiguration?.uri?.let(::streamOffsetOfRemoteUri) ?: 0L
         if (decalageMs > 0L) decalages[nouvelle.uid] = decalageMs
+        return nouvelle.uid
     }
 
     /**
@@ -203,33 +397,76 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
 
         if (segmentRepete) {
             segmentRepete = false
-            val courant = player.currentMediaItemIndex
-            val courante = player.currentTimeline
-            // Bornée comme dans [allerA] : la file peut s'être vidée entre la
-            // discontinuité et cette salve d'événements, et il ne reste alors
-            // aucune fenêtre à lire. Garde **non éprouvée** — la fenêtre est
-            // trop étroite pour qu'un test la vise —, mais une exception ici
-            // emporterait le service de lecture.
-            if (courant != C.INDEX_UNSET && courant < courante.windowCount) {
-                val fenetre = courante.getWindow(courant, Timeline.Window())
-                if ((decalages[fenetre.uid] ?: 0L) > 0L) {
-                    relancer(courant, fenetre, 0L)
-                    change = true
-                }
-            }
+            change = repartirDuDebut()
         }
 
         val timeline = player.currentTimeline
         for (index in 0 until timeline.windowCount) {
             if (index == player.currentMediaItemIndex) continue
             val fenetre = timeline.getWindow(index, Timeline.Window())
-            if ((decalages[fenetre.uid] ?: 0L) > 0L) {
+            val rendu = rendusAvantRepli.remove(fenetre.uid)
+            if (rendu != null) {
+                // R22 : le repli ne valait que pour l'écoute quittée.
+                remplacerPar(index, fenetre, fenetre.mediaItem.withRendering(rendu))
+                change = true
+            } else if ((decalages[fenetre.uid] ?: 0L) > 0L) {
                 remplacer(index, fenetre, 0L)
                 change = true
             }
         }
 
         if (change) invalidateState()
+    }
+
+    /**
+     * Ce que défait un morceau qui recommence : un saut en attente (R9), un
+     * segment (R12), un repli sur l'original (R22).
+     *
+     * @return vrai si l'état est à relire.
+     */
+    private fun repartirDuDebut(): Boolean {
+        val courant = player.currentMediaItemIndex
+        val courante = player.currentTimeline
+        // Bornée comme dans [allerA] : la file peut s'être vidée entre la
+        // discontinuité et cette salve d'événements, et il ne reste alors
+        // aucune fenêtre à lire. Garde **non éprouvée** — la fenêtre est
+        // trop étroite pour qu'un test la vise —, mais une exception ici
+        // emporterait le service de lecture.
+        if (courant == C.INDEX_UNSET || courant >= courante.windowCount) return false
+        val fenetre = courante.getWindow(courant, Timeline.Window())
+
+        // R9 : le morceau recommence, comme un changement de piste ; un saut
+        // demandé dans l'écoute qui vient de finir n'a plus de sens.
+        val attendait = sautEnAttente != null
+        annulerSautEnAttente()
+        val rendu = rendusAvantRepli.remove(fenetre.uid)
+        when {
+            // R22 : l'original répété, c'est une nouvelle écoute ; elle
+            // redemande le rendu choisi, depuis le début.
+            rendu != null -> {
+                remplacerPar(courant, fenetre, fenetre.mediaItem.withRendering(rendu))
+                sautAnnonce = 0L
+            }
+
+            (decalages[fenetre.uid] ?: 0L) > 0L -> relancer(courant, fenetre, 0L)
+
+            // L'état déjà relu pour cette salve annonce encore la cible de
+            // l'attente : sans relecture, le curseur y resterait.
+            else -> return attendait
+        }
+        return true
+    }
+
+    /** R9 : un arrêt demandé, même après une panne, n'est pas une panne à réparer. */
+    override fun handleStop(): ListenableFuture<*> {
+        arreteSurErreur = false
+        return super.handleStop()
+    }
+
+    /** Une relance en attente ne doit pas survivre au lecteur qu'elle viserait. */
+    override fun handleRelease(): ListenableFuture<*> {
+        annulerSautEnAttente()
+        return super.handleRelease()
     }
 
     /** Ce que le lecteur enveloppé ne connaît plus n'a plus à être rattaché à rien. */
@@ -241,7 +478,20 @@ internal class TranscodeSeekingPlayer(player: Player) : ForwardingSimpleBasePlay
         for (i in 0 until timeline.periodCount) periodes += timeline.getUidOfPeriod(i)
         fenetresLogiques.keys.retainAll(fenetres)
         decalages.keys.retainAll(fenetres)
+        rendusAvantRepli.keys.retainAll(fenetres)
         periodesLogiques.keys.retainAll(periodes)
+    }
+
+    /** Une relance demandée, par l'identifiant brut de la fenêtre qu'elle vise. */
+    private data class SautEnAttente(val fenetre: Any, val cibleMs: Long)
+
+    companion object {
+        /**
+         * Le délai qu'Android laisse entre deux touchers d'un même geste
+         * (`ViewConfiguration.getDoubleTapTimeout`) : deux pressions plus
+         * rapprochées font une rafale (R9).
+         */
+        const val COALESCENCE_MS = 300L
     }
 }
 
