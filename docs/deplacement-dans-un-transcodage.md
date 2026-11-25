@@ -185,14 +185,33 @@ viendra éventuellement plus tard — pas dans cette première version.
 segment. Laisser `REPEAT_MODE_ONE` à ExoPlayer pendant un segment rejouerait ses
 dernières secondes sans fin — le piège payé par Resonus (`applyLoop`).
 
-Toute relance de la piste courante suspend la répétition et l'ordre aléatoire
-le temps du remplacement. L'ExoPlayer remplace une source dont l'URI change en
-ajoutant la nouvelle juste après l'ancienne, puis en retirant l'ancienne ; et
-retirer la piste courante lui fait chercher la suivante, selon la répétition et
-l'ordre aléatoire. Sous `REPEAT_MODE_ONE`, c'était la piste elle-même, retirée :
-il s'arrêtait (`STATE_ENDED`). En aléatoire, c'était la piste tirée après elle :
-il changeait de morceau. Les deux constatés face à un vrai ExoPlayer 1.11.1.
-Suspendus, la suivante est la nouvelle source.
+Toute relance passe par un remplacement, que l'ExoPlayer fait en ajoutant la
+nouvelle source juste après l'ancienne, puis en retirant l'ancienne ; il envoie
+au fil de lecture l'ordre aléatoire de **chacune** de ces deux étapes. Deux
+pièges, constatés face à un vrai ExoPlayer 1.11.1 ou lus dans ses sources :
+
+- retirer la piste courante lui fait chercher la suivante, selon la répétition
+  et l'ordre aléatoire. Sous `REPEAT_MODE_ONE`, c'était la piste elle-même,
+  retirée : il s'arrêtait (`STATE_ENDED`). La répétition est donc suspendue le
+  temps du remplacement de la piste courante ;
+- **l'ordre aléatoire (#86).** Par défaut, l'ajout place la nouvelle source à un
+  rang tiré au hasard, que l'aléatoire soit actif ou non. Ce qui suivait la piste
+  remplacée ne la suivait plus ; retirer la piste courante faisait passer à la
+  piste tirée après elle ; et, dans l'ordre de l'étape intermédiaire, la nouvelle
+  source pouvait se glisser entre la courante et la suivante — l'ExoPlayer retire
+  alors la suivante qu'il préparait et, s'il la lisait déjà pour l'enchaîner,
+  relance la courante (`MediaPeriodQueue.updateQueuedPeriods`, puis
+  `seekToCurrentPosition`) : une coupure.
+
+Le temps du remplacement, l'enveloppe pose donc un **ordre en place**
+(`OrdreEnPlace`, partagé avec la qualité automatique) : figé sur l'ordre tiré, il
+range la nouvelle source juste après l'ancienne. À chaque étape, la nouvelle
+prend la place exacte de l'ancienne, rien d'autre ne bouge, et la suivante de la
+piste courante retirée est la nouvelle source. L'ordre tiré est rétabli ensuite :
+c'est lui qui placera au hasard les pistes ajoutées plus tard. Cela vaut pour
+**toute** piste remplacée, courante ou non : la piste quittée qui retrouve son
+marqueur nu (R14) ou son rendu (R22). Suspendre l'aléatoire, comme le faisait la
+première parade, n'est plus nécessaire.
 
 **R13. « Précédent », « reculer » et « avancer » jugent sur la position
 logique.** `ForwardingSimpleBasePlayer.handleSeek` les transmet tels quels
@@ -294,17 +313,98 @@ saturé : lecture en qualité d'origine. » L'échec sans repli se dit pour ce q
 est, « serveur occupé », et non « injoignable » : ce n'est pas la même panne, ni
 le même geste à suggérer.
 
+### Quand le réseau coupe : la reprise
+
+Règles ajoutées le 25/11 pour l'issue #60.
+
+Ce qui se passe sans elles, constaté sur la vraie chaîne de lecture. Le flux
+s'interrompt en pleine lecture, et Media3 décide de la suite selon ce qu'il sait
+du flux (`ProgressiveMediaPeriod.configureRetry`, 1.11.1) :
+
+- **il en connaît la longueur ou la durée** : il le rouvre **à l'octet atteint**
+  (`Range: bytes=N-`). Le serveur refuse toute plage d'un transcodage en cours —
+  `416`, `Accept-Ranges: none`, sans `Content-Range` (`waveflow-server`,
+  `src/media/mod.rs`) —, refus que Media3 tient pour définitif : ce qui était
+  reçu se joue, puis le lecteur s'arrête sur son erreur, pour de bon ;
+- **il n'en connaît ni l'une ni l'autre** — c'est le cas de **tout transcodage
+  en direct** : un Ogg Opus sans longueur n'a pas de durée non plus — : il le
+  tient pour un direct, joue ce qui était reçu, puis **recharge le même flux
+  depuis le début**, sans erreur. On réentend le segment depuis son début, ou le
+  morceau depuis 0:00.
+
+Ni l'un ni l'autre ne reprend là où le son s'est tu. Le second est le cas réel ;
+le premier est celui qu'avait décrit l'issue, et qu'un banc à durée connue
+aurait seul montré.
+
+**R25. Une coupure se reprend par une relance, là où le son s'est tu.** Un
+transcodage coupé **en pleine lecture** — la liaison cède une fois des octets
+reçus — n'est pas retenté par Media3 : la politique de chargement rend l'erreur
+définitive, avant qu'il ne choisisse entre l'octet atteint et le début. Ce qui
+était reçu se joue jusqu'au bout ; puis l'erreur arrive au lecteur, et se répare
+en redemandant le flux, même rendu, à `offset_ms` = la **position logique** à cet
+instant — celui où le tampon s'est vidé : rien de ce qui a été entendu ne se
+rejoue, rien de ce qui ne l'a pas été ne se perd.
+
+Ce qui distingue le transcodage en direct, c'est la réponse : le serveur dit
+`Accept-Ranges: none` d'un transcodage qu'il produit encore
+(`src/media/transcode.rs`), `bytes` d'un fichier entier — l'original, ou **un
+transcodage qu'il avait déjà en cache**,
+qu'il sert alors comme un fichier, avec sa longueur (`src/media/stream.rs`).
+Celui-là se rouvre à l'octet atteint, comme l'original : le rendre définitif
+redemanderait à ffmpeg un segment que le serveur avait déjà, et pourrait se
+heurter au plafond de transcodages du compte (R17) là où la plage passait. Seule
+une réponse qui n'a pas dit accepter les plages rend donc la coupure
+définitive ; sans l'en-tête, c'est le direct qu'on suppose.
+
+L'erreur arrive au lecteur quand ce qui était reçu a été joué : en lecture,
+quand le tampon s'est vidé ; en chargement, sitôt la coupure — le lecteur est
+alors à l'arrêt, et ce qui était tamponné sans avoir été joué se redemande avec
+la reprise. Dans les deux cas, la position logique est celle où le son s'est
+tu ; en pause, rien ne se consomme, et l'erreur attend la reprise de la lecture.
+Ce qu'en disent les sources de Media3 1.11.1 (`ExoPlayerImplInternal.doSomeWork`) ;
+le banc ne montre que le premier cas.
+
+**R26. Seul un transcodage se reprend.** L'original accepte les plages : Media3
+le rouvre à l'octet atteint et la lecture continue, comme avant. L'original d'un
+repli (R22) est un original.
+
+**R27. La reprise est une relance comme une autre.** Ni la session ni les
+écouteurs du service n'y voient de changement de piste (R5) : l'historique ne
+compte pas deux fois le morceau. Le décalage voyage dans le marqueur (R10), le
+segment contourne le cache (R11), répétition et ordre aléatoire tiennent (R12).
+Elle se décide, comme le repli, **dans le rappel d'erreur de l'ExoPlayer**, avant
+que l'enveloppe ne relise l'état (R23) : l'écran ne dit pas « injoignable »
+avant de reprendre. Elle ne se dit pas à l'écran : rien n'a changé pour qui
+écoute, hormis le silence de la relance.
+
+**R28. Un saut en attente l'emporte.** Si l'erreur tombe pendant les 300 ms d'un
+saut (R9), la reprise part à la cible du saut, et le saut en attente n'a plus
+d'objet — comme pour le repli (R22).
+
+**R29. Une reprise refusée suit les règles du 429.** C'est une demande de
+transcodage : `Retry-After`, trois relances (R17 à R20), puis l'original à la
+position de la coupure sur une liaison non facturée, « serveur occupé » sinon
+(R22, R24).
+
+**R30. Trois reprises au plus sans écoute.** Un flux qui coupe toujours au même
+endroit — ffmpeg qui tombe à la même seconde, un proxy qui ferme après tant
+d'octets — ferait relancer sans fin, et chaque relance prend un créneau de
+transcodage au serveur (R9). Une reprise compte comme **entendue** quand la
+coupure suivante tombe au moins cinq secondes après elle ; trois reprises de
+suite sans cela, et la quatrième coupure remonte comme une panne du réseau,
+« serveur injoignable ». Une reprise entendue remet le compte à zéro — une
+liaison qui coupe toutes les deux minutes se reprend à chaque fois —, de même
+qu'un saut demandé, un changement de piste ou la répétition du titre : toute
+nouvelle écoute, même d'une piste déjà reprise que la file ramène.
+
+Une coupure **qui dure** n'a pas besoin de cette borne. La demande de reprise
+échoue alors à se connecter : une panne réseau ordinaire, que Media3 retente puis
+rend au lecteur à son seuil (R20), « serveur injoignable » — comme l'original
+dans la même situation.
+
 ## Ce que cette première version ne couvre pas
 
-- **La coupure réseau pendant un transcodage.** Media3 reprend à l'octet atteint,
-  et le serveur refuse cette plage. La même relance l'y ramènera, au décalage de
-  la position logique courante — dans une PR suivante, une fois l'enveloppe en
-  place.
 - **Le cache des segments** (R11).
-- **L'ordre aléatoire après une relance (#86).** La relance reste sur la piste
-  (R12), mais l'ExoPlayer insère la nouvelle source à une place tirée au hasard
-  dans son ordre aléatoire : ce qui suit la piste relancée n'est plus ce qui la
-  suivait. Garder l'ordre d'avant le remplacement (R1) est une carte à part.
 
 ## Comment l'éprouver
 
@@ -328,6 +428,35 @@ Ce qui suppose une fin de flux — l'original d'un repli qui se répète — ou 
 refus tombé à un instant précis — pendant les 300 ms d'un saut en attente —
 s'éprouve face au lecteur factice (`TranscodeSeekingPlayerTest`), qui appelle le
 repli lui-même.
+L'ordre aléatoire après un remplacement (R12, R14) s'éprouve sur la même
+chaîne, `TranscodeRelaunchChainTest` : le lecteur factice remplace une piste sur
+place et ne peut pas le déranger. L'ExoPlayer tire son ordre sans graine ; une
+file de trente pistes et trois remplacements par test ramènent à moins d'un sur
+mille la chance qu'un ordre dérangé retombe sur l'ancien. Ces deux tests ne
+voient que l'ordre final ; l'ordre de l'étape intermédiaire s'éprouve à part, sur
+un ExoPlayer espion qui relève, à chaque remplacement, ce que l'ordre en vigueur
+ferait de l'ajout — avec un ordre tiré posé à la main et une graine, pour que le
+résultat ne dépende pas du hasard.
+
+**R25 à R30 s'éprouvent sur la même chaîne**, face à un serveur factice qui
+coupe le flux en son milieu et refuse la plage comme le vrai. Robolectric ne
+décode pas l'Opus, mais le moteur audio lit du PCM sans décodeur : les
+« transcodages » y sont servis en **Matroska PCM sans durée ni index**, en
+morceaux — la chaîne les traite en transcodages, c'est le marqueur qui en
+décide, et Media3 n'en connaît ni la longueur ni la durée, **comme d'un Opus en
+direct**. C'est ce qui décide de son geste après une coupure : un premier banc
+servait du WAV, dont l'en-tête annonce la durée ; Media3 y rouvrait à l'octet
+atteint, et la reprise passait ses tests sur un chemin que la production ne
+prend pas. Sur le Matroska, sans le correctif, il recharge le flux depuis le
+début. La lecture y avance, le tampon s'y vide, et l'erreur tombe là où elle
+tomberait sur un appareil : c'est ce qui permet de vérifier que la reprise part
+de l'instant de la coupure, et que l'original d'un repli est rouvert à l'octet
+de cet instant — l'original, lui, est servi en WAV. Ce qui dépend d'un instant
+précis — une coupure pendant les 300 ms d'un saut (R28) — et le compte des
+reprises entendues (R30) s'éprouvent face au lecteur factice ; ce que décide la
+politique, sur des coupures levées par la vraie source HTTP
+(`TranscodeRefusalPolicyTest`).
+
 `TranscodeRefusalPolicyTest` éprouve les bornes de la politique sur des refus
 **levés par la vraie source HTTP** — c'est ainsi qu'est apparue la clé `null` que
 `HttpURLConnection` donne à la ligne de statut, et qu'un refus construit à la
@@ -347,7 +476,24 @@ Ce qui n'est **pas** éprouvé :
   piste courante, ce qui suppose qu'ExoPlayer ne rende l'erreur d'une piste
   qu'une fois celle-ci devenue la courante. C'est ce que disent ses sources
   (`ExoPlayerImplInternal.handleIoException`, 1.11.1) ; aucun test ne le montre.
+- **La coupure qu'un ordre intermédiaire dérangé provoquait (R12)** : le test
+  éprouve l'ordre, non la relance de la piste courante qui en découlait, lue
+  dans les sources de Media3 (`updateQueuedPeriods`, `seekToCurrentPosition`).
+- **Une coupure sur un vrai flux Opus.** Le Matroska du banc reproduit ce qui
+  décide du geste de Media3 — ni longueur ni durée —, mais l'extracteur Ogg n'y
+  passe pas : rien n'a coupé un Opus.
+- **La coupure d'un original servi avec sa longueur.** Le banc sert l'original en
+  morceaux : coupé en son milieu, un corps à longueur fixe n'y a pas fait
+  rouvrir le flux, cause non élucidée. R26 n'est éprouvée que sur un original
+  servi en morceaux.
+- **Une coupure qui dure** n'est simulée que par une liaison qui tombe sitôt la
+  demande partie ; ni l'absence de réseau ni un nom qui ne se résout plus.
+- **La série de reprises remise à zéro par une piste retrouvée dans une file
+  qui se répète (R30)** : c'est la même transition automatique que la
+  répétition d'un titre, qui est éprouvée ; le lecteur factice ne sait pas
+  revenir de lui-même au début de la file.
 
 Le jeu réel — un saut entendu au bon endroit, la notification et la voiture qui
-suivent, l'original qui prend le relais d'un transcodage refusé — reste **à
+suivent, l'original qui prend le relais d'un transcodage refusé, une coupure
+reprise sans rien d'autre à entendre que le silence de la relance — reste **à
 valider sur appareil**, face à un serveur dont on aura abaissé `per_user_limit`.

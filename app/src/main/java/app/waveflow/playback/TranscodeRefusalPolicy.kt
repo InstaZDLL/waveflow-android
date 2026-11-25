@@ -21,6 +21,11 @@ import kotlin.random.Random
  * l'on cesse après [RELANCES_MAX] relances (R20). Ce qui suit l'abandon — le
  * repli sur l'original — se décide plus haut, voir [TranscodeRefusalFallback].
  *
+ * Un transcodage **coupé en route** n'est pas retenté du tout (R25) : Media3
+ * le rouvrirait à l'octet atteint, ce que le serveur refuse, ou du début, ce
+ * qui rejouerait ce qu'on a déjà entendu. L'erreur remonte, et
+ * [TranscodeCutRecovery] le reprend où le son s'est tu.
+ *
  * Toute autre erreur garde le comportement de Media3, délais et abandon compris.
  *
  * @param hasard la source de la gigue ; remplaçable pour qu'un test en
@@ -32,13 +37,25 @@ internal class TranscodeRefusalPolicy(
 
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long {
         val refus = loadErrorInfo.exception.refusDeTranscodage()
-            ?: return super.getRetryDelayMsFor(loadErrorInfo)
-        // Media3 rendrait de toute façon l'erreur au lecteur à ce compte-là ;
-        // dire qu'on renonce évite de laisser une relance en suspens derrière.
-        if (loadErrorInfo.errorCount > RELANCES_MAX) return C.TIME_UNSET
+        return when {
+            // R25 : un transcodage coupé en route ne se reprend ni à l'octet
+            // atteint — le serveur refuse la plage — ni du début, ce que Media3
+            // ferait d'un flux sans longueur ni durée. L'erreur est définitive
+            // pour lui ; la reprise la répare plus haut, voir [TranscodeCutRecovery].
+            // Un transcodage que le serveur avait entier se rouvre comme un
+            // fichier, à l'octet atteint : rien à reprendre.
+            loadErrorInfo.exception.estUneLectureCoupee() &&
+                loadErrorInfo.loadEventInfo.dataSpec.uri.estUnTranscodage() &&
+                !loadErrorInfo.loadEventInfo.responseHeaders.acceptentLesPlages() -> C.TIME_UNSET
 
-        val delaiMs = refus.delaiAnnonceMs()
-        return delaiMs + hasard.nextLong(delaiMs / 2 + 1)
+            refus == null -> super.getRetryDelayMsFor(loadErrorInfo)
+
+            // Media3 rendrait de toute façon l'erreur au lecteur à ce compte-là ;
+            // dire qu'on renonce évite de laisser une relance en suspens derrière.
+            loadErrorInfo.errorCount > RELANCES_MAX -> C.TIME_UNSET
+
+            else -> refus.delaiAnnonceMs().let { delaiMs -> delaiMs + hasard.nextLong(delaiMs / 2 + 1) }
+        }
     }
 
     companion object {
@@ -93,6 +110,23 @@ internal fun InvalidResponseCodeException.delaiAnnonceMs(): Long {
     return secondes.coerceAtMost(TranscodeRefusalPolicy.DELAI_MAX_MS / MS_PAR_SECONDE) * MS_PAR_SECONDE
 }
 
+/**
+ * Vrai si la réponse a dit accepter les plages (`Accept-Ranges: bytes`) : le
+ * serveur la dit d'un fichier entier, l'original ou un transcodage qu'il avait
+ * déjà en cache, et `none` d'un transcodage en direct. Sans en-tête, faux :
+ * c'est le transcodage en direct qu'on suppose, celui qu'on sait reprendre.
+ *
+ * Les noms se lisent sans casse et comme nullables, pour la même raison que
+ * dans [delaiAnnonceMs].
+ */
+internal fun Map<String, List<String>>.acceptentLesPlages(): Boolean =
+    entries.any { (nom, valeurs) ->
+        (nom as String?)?.equals(ACCEPT_RANGES, ignoreCase = true) == true &&
+            valeurs.any { it.trim().equals(OCTETS, ignoreCase = true) }
+    }
+
+private const val ACCEPT_RANGES = "Accept-Ranges"
+private const val OCTETS = "bytes"
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val RETRY_AFTER = "Retry-After"
 private const val MS_PAR_SECONDE = 1_000L

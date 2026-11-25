@@ -14,6 +14,7 @@ import app.waveflow.testing.remoteSong
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -414,6 +415,117 @@ class TranscodeSeekingPlayerTest {
         assertEquals("on est passé au morceau suivant", 1, faux.currentMediaItemIndex)
         assertEquals(0, faux.remplacements.last().first)
         assertEquals(0L, faux.dernierDecalage)
+    }
+
+    @Test
+    fun `une reprise apres une coupure repart de la position logique`() {
+        // R25 : le décalage du segment plus ce que son flux a joué, et non le
+        // début du segment ni celui du morceau.
+        jouer(transcode())
+        lecteur.seekTo(133_000L)
+        ecouler()
+        faux.avancer(5_000L)
+
+        assertTrue(lecteur.reprendreApresCoupure())
+        ecouler()
+
+        assertEquals(138_000L, faux.dernierDecalage)
+        assertEquals(
+            StreamRendering("opus", 96),
+            renderingOfRemoteUri(faux.remplacements.last().second.localConfiguration!!.uri),
+        )
+    }
+
+    @Test
+    fun `une reprise pendant l'attente d'un saut part a la cible du saut`() {
+        // R28 : l'utilisateur a dit où il voulait être, et le saut en attente
+        // n'a plus d'objet — une seule relance, pas deux.
+        jouer(transcode())
+        lecteur.seekTo(133_000L)
+
+        lecteur.reprendreApresCoupure()
+        ecouler()
+
+        val (index, item) = faux.remplacements.single()
+        assertEquals(0, index)
+        assertEquals(133_000L, streamOffsetOfRemoteUri(item.localConfiguration!!.uri))
+    }
+
+    @Test
+    fun `une coupure dans l'original ne se reprend pas`() {
+        // R26 : l'original accepte les plages ; un refus y est une vraie panne.
+        jouer(original())
+        faux.avancer(30_000L)
+
+        assertFalse(lecteur.reprendreApresCoupure())
+        assertEquals(0, faux.remplacements.size)
+    }
+
+    @Test
+    fun `trois reprises sans ecoute, la quatrieme coupure remonte`() {
+        // R30 : un flux qui coupe toujours au même endroit ne fait pas relancer
+        // sans fin.
+        jouer(transcode())
+        faux.avancer(30_000L)
+
+        repeat(TranscodeSeekingPlayer.REPRISES_SANS_ECOUTE_MAX) {
+            assertTrue("reprise n° ${it + 1}", lecteur.reprendreApresCoupure())
+            ecouler()
+            faux.avancer(1_000L)
+        }
+
+        assertFalse(lecteur.reprendreApresCoupure())
+        assertEquals(TranscodeSeekingPlayer.REPRISES_SANS_ECOUTE_MAX, faux.remplacements.size)
+    }
+
+    @Test
+    fun `une reprise entendue remet le compte a zero`() {
+        // R30 : le pendant du précédent. Une liaison qui coupe de loin en loin
+        // se reprend à chaque fois.
+        jouer(transcode())
+        faux.avancer(30_000L)
+
+        repeat(TranscodeSeekingPlayer.REPRISES_SANS_ECOUTE_MAX + 2) {
+            assertTrue("reprise n° ${it + 1}", lecteur.reprendreApresCoupure())
+            ecouler()
+            faux.avancer(TranscodeSeekingPlayer.REPRISE_ENTENDUE_MS)
+        }
+    }
+
+    @Test
+    fun `un saut remet le compte des reprises a zero`() {
+        // R30 : la lecture repart d'où l'on a voulu.
+        jouer(transcode())
+        faux.avancer(30_000L)
+        repeat(TranscodeSeekingPlayer.REPRISES_SANS_ECOUTE_MAX) {
+            lecteur.reprendreApresCoupure()
+            ecouler()
+        }
+
+        lecteur.seekTo(20_000L)
+        ecouler()
+
+        assertTrue(lecteur.reprendreApresCoupure())
+    }
+
+    @Test
+    fun `une nouvelle ecoute du meme titre remet le compte des reprises a zero`() {
+        // R30 : la piste qui revient — répétée ici, retrouvée par une file qui
+        // se répète ailleurs — garde son identifiant logique. Les reprises de
+        // l'écoute d'avant ne disent rien de celle-ci.
+        faux.dureeUs = { Util.msToUs(DUREE_MS) }
+        jouer(transcode())
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+        faux.avancer(30_000L)
+        repeat(TranscodeSeekingPlayer.REPRISES_SANS_ECOUTE_MAX) {
+            lecteur.reprendreApresCoupure()
+            ecouler()
+        }
+
+        faux.finirLeFlux()
+        ecouler()
+
+        assertTrue(lecteur.reprendreApresCoupure())
     }
 
     @Test

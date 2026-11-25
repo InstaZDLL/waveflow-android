@@ -1,5 +1,6 @@
 package app.waveflow.playback
 
+import android.net.Uri
 import android.os.Handler
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingSimpleBasePlayer
@@ -8,6 +9,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.ExoPlayer
 import app.waveflow.model.StreamRendering
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -22,7 +24,7 @@ import com.google.common.util.concurrent.ListenableFuture
  * morceau tel qu'il est : commencé à 0:00, de sa durée entière.
  *
  * Les règles sont dans `docs/deplacement-dans-un-transcodage.md` ; les renvois
- * R1 à R24 ci-dessous y pointent.
+ * R1 à R30 ci-dessous y pointent.
  *
  * @param coalescenceMs ce qu'une relance demandée par un saut attend avant de
  *   partir, pour qu'un saut suivant la remplace (R9).
@@ -67,6 +69,9 @@ internal class TranscodeSeekingPlayer(
     /** La relance qu'un saut a demandée et qui n'est pas encore partie (R9). */
     private var sautEnAttente: SautEnAttente? = null
 
+    /** La dernière série de reprises après une coupure (R30) ; un saut l'efface. */
+    private var reprises: Reprises? = null
+
     /**
      * Vrai quand une relance différée vient de partir : le saut a été annoncé au
      * moment du geste, la discontinuité que provoque le remplacement ne doit pas
@@ -80,9 +85,10 @@ internal class TranscodeSeekingPlayer(
     private val lancerLeSautEnAttente = Runnable { lancerSautEnAttente() }
 
     init {
-        // Trois choses ne se déduisent pas d'un état mais d'un événement : la fin
-        // d'un flux qui se répète, une piste relancée qu'on vient de quitter, et
-        // un arrêt causé par une panne plutôt que demandé.
+        // Quatre choses ne se déduisent pas d'un état mais d'un événement : la
+        // fin d'un flux qui se répète, une nouvelle écoute, une piste relancée
+        // qu'on vient de quitter, et un arrêt causé par une panne plutôt que
+        // demandé.
         player.addListener(
             object : Player.Listener {
                 override fun onPositionDiscontinuity(
@@ -90,11 +96,13 @@ internal class TranscodeSeekingPlayer(
                     newPosition: Player.PositionInfo,
                     reason: Int,
                 ) {
-                    if (reason == DISCONTINUITY_REASON_AUTO_TRANSITION &&
-                        oldPosition.mediaItemIndex == newPosition.mediaItemIndex
-                    ) {
-                        segmentRepete = true
-                    }
+                    if (reason != DISCONTINUITY_REASON_AUTO_TRANSITION) return
+                    // R30 : une nouvelle écoute, d'une autre piste ou de la même
+                    // répétée. La piste retrouvée plus tard — la file qui se
+                    // répète — garde son identifiant logique : sans cela, les
+                    // reprises de l'écoute d'avant compteraient encore.
+                    reprises = null
+                    if (oldPosition.mediaItemIndex == newPosition.mediaItemIndex) segmentRepete = true
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -181,6 +189,9 @@ internal class TranscodeSeekingPlayer(
         // R9 : un saut chasse le précédent. S'il demande à son tour une
         // relance, [allerA] la remet en attente à sa propre cible.
         annulerSautEnAttente()
+        // R30 : la lecture repart d'où l'on a voulu, les reprises d'avant ne
+        // disent plus rien du flux à venir.
+        reprises = null
         val courant = player.currentMediaItemIndex
         when (seekCommand) {
             COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, COMMAND_SEEK_BACK, COMMAND_SEEK_FORWARD ->
@@ -323,6 +334,67 @@ internal class TranscodeSeekingPlayer(
         return true
     }
 
+    /**
+     * R25 : reprend le transcodage de la piste courante là où le son s'est tu,
+     * après une coupure que le serveur refuse de reprendre à l'octet atteint.
+     *
+     * Une relance comme une autre (R27) : même rendu, même identité, au décalage
+     * de la position logique — ou à la cible d'un saut en attente (R28). Le
+     * lecteur, arrêté sur son erreur, est préparé de nouveau ; il reprend s'il
+     * jouait.
+     *
+     * @return faux, sans rien changer, si la piste courante n'est pas un
+     *   transcodage du serveur (R26), ou après trois reprises de suite sans
+     *   écoute (R30) : l'erreur suit alors son cours.
+     */
+    fun reprendreApresCoupure(): Boolean {
+        val fenetre = transcodageCourant() ?: return false
+        val item = fenetre.mediaItem
+
+        val position = sautEnAttente?.takeIf { it.fenetre == fenetre.uid }?.cibleMs
+            ?: logicalPositionMs(
+                streamPositionMs = player.currentPosition,
+                offsetMs = decalages[fenetre.uid] ?: 0L,
+                durationMs = item.mediaMetadata.durationMs ?: C.TIME_UNSET,
+            ).coerceAtLeast(0L)
+        if (!compterLaReprise(fenetre, position)) return false
+
+        // R28 : le saut est pris en charge par la reprise. Le remplacement
+        // suffirait d'ailleurs à le rendre caduc — la fenêtre qu'il visait
+        // change d'identifiant —, si bien que cette annulation, qui retire
+        // aussi le rappel de la minuterie, n'est éprouvée par aucun test.
+        annulerSautEnAttente()
+        relancer(player.currentMediaItemIndex, fenetre, bornerAuMorceau(position, item))
+        player.prepare()
+        return true
+    }
+
+    /** La fenêtre courante du lecteur enveloppé, si c'est un transcodage du serveur (R26). */
+    private fun transcodageCourant(): Timeline.Window? {
+        val index = player.currentMediaItemIndex
+        val timeline = player.currentTimeline
+        if (index == C.INDEX_UNSET || index >= timeline.windowCount) return null
+        return timeline.getWindow(index, Timeline.Window()).takeIf { it.mediaItem.isRemoteTranscode() }
+    }
+
+    /**
+     * R30 : compte une reprise à [positionMs] dans la série de son écoute.
+     *
+     * La série se compte sur l'écoute, identifiée par sa fenêtre logique, que
+     * les relances ne changent pas ; elle repart de zéro quand la reprise
+     * d'avant a été entendue.
+     *
+     * @return faux, sans rien compter, si la reprise dépasserait la borne.
+     */
+    private fun compterLaReprise(fenetre: Timeline.Window, positionMs: Long): Boolean {
+        val ecoute = fenetresLogiques[fenetre.uid] ?: fenetre.uid
+        val serie = reprises?.takeIf { it.ecoute == ecoute && positionMs < it.positionMs + REPRISE_ENTENDUE_MS }
+        val nombre = (serie?.nombre ?: 0) + 1
+        if (nombre > REPRISES_SANS_ECOUTE_MAX) return false
+        reprises = Reprises(ecoute, positionMs, nombre)
+        return true
+    }
+
     private fun relancer(index: Int, fenetre: Timeline.Window, decalageMs: Long) {
         remplacer(index, fenetre, decalageMs)
 
@@ -347,6 +419,48 @@ internal class TranscodeSeekingPlayer(
         remplacerPar(index, fenetre, fenetre.mediaItem.withStreamOffset(decalageMs))
 
     /**
+     * Remplace la piste [index] du lecteur enveloppé sans rien déranger d'autre :
+     * ni la piste qu'il joue, ni l'ordre de lecture.
+     *
+     * L'ExoPlayer ajoute la nouvelle source juste après l'ancienne, puis retire
+     * l'ancienne, et envoie au fil de lecture l'ordre aléatoire de **chaque**
+     * étape (éprouvé en 1.11.1). Par défaut, l'ajout place la nouvelle source à
+     * un rang tiré au hasard, que l'aléatoire soit actif ou non. Glissée entre
+     * la courante et la suivante, elle fait retirer à l'ExoPlayer la suivante
+     * qu'il préparait ; s'il la lisait déjà pour l'enchaîner, il relance la
+     * courante — une coupure, que reposer l'ordre à la fin ne rattrape pas (R1).
+     * Retirer la piste courante lui fait chercher la suivante dans ce même ordre :
+     * il changeait de morceau.
+     *
+     * Le temps du remplacement, l'ordre en place ([OrdreEnPlace]) range la
+     * nouvelle source juste après l'ancienne : à chaque étape, elle en prend la
+     * place exacte, et la suivante de la piste courante retirée est la nouvelle
+     * source. Toute piste remplacée y passe, courante ou non (R14, R22). L'ordre
+     * tiré est rétabli ensuite : c'est lui qui placera au hasard les pistes
+     * ajoutées plus tard.
+     *
+     * Sous `REPEAT_MODE_ONE`, la suivante de l'ancienne est l'ancienne elle-même,
+     * retirée : il s'arrêtait. La répétition est suspendue le temps du
+     * remplacement.
+     */
+    private fun remplacerSansDeranger(index: Int, item: MediaItem) {
+        val courante = index == player.currentMediaItemIndex
+        val repetition = player.repeatMode
+        val exoPlayer = player as? ExoPlayer
+        val ordre = exoPlayer?.shuffleOrder
+        if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = REPEAT_MODE_OFF
+        if (ordre != null) exoPlayer.setShuffleOrder(OrdreEnPlace.de(ordre))
+        try {
+            player.replaceMediaItem(index, item)
+        } finally {
+            // Un remplacement interrompu entre ses deux étapes laisserait une
+            // longueur que l'ordre relevé ne couvre plus (garde non éprouvée).
+            if (ordre != null && exoPlayer.shuffleOrder.length == ordre.length) exoPlayer.shuffleOrder = ordre
+            if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = repetition
+        }
+    }
+
+    /**
      * Échange la piste [index] contre [item] en lui gardant son identité ; voir
      * [remplacer].
      *
@@ -358,24 +472,7 @@ internal class TranscodeSeekingPlayer(
         val periodeBrute = avant.getUidOfPeriod(fenetre.firstPeriodIndex)
         val periodeLogique = periodesLogiques[periodeBrute] ?: periodeBrute
 
-        // L'ExoPlayer ajoute la nouvelle source juste après l'ancienne, puis
-        // retire l'ancienne ; retirer la piste courante lui fait chercher la
-        // suivante, selon la répétition et l'ordre aléatoire (éprouvé en 1.11.1).
-        // Sous `REPEAT_MODE_ONE`, c'est l'ancienne elle-même, retirée : il
-        // s'arrête. En aléatoire, c'est la piste tirée après elle : il change de
-        // morceau. Les deux sont suspendus le temps du remplacement, et la
-        // suivante est alors la nouvelle source.
-        val courante = index == player.currentMediaItemIndex
-        val repetition = player.repeatMode
-        val melange = player.shuffleModeEnabled
-        if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = REPEAT_MODE_OFF
-        if (courante && melange) player.shuffleModeEnabled = false
-        try {
-            player.replaceMediaItem(index, item)
-        } finally {
-            if (courante && melange) player.shuffleModeEnabled = true
-            if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = repetition
-        }
+        remplacerSansDeranger(index, item)
 
         val apres = player.currentTimeline
         val nouvelle = apres.getWindow(index, Timeline.Window())
@@ -485,7 +582,21 @@ internal class TranscodeSeekingPlayer(
     /** Une relance demandée, par l'identifiant brut de la fenêtre qu'elle vise. */
     private data class SautEnAttente(val fenetre: Any, val cibleMs: Long)
 
+    /**
+     * La dernière reprise d'une écoute, et combien l'ont précédée sans qu'on ait
+     * rien entendu entre deux (R30).
+     *
+     * @param ecoute l'identifiant logique de la fenêtre reprise.
+     */
+    private data class Reprises(val ecoute: Any, val positionMs: Long, val nombre: Int)
+
     companion object {
+        /** R30 : au-delà, la coupure remonte comme une panne du réseau. */
+        const val REPRISES_SANS_ECOUTE_MAX = 3
+
+        /** R30 : ce qu'une reprise doit avoir rendu pour compter comme entendue. */
+        const val REPRISE_ENTENDUE_MS = 5_000L
+
         /**
          * Le délai qu'Android laisse entre deux touchers d'un même geste
          * (`ViewConfiguration.getDoubleTapTimeout`) : deux pressions plus
@@ -521,7 +632,11 @@ internal fun logicalPositionMs(streamPositionMs: Long, offsetMs: Long, durationM
 }
 
 /** Une piste du serveur servie transcodée : la seule dont le flux peut devoir être relancé. */
-internal fun MediaItem.isRemoteTranscode(): Boolean {
-    val uri = localConfiguration?.uri ?: return false
-    return trackIdOfRemoteUri(uri) != null && !renderingOfRemoteUri(uri).isOriginal
-}
+internal fun MediaItem.isRemoteTranscode(): Boolean = localConfiguration?.uri?.estUnTranscodage() == true
+
+/**
+ * Le même jugement sur le marqueur seul, tel que le voit la chaîne de lecture —
+ * une politique de chargement ne connaît que l'URI qu'elle charge.
+ */
+internal fun Uri.estUnTranscodage(): Boolean =
+    trackIdOfRemoteUri(this) != null && !renderingOfRemoteUri(this).isOriginal
