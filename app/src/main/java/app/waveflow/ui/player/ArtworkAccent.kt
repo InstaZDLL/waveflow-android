@@ -12,7 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -105,29 +105,42 @@ fun PlayerAccent(light: PlayerLight, content: @Composable () -> Unit) {
  * lumière de la pochette ([lightPools]), bornées pour que le texte et
  * l'accent restent lisibles. Les nappes sont des ellipses floues : un disque
  * à dégradé radial, étiré à la mesure de l'écran.
+ *
+ * Les nappes et leurs brosses sont préparées une fois par lumière, matière,
+ * fond et taille : la page peut se redessiner sans que rien de cela change
+ * (un enfant qui s'anime sans calque à lui), et borner les opacités — une
+ * dichotomie par nappe — n'a pas à suivre.
  */
 fun Modifier.playerLight(light: PlayerLight, material: WaveFlowMaterial, ground: Color): Modifier =
-    drawBehind {
-        drawRect(ground)
-        for (nappe in lightPools(light, material, ground)) {
+    drawWithCache {
+        val nappes = lightPools(light, material, ground).map { nappe ->
             val centre = Offset(size.width * nappe.x, size.height * nappe.y)
             val rx = size.width * nappe.rx
-            val ry = size.height * nappe.ry
-            // Un disque de rayon rx, aplati verticalement par l'échelle.
-            scale(scaleX = 1f, scaleY = ry / rx, pivot = centre) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        0f to nappe.color.copy(alpha = nappe.alpha),
-                        POOL_FADE to Color.Transparent,
-                        center = centre,
-                        radius = rx,
-                    ),
-                    radius = rx,
+            NappePeinte(
+                centre = centre,
+                rx = rx,
+                aplatissement = size.height * nappe.ry / rx,
+                brosse = Brush.radialGradient(
+                    0f to nappe.color.copy(alpha = nappe.alpha),
+                    POOL_FADE to Color.Transparent,
                     center = centre,
-                )
+                    radius = rx,
+                ),
+            )
+        }
+        onDrawBehind {
+            drawRect(ground)
+            for (nappe in nappes) {
+                // Un disque de rayon rx, aplati verticalement par l'échelle.
+                scale(scaleX = 1f, scaleY = nappe.aplatissement, pivot = nappe.centre) {
+                    drawCircle(brush = nappe.brosse, radius = nappe.rx, center = nappe.centre)
+                }
             }
         }
     }
+
+/** Une nappe de [lightPools] mise à la taille de la page, prête à peindre. */
+private class NappePeinte(val centre: Offset, val rx: Float, val aplatissement: Float, val brosse: Brush)
 
 private suspend fun sampleCover(context: Context, artworkUri: Uri): CoverSample? {
     val request = ImageRequest.Builder(context)

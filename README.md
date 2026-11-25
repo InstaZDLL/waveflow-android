@@ -139,7 +139,7 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 | `GroupingTest` | album / artist derivation, sorting, missing tags |
 | `DurationFormatTest` | `m:ss` / `h:mm:ss` formatting |
 | `CoverColorsTest` | cover accent over the whole hue wheel, contrast against ink and grounds, bounded light pools |
-| `PlayerSeekBarTest` | tap, drag-then-release, screen-reader seeking, A-B marks |
+| `PlayerSeekBarTest` | tap, drag-then-release, gestures dropped on a track or duration change, screen-reader seeking, A-B marks |
 | `WaveFlowSymbolTest` | the W's breath: when, how deep, settling on pause |
 | `HttpServerApiTest` | request shapes, error classes, URL handling, unknown fields |
 | `ServerSessionRepositoryTest` | token refresh and rotation, session lifetime, sign-out |
@@ -159,9 +159,10 @@ in-memory SQLite for Room, so the DAO is exercised without a device.
 Fakes and the `Dispatchers.Main` rule live in `src/test/java/app/waveflow/testing/`.
 
 Compose tests run on the JVM too: `createComposeRule()` works under Robolectric,
-so a screen can be composed and driven without a device. What still cannot be
-covered that way is the pointer gesture itself — its arithmetic is extracted
-into `DragState` and tested there instead.
+so a screen can be composed and driven without a device, pointer gestures
+included: `PlayerSeekBarTest` taps and drags the seek bar with
+`performTouchInput`. Only the playlist reorder keeps its arithmetic apart, in
+`DragState`, tested on its own.
 
 ## Roadmap
 

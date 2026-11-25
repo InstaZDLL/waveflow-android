@@ -25,3 +25,11 @@ fun loopMarks(abLoop: AbLoopState, mediaId: String, durationMs: Long): LoopMarks
         is AbLoopState.Armed -> LoopMarks(part(abLoop.startMs), part(abLoop.endMs))
     }
 }
+
+/**
+ * [abLoop] s'il appartient à [mediaId], [AbLoopState.Off] sinon : le bouton de
+ * la boucle ne s'allume pas pour celle du morceau précédent, pour la même
+ * raison que [loopMarks] ne la dessine pas.
+ */
+fun loopOfTrack(abLoop: AbLoopState, mediaId: String): AbLoopState =
+    if (abLoop.mediaId == mediaId) abLoop else AbLoopState.Off

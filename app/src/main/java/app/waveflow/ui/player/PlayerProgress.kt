@@ -265,7 +265,9 @@ private fun DrawScope.drawLightLine(
 
     // Le bord lumineux : un point blanc cerclé de lavande.
     if (!compact) {
-        val r = (if (scrubbing) LIGHT_HEAD_SCRUB else LIGHT_HEAD).dp.toPx() / 2f
+        // Le rayon borné à la demi-largeur : sur une ligne plus étroite que la
+        // tête, les bornes du centre s'inverseraient et coerceIn lèverait.
+        val r = min((if (scrubbing) LIGHT_HEAD_SCRUB else LIGHT_HEAD).dp.toPx() / 2f, size.width / 2f)
         val centre = Offset(tete.coerceIn(r, size.width - r), milieu)
         drawCircle(LiquidLavenderDeep.copy(alpha = HEAD_GLOW), radius = r + HEAD_GLOW_SPREAD.dp.toPx(), center = centre)
         drawCircle(LiquidLavenderDeep.copy(alpha = HEAD_RING), radius = r + HEAD_RING_WIDTH.dp.toPx(), center = centre)
@@ -302,7 +304,8 @@ private fun DrawScope.drawLoopMarks(
 ) {
     val hauteur = LOOP_MARK_HEIGHT.dp.toPx()
     val haut = size.height / 2f - hauteur / 2f
-    listOfNotNull(loop.start to "A", loop.end?.let { it to "B" }).forEach { (part, lettre) ->
+    val bornes = listOfNotNull(loop.start, loop.end)
+    bornes.forEach { part ->
         val x = size.width * part
         drawLine(
             color = ink,
@@ -311,10 +314,37 @@ private fun DrawScope.drawLoopMarks(
             strokeWidth = LOOP_MARK_STROKE.dp.toPx(),
             cap = StrokeCap.Round,
         )
-        val texte = mesureur.measure(lettre, style.copy(color = label))
-        val gauche = if (lettre == "A") x - texte.size.width else x
-        drawText(texte, topLeft = Offset(gauche.coerceIn(0f, size.width - texte.size.width), haut - texte.size.height))
     }
+    val a = mesureur.measure("A", style.copy(color = label))
+    val b = loop.end?.let { mesureur.measure("B", style.copy(color = label)) }
+    val (gaucheA, gaucheB) = loopLetterLefts(
+        aX = size.width * loop.start,
+        aWidth = a.size.width.toFloat(),
+        bX = loop.end?.let { size.width * it },
+        bWidth = b?.size?.width?.toFloat() ?: 0f,
+        width = size.width,
+    )
+    drawText(a, topLeft = Offset(gaucheA, haut - a.size.height))
+    if (b != null && gaucheB != null) drawText(b, topLeft = Offset(gaucheB, haut - b.size.height))
+}
+
+/**
+ * Le bord gauche des lettres A et B : A à gauche de son trait, B à droite,
+ * chacune bornée à la ligne. Près d'un bord, une boucle de quelques secondes
+ * les ferait se chevaucher une fois bornées : B est alors poussée juste après
+ * A, ou A juste avant B quand c'est B qui bute sur le bord droit.
+ */
+internal fun loopLetterLefts(aX: Float, aWidth: Float, bX: Float?, bWidth: Float, width: Float): Pair<Float, Float?> {
+    var gaucheA = (aX - aWidth).coerceIn(0f, (width - aWidth).coerceAtLeast(0f))
+    var gaucheB = bX?.coerceIn(0f, (width - bWidth).coerceAtLeast(0f)) ?: return gaucheA to null
+    if (gaucheB < gaucheA + aWidth) {
+        gaucheB = gaucheA + aWidth
+        if (gaucheB + bWidth > width) {
+            gaucheB = (width - bWidth).coerceAtLeast(0f)
+            gaucheA = (gaucheB - aWidth).coerceAtLeast(0f)
+        }
+    }
+    return gaucheA to gaucheB
 }
 
 /** La durée d'un tic de position (`Media3PlaybackController.POSITION_POLL_MS`). */

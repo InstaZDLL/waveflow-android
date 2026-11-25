@@ -11,7 +11,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
+import kotlin.math.min
 
 /**
  * Le motif de l'onde, seul ornement que la direction permet.
@@ -30,15 +32,28 @@ fun WaveMark(
     color: Color = MaterialTheme.colorScheme.primary,
 ) {
     Canvas(modifier = modifier.size(MARK_WIDTH.dp, MARK_HEIGHT.dp)) {
-        val echelle = size.width / MARK_WIDTH
+        val echelle = markScale(size.width, size.height)
+        if (echelle <= 0f) return@Canvas
         // Le trait est donné en dp à la taille dessinée, pas à l'échelle de
         // la boîte : agrandi, le motif garde son épaisseur de filet.
         val trait = Stroke(width = MARK_STROKE.dp.toPx() / echelle, cap = StrokeCap.Round)
-        scale(echelle, pivot = Offset.Zero) {
-            drawPath(MarkPath, color = color, style = trait)
+        // Centré dans la boîte quand elle n'a pas les proportions du motif.
+        translate(
+            left = (size.width - MARK_WIDTH * echelle) / 2f,
+            top = (size.height - MARK_HEIGHT * echelle) / 2f,
+        ) {
+            scale(echelle, pivot = Offset.Zero) {
+                drawPath(MarkPath, color = color, style = trait)
+            }
         }
     }
 }
+
+/**
+ * L'échelle du motif dans une boîte de [width] × [height] : la plus grande à
+ * laquelle il y tient entier, sans déformation.
+ */
+internal fun markScale(width: Float, height: Float): Float = min(width / MARK_WIDTH, height / MARK_HEIGHT)
 
 /** Le tracé du document, ses `S` dépliés en `C` (le point de contrôle reflété). */
 private val MarkPath = Path().apply {

@@ -47,12 +47,16 @@ class PlayerSeekBarTest {
     /** Le morceau à l'écran : un test peut le changer sous la barre. */
     private var piste by mutableStateOf(PISTE)
 
+    /** La durée annoncée par le lecteur : elle aussi peut changer sous la barre. */
+    private var duree by mutableStateOf(DUREE)
+
     private fun afficher(durationMs: Long = DUREE, abLoop: AbLoopState = AbLoopState.Off) {
+        duree = durationMs
         compose.setContent {
             WaveFlowTheme {
                 PlayerSeekBar(
                     positionMs = 30_000L,
-                    durationMs = durationMs,
+                    durationMs = duree,
                     trackKey = piste,
                     playing = false,
                     abLoop = abLoop,
@@ -179,6 +183,42 @@ class PlayerSeekBarTest {
 
         assertTrue("sauts : $sauts", sauts.isEmpty())
         barre().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "0:30 sur 3:20"))
+    }
+
+    @Test
+    fun `un appui commence avant un changement de morceau est oublie`() {
+        afficher()
+        barre().performTouchInput { down(center) }
+
+        compose.runOnIdle { piste = "local:2" }
+        barre().performTouchInput { up() }
+
+        assertTrue("sauts : $sauts", sauts.isEmpty())
+    }
+
+    @Test
+    fun `un glissement interrompu par la perte de la duree est oublie`() {
+        afficher()
+        barre().performTouchInput {
+            down(centerLeft + Offset(width * 0.1f, 0f))
+            moveTo(centerLeft + Offset(width * 0.5f, 0f))
+        }
+
+        // Le même morceau perd sa durée sous le doigt, puis la retrouve : la
+        // tête ne doit pas rester figée là où le doigt l'avait laissée.
+        compose.runOnIdle { duree = 0L }
+        barre().performTouchInput { up() }
+        compose.runOnIdle { duree = DUREE }
+
+        assertTrue("sauts : $sauts", sauts.isEmpty())
+        barre().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "0:30 sur 3:20"))
+    }
+
+    @Test
+    fun `une boucle d'un autre morceau n'allume pas le bouton`() {
+        afficher(abLoop = AbLoopState.Armed("autre", startMs = 10_000L, endMs = 20_000L))
+
+        compose.onNodeWithContentDescription("Boucle A-B : poser le début").assertIsEnabled()
     }
 
     private companion object {

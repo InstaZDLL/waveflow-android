@@ -64,11 +64,17 @@ fun PlayerSeekBar(
     onMarkAbLoop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Pendant un glissement, la position affichée suit le doigt et non le
-    // lecteur ; remise à zéro dès qu'on change de morceau.
-    var scrub by remember(trackKey) { mutableStateOf<Float?>(null) }
-
     val hasDuration = durationMs > 0L
+
+    // Pendant un glissement, la position affichée suit le doigt et non le
+    // lecteur ; remise à zéro dès qu'on change de morceau, ou que la durée se
+    // perd ou revient : le geste interrompu ne finit jamais, et la tête
+    // resterait là où le doigt l'avait laissée.
+    var scrub by remember(trackKey, hasDuration) { mutableStateOf<Float?>(null) }
+
+    // Une boucle d'un autre morceau n'allume pas le bouton : l'écran peut
+    // recevoir la piste suivante un tic avant que le service ne l'efface.
+    val boucle = loopOfTrack(abLoop, trackKey)
     val glisse by rememberGlidingProgress(positionMs, durationMs, trackKey, playing)
     val displayedPositionMs = scrub?.let { (it * durationMs).toLong() } ?: positionMs
 
@@ -93,7 +99,9 @@ fun PlayerSeekBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(TOUCH_HEIGHT.dp)
-                .pointerInput(hasDuration) {
+                // Relancé à chaque morceau, comme le glissement : un appui
+                // commencé sur le précédent ne finit pas dans le suivant.
+                .pointerInput(hasDuration, trackKey) {
                     if (!hasDuration) return@pointerInput
                     detectTapGestures { point ->
                         chercher((part(point.x, size.width) * duree).toLong())
@@ -161,7 +169,7 @@ fun PlayerSeekBar(
             // Entre les deux durées, et non dans l'en-tête : A et B sont des
             // positions, et se posent en regardant celle qui défile. L'en-tête
             // est par ailleurs plein.
-            AbLoopButton(abLoop = abLoop, onClick = onMarkAbLoop)
+            AbLoopButton(abLoop = boucle, onClick = onMarkAbLoop)
 
             Text(
                 text = if (hasDuration) formatDuration(durationMs) else "--:--",
