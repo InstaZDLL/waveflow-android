@@ -107,6 +107,15 @@ qu'aux contrôleurs de confiance, dont l'application ; les autres gardent les
 commandes par défaut de Media3. La demande attend que la liaison au service
 soit établie — elle arrive souvent au démarrage à froid, avant elle.
 
+L'activité lie elle-même le service à chaque reprise, **si la permission
+audio est accordée**, quel que soit l'écran affiché. Autrement, seuls les
+écrans gardés par la permission le lieraient ; Réglages et Serveur ne le sont
+pas, et une demande reçue là attendrait sans fin. Sans la permission, la
+demande attend : la recherche ne lit que la bibliothèque de l'appareil (R1),
+qu'elle ne pourrait pas lire, et lier le service ne ferait rien jouer.
+L'accueil, gardé, invite à l'accorder ; accordée, dans la boîte de dialogue ou
+dans les paramètres système, le service est lié et la demande part.
+
 L'activité ne relaie que les demandes neuves. Recréée (rotation, processus
 tué) ou rouverte depuis les récents (`FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`),
 elle reçoit encore l'intention qui l'a lancée : la rejouer remplacerait la file
@@ -142,6 +151,12 @@ que rien.
 - Une demande qui attend la première lecture de la bibliothèque (R11) s'applique
   à son terme, même si une autre file a été posée entre-temps — la fenêtre est
   celle du démarrage à froid, le temps d'une requête au MediaStore.
+- Un service **démarré sans la permission** audio — lié par la voiture avant
+  qu'elle soit accordée — garde une bibliothèque vide, tenue pour lue (R11),
+  jusqu'à ce qu'un écran gardé la recharge. Une demande reçue entre-temps sur
+  Réglages ou Serveur ne trouve rien (R9). Recharger à l'octroi ne suffirait
+  pas : R11 devrait aussi attendre une lecture faite avec la permission. La
+  navigation dans la voiture partage ce vide, indépendamment de la recherche.
 - **Non éprouvé** : la commande réservée aux contrôleurs de confiance (R10).
   Sous Robolectric, tout contrôleur l'est. De même, l'intention illisible n'est
   éprouvée qu'avec un `Bundle` mal formé lu sous l'API 36, pas avec le

@@ -7,6 +7,9 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.provider.MediaStore
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.media3.session.MediaBrowser
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService
@@ -24,6 +27,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.fail
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -47,6 +51,10 @@ import java.util.concurrent.TimeUnit
  */
 @RunWith(RobolectricTestRunner::class)
 class PlaybackServiceVoiceSearchTest {
+
+    /** Pour toucher l'interface de [MainActivity] : sans effet sur les autres tests. */
+    @get:Rule
+    val compose = createEmptyComposeRule()
 
     private val app: Application = ApplicationProvider.getApplicationContext()
 
@@ -192,7 +200,91 @@ class PlaybackServiceVoiceSearchTest {
         val temoin = controleurConnecte()
         val activite = lancerLActivite(Intent(Intent.ACTION_MAIN))
 
-        activite.newIntent(intentionVocale())
+        recevoir(activite, intentionVocale())
+
+        attendre("l'album dans la file") { idsDe(temoin) == ALBUM_NEVERMIND }
+    }
+
+    @Test
+    fun `une demande recue hors des ecrans gardes lance elle-meme la liaison`() {
+        // Seuls les écrans gardés par la permission audio lient le service.
+        // Sans elle, l'accueil ne le lie pas ; l'utilisateur passe aux
+        // Réglages, qui ne sont pas gardés, puis accorde la permission.
+        demarrerLeService()
+        val temoin = controleurConnecte()
+        val activite = Robolectric.buildActivity(MainActivity::class.java, Intent(Intent.ACTION_MAIN))
+            .also { activites += it }
+            .setup()
+        compose.onNodeWithContentDescription("Réglages").performClick()
+        compose.waitForIdle()
+        shadowOf(app).grantPermissions(Manifest.permission.READ_MEDIA_AUDIO)
+
+        recevoir(activite, intentionVocale())
+
+        attendre("l'album dans la file") { idsDe(temoin) == ALBUM_NEVERMIND }
+    }
+
+    @Test
+    fun `sans la permission audio la demande attend qu'elle soit accordee`() {
+        // Le faux MediaStore répond même sans permission : si la demande liait
+        // le service, l'album serait joué.
+        demarrerLeService()
+        val temoin = controleurConnecte()
+        val activite = Robolectric.buildActivity(MainActivity::class.java, intentionVocale())
+            .also { activites += it }
+            .setup()
+        repeat(ECOULEMENTS) {
+            ecouler()
+            Thread.sleep(PAUSE_MS)
+        }
+        assertEquals(emptyList<String>(), idsDe(temoin))
+
+        // L'accueil, gardé, relit la permission à chaque retour au premier
+        // plan — ici des paramètres système —, et lie alors le service.
+        shadowOf(app).grantPermissions(Manifest.permission.READ_MEDIA_AUDIO)
+        activite.pause().stop().restart().resume()
+        compose.waitForIdle()
+
+        attendre("l'album dans la file, la permission accordée") { idsDe(temoin) == ALBUM_NEVERMIND }
+    }
+
+    @Test
+    fun `la permission accordee au retour sur un ecran non garde lance la liaison`() {
+        // La demande arrive sans la permission ; l'utilisateur passe aux
+        // Réglages, l'accorde dans les paramètres système et revient : aucun
+        // écran gardé n'est composé pour lier le service.
+        demarrerLeService()
+        val temoin = controleurConnecte()
+        val activite = Robolectric.buildActivity(MainActivity::class.java, intentionVocale())
+            .also { activites += it }
+            .setup()
+        compose.onNodeWithContentDescription("Réglages").performClick()
+        compose.waitForIdle()
+
+        shadowOf(app).grantPermissions(Manifest.permission.READ_MEDIA_AUDIO)
+        activite.pause().stop().restart().resume()
+
+        attendre("l'album dans la file") { idsDe(temoin) == ALBUM_NEVERMIND }
+    }
+
+    @Test
+    fun `la permission accordee en ecran partage apres une recreation lance la liaison`() {
+        // Recréée, l'activité ne rejoue pas l'intention : la demande attend
+        // dans le contrôleur. En écran partagé, l'activité reste visible
+        // pendant que l'utilisateur accorde la permission : elle n'est que
+        // reprise, pas redémarrée.
+        demarrerLeService()
+        val temoin = controleurConnecte()
+        val activite = Robolectric.buildActivity(MainActivity::class.java, intentionVocale())
+            .also { activites += it }
+            .setup()
+        compose.onNodeWithContentDescription("Réglages").performClick()
+        compose.waitForIdle()
+        activite.recreate()
+        compose.waitForIdle()
+
+        shadowOf(app).grantPermissions(Manifest.permission.READ_MEDIA_AUDIO)
+        activite.pause().resume()
 
         attendre("l'album dans la file") { idsDe(temoin) == ALBUM_NEVERMIND }
     }
@@ -214,6 +306,15 @@ class PlaybackServiceVoiceSearchTest {
         }
 
         assertEquals(listOf(song(7L).toMediaItem().mediaId), idsDe(temoin))
+    }
+
+    /**
+     * Une intention reçue par l'activité déjà lancée. Android la met en pause
+     * avant `onNewIntent` et la reprend après ; `ActivityController.newIntent`
+     * ne le fait pas de lui-même.
+     */
+    private fun recevoir(activite: ActivityController<MainActivity>, intention: Intent) {
+        activite.pause().newIntent(intention).resume()
     }
 
     private fun intentionVocale(): Intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)

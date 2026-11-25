@@ -150,7 +150,8 @@ private fun AudioPermissionPrompt(
     }
 }
 
-private fun Context.hasAudioPermission(): Boolean =
+/** Vrai si la bibliothèque de l'appareil est lisible. */
+internal fun Context.hasAudioPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, AUDIO_PERMISSION) == PackageManager.PERMISSION_GRANTED
 
 private fun Context.openAppSettings() {

@@ -33,8 +33,14 @@ class FauxMediaStore : ContentProvider() {
         sortOrder: String?,
     ): Cursor = MatrixCursor(COLONNES).apply {
         // Bornée : une lecture qu'on oublierait de libérer doit faire échouer
-        // le test, pas le figer.
-        retenue.await(RETENUE_MAX_S, TimeUnit.SECONDS)
+        // le test, pas le figer — ni rendre les morceaux comme si de rien
+        // n'était. L'application attrape l'échec de la requête et tient la
+        // bibliothèque pour vide ; [vider] le fait donc remonter au test.
+        if (!retenue.await(RETENUE_MAX_S, TimeUnit.SECONDS)) {
+            val message = "FauxMediaStore retenu plus de $RETENUE_MAX_S s : liberer() oublié"
+            expiree = message
+            error(message)
+        }
         morceaux.forEach { song ->
             addRow(
                 arrayOf<Any?>(
@@ -77,6 +83,9 @@ class FauxMediaStore : ContentProvider() {
         @Volatile
         private var retenue = CountDownLatch(0)
 
+        @Volatile
+        private var expiree: String? = null
+
         private const val RETENUE_MAX_S = 30L
 
         /**
@@ -100,10 +109,16 @@ class FauxMediaStore : ContentProvider() {
             Robolectric.setupContentProvider(FauxMediaStore::class.java, MediaStore.AUTHORITY)
         }
 
-        /** Rend l'autorité muette pour le test suivant. */
+        /**
+         * Rend l'autorité muette pour le test suivant, et fait échouer celui
+         * qui s'achève si une lecture a expiré pendant qu'il la retenait.
+         */
         fun vider() {
             morceaux = emptyList()
             liberer()
+            val message = expiree
+            expiree = null
+            check(message == null) { message.orEmpty() }
         }
     }
 }

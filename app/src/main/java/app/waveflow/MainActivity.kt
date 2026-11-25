@@ -67,6 +67,7 @@ import app.waveflow.ui.navigation.TopLevelDestination
 import app.waveflow.ui.navigation.WaveFlowBottomBar
 import app.waveflow.ui.navigation.longArgOf
 import app.waveflow.ui.permission.AudioPermissionGate
+import app.waveflow.ui.permission.hasAudioPermission
 import app.waveflow.ui.player.MiniPlayerHost
 import app.waveflow.ui.player.NowPlayingScreen
 import app.waveflow.ui.player.PlayerViewModel
@@ -122,6 +123,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Une demande vocale attend la liaison au service (R10 de
+        // `docs/recherche-vocale.md`). Seuls les écrans gardés par la
+        // permission audio la lancent ; Réglages ou Serveur n'en sont pas. La
+        // liaison suit donc la permission, quel que soit l'écran : au premier
+        // plan, au retour des paramètres système, après une recréation.
+        // `connect` est idempotent.
+        if (hasAudioPermission()) playerViewModel.connect()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         relayVoiceSearch(intent)
@@ -131,6 +143,11 @@ class MainActivity : ComponentActivity() {
      * « Joue Nevermind » dit à l'Assistant du téléphone : l'intention
      * `MEDIA_PLAY_FROM_SEARCH` est transmise au service, qui la résout comme
      * celle d'Android Auto (R10 de `docs/recherche-vocale.md`).
+     *
+     * La demande part quand l'activité lie le service, à sa reprise
+     * ([onResume]) si la permission audio est accordée. Sans elle, la demande
+     * attend : la recherche ne lit que la bibliothèque de l'appareil (R1), et
+     * ne trouverait rien.
      */
     private fun relayVoiceSearch(intent: Intent?) {
         voiceRequestOf(intent)?.let(playerViewModel::playFromSearch)
