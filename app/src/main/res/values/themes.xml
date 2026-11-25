@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  La fenêtre telle qu'elle paraît avant que Compose ne dessine : l'écran de
+  démarrage, puis le fond sous la première image. Elle suit le thème du
+  système, la préférence de l'application n'étant pas encore lue ; ses deux
+  fonds sont ceux des deux matières, pour que rien ne clignote au passage.
+
+  Ici le clair, Liquid Aurora Glass : son fond `ground`. Le sombre est dans
+  `values-night/themes.xml`.
+-->
 <resources>
 
-    <style name="Theme.WaveFlow" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.WaveFlow" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fond_fenetre</item>
+    </style>
 </resources>

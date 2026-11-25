@@ -9,7 +9,9 @@ local-first music player. Kotlin + Jetpack Compose + Media3.
 ## Stack
 
 - **Language:** Kotlin
-- **UI:** Jetpack Compose + Material 3 (WaveFlow emerald theme)
+- **UI:** Jetpack Compose + Material 3, in the WaveFlow 2.0 design language —
+  Fluid Editorial when dark, Liquid Aurora Glass when light; DM Sans and
+  Playfair Display bundled
 - **Audio:** [Media3](https://developer.android.com/media/media3) / ExoPlayer via
   a `MediaSessionService` — background playback + lock-screen / notification
   controls out of the box
@@ -50,7 +52,7 @@ app/src/main/java/app/waveflow/
 │  ├─ PlayingTrack.kt             What the player holds, whatever its source
 │  └─ RemoteStreamResolver.kt     Marker URI → ticketed stream URL
 └─ ui/
-   ├─ theme/                Material 3 emerald theme
+   ├─ theme/                Colours, type, shapes, motion of both materials
    ├─ DurationFormat.kt     m:ss / h:mm:ss
    ├─ Labels.kt             Unknown artist / album fallbacks
    ├─ components/           Artwork, MediaRow, SongRow, LibraryStateContainer
@@ -282,3 +284,6 @@ track to a server.
 ## License
 
 [GPL-3.0](LICENSE) — same as WaveFlow desktop.
+
+The bundled fonts, DM Sans and Playfair Display, are under the SIL Open Font
+License 1.1: see [`licences/polices/`](licences/polices/).

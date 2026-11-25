@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,6 +15,7 @@ import app.waveflow.model.Song
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.SongRow
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /** Détail d'un artiste : en-tête puis tous ses morceaux. */
 @Composable
@@ -53,7 +53,7 @@ fun ArtistDetailScreen(
                 durationMs = songs.sumOf { it.durationMs },
                 onPlay = onPlay,
                 onShuffle = onShuffle,
-                artworkShape = CircleShape,
+                artworkShape = WaveFlowTheme.shapes.portrait,
             )
         }
 

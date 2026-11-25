@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Les couleurs de la fenêtre, hors Compose. Les mêmes que `LiquidGround` et `FluidBg`. -->
+<resources>
+
+    <!-- Liquid Aurora Glass, `ground`. -->
+    <color name="fond_fenetre">#FFECEEF5</color>
+</resources>

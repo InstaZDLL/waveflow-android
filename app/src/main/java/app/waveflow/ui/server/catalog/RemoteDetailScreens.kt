@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +24,7 @@ import app.waveflow.ui.browse.DetailHeader
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.MediaRow
 import app.waveflow.ui.formatDuration
+import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
 
 /** Un album distant et ses morceaux. */
@@ -157,7 +157,7 @@ private fun RemoteArtistHeader(
         artworkUri = artworkUri,
         title = name,
         subtitle = listOf("Artiste", summary).filter { it.isNotBlank() }.joinToString(" · "),
-        artworkShape = CircleShape,
+        artworkShape = WaveFlowTheme.shapes.portrait,
         modifier = Modifier.fillMaxWidth(),
     )
 }

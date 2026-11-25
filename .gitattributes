@@ -15,3 +15,7 @@ gradlew text eol=lf
 *.jpeg binary
 *.keystore binary
 *.jks binary
+
+# Polices embarquées — jamais touchées par les fins de ligne.
+*.ttf binary
+*.otf binary

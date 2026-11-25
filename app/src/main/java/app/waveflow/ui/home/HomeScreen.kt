@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -30,6 +29,7 @@ import app.waveflow.model.Album
 import app.waveflow.model.Song
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.MediaRow
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
  * La première page : ce que l'appareil sait déjà de vos écoutes.
@@ -129,7 +129,7 @@ private fun SectionTitle(text: String) {
 private fun ResumeCard(song: Song, onClick: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(12.dp),
+        shape = WaveFlowTheme.shapes.card,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
@@ -141,7 +141,7 @@ private fun ResumeCard(song: Song, onClick: () -> Unit) {
         ) {
             Artwork(
                 artworkUri = song.artworkUri,
-                shape = RoundedCornerShape(8.dp),
+                shape = WaveFlowTheme.shapes.thumbnail,
                 modifier = Modifier.size(64.dp),
             )
             Column(
@@ -181,7 +181,7 @@ private fun AlbumTile(album: Album, onClick: () -> Unit) {
     ) {
         Artwork(
             artworkUri = album.artworkUri,
-            shape = RoundedCornerShape(8.dp),
+            shape = WaveFlowTheme.shapes.tile,
             modifier = Modifier.size(TUILE),
         )
         Text(

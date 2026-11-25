@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -14,6 +13,7 @@ import app.waveflow.model.Library
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.LibraryStateContainer
 import app.waveflow.ui.components.MediaRow
+import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
 
 /** Onglet Artistes. */
@@ -45,7 +45,7 @@ fun ArtistsScreen(
                     onClick = { onArtistClick(artist) },
                     // Rond plutôt que carré : le repère visuel habituel pour
                     // un artiste.
-                    artworkShape = CircleShape,
+                    artworkShape = WaveFlowTheme.shapes.portrait,
                 )
             }
         }

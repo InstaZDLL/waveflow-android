@@ -1,95 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Le logo WaveFlow : cinq barres d'égaliseur symétriques, en dégradé émeraude.
-  Repris de `WaveFlow/assets/logo.svg` — mêmes proportions (140/80/40/80/140),
-  mêmes couleurs — puis ramené dans la zone sûre de l'icône adaptative.
+  Le symbole de WaveFlow : le W du nom tracé comme une onde — une période et
+  demie de sinus, d'un seul trait —, en blanc sur la tuile verte.
 
-  Cette zone est un **disque** de 72 dp et non un carré : c'est la
-  demi-diagonale du logo qui doit rester sous 36, pas sa demi-largeur. Dimensionné
-  au carré, les deux barres extérieures tombaient hors du cercle et le premier
-  lanceur rond venu les aurait rognées. À l'échelle retenue (0,30) la
-  demi-diagonale vaut 34,7 dp : le logo tient, avec la marge qui va bien.
+  Le tracé est celui de l'icône du bureau (`WaveFlow/assets/discord/waveflow_logo.svg`,
+  la même que `src-tauri/crates/app/icons/`) : le dessin pour petites tailles,
+  au trait de 46 sur 256, plus épais que celui de `assets/logo.svg` (36), qui
+  s'amincirait sur un écran d'accueil. Il est repris dans sa boîte de 256 et
+  ramené ici par l'échelle du groupe.
 
-  Les barres sont des capsules : dans l'original le rayon vaut la moitié de la
-  largeur, ce que des arcs de demi-cercle rendent exactement.
+  Échelle 0,22 : le W occupe 51 dp des 72 qu'un lanceur laisse voir, soit la
+  même part de la tuile (71 %) que sur l'icône du bureau. Son centre (128, 124)
+  tombe au centre du calque (54, 54). Son point le plus éloigné, le bout
+  arrondi de chaque jambage, est à 26 dp du centre : sous les 33 dp de la zone
+  sûre, il tient dans toutes les formes qu'un lanceur découpe.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <group>
-        <path android:pathData="M26.4,36.6 A3.6,3.6 0 0 1 33.6,36.6 L33.6,71.4 A3.6,3.6 0 0 1 26.4,71.4 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:startX="26.4"
-                    android:startY="33"
-                    android:endX="81.6"
-                    android:endY="75"
-                    android:type="linear">
-                    <item android:offset="0" android:color="#34D399" />
-                    <item android:offset="0.5" android:color="#10B981" />
-                    <item android:offset="1" android:color="#059669" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path android:pathData="M38.4,45.6 A3.6,3.6 0 0 1 45.6,45.6 L45.6,62.4 A3.6,3.6 0 0 1 38.4,62.4 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:startX="26.4"
-                    android:startY="33"
-                    android:endX="81.6"
-                    android:endY="75"
-                    android:type="linear">
-                    <item android:offset="0" android:color="#34D399" />
-                    <item android:offset="0.5" android:color="#10B981" />
-                    <item android:offset="1" android:color="#059669" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path android:pathData="M50.4,51.6 A3.6,3.6 0 0 1 57.6,51.6 L57.6,56.4 A3.6,3.6 0 0 1 50.4,56.4 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:startX="26.4"
-                    android:startY="33"
-                    android:endX="81.6"
-                    android:endY="75"
-                    android:type="linear">
-                    <item android:offset="0" android:color="#34D399" />
-                    <item android:offset="0.5" android:color="#10B981" />
-                    <item android:offset="1" android:color="#059669" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path android:pathData="M62.4,45.6 A3.6,3.6 0 0 1 69.6,45.6 L69.6,62.4 A3.6,3.6 0 0 1 62.4,62.4 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:startX="26.4"
-                    android:startY="33"
-                    android:endX="81.6"
-                    android:endY="75"
-                    android:type="linear">
-                    <item android:offset="0" android:color="#34D399" />
-                    <item android:offset="0.5" android:color="#10B981" />
-                    <item android:offset="1" android:color="#059669" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path android:pathData="M74.4,36.6 A3.6,3.6 0 0 1 81.6,36.6 L81.6,71.4 A3.6,3.6 0 0 1 74.4,71.4 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:startX="26.4"
-                    android:startY="33"
-                    android:endX="81.6"
-                    android:endY="75"
-                    android:type="linear">
-                    <item android:offset="0" android:color="#34D399" />
-                    <item android:offset="0.5" android:color="#10B981" />
-                    <item android:offset="1" android:color="#059669" />
-                </gradient>
-            </aapt:attr>
-        </path>
+    <group
+        android:scaleX="0.22"
+        android:scaleY="0.22"
+        android:translateX="25.84"
+        android:translateY="26.72">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M 128,41 C 115.28,41 106.95,48.53 102.13,54.38 97.31,60.24 94.22,66.24 91.23,72.78 85.26,85.86 80.27,101.24 75.15,116.81 71.96,126.52 68.92,135.29 66,143.17 63.08,135.29 60.04,126.52 56.85,116.81 A 23 23 0 0 0 27.81,102.15 23 23 0 0 0 13.15,131.19 c 5.12,15.57 10.1,30.95 16.08,44.03 2.99,6.54 6.08,12.54 10.9,18.4 C 44.95,199.47 53.28,207 66,207 c 12.72,0 21.05,-7.53 25.87,-13.38 4.82,-5.86 7.91,-11.86 10.9,-18.4 5.97,-13.08 10.96,-28.46 16.08,-44.03 3.19,-9.71 6.24,-18.47 9.15,-26.35 2.92,7.88 5.96,16.65 9.15,26.35 5.12,15.57 10.1,30.95 16.08,44.03 2.99,6.54 6.08,12.54 10.9,18.4 C 168.95,199.47 177.28,207 190,207 c 12.72,0 21.05,-7.53 25.87,-13.38 4.82,-5.86 7.91,-11.86 10.9,-18.4 5.97,-13.08 10.96,-28.46 16.08,-44.03 A 23 23 0 0 0 228.19,102.15 23 23 0 0 0 199.15,116.81 c -3.19,9.71 -6.24,18.47 -9.15,26.35 -2.92,-7.88 -5.96,-16.65 -9.15,-26.35 C 175.73,101.24 170.74,85.86 164.77,72.78 161.78,66.24 158.69,60.24 153.87,54.38 149.05,48.53 140.72,41 128,41 Z" />
     </group>
 </vector>

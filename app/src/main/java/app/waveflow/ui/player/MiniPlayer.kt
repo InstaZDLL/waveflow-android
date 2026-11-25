@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -32,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.orUnknownArtist
 import app.waveflow.ui.components.Artwork
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
  * Barre de lecture compacte, posée au-dessus de la bibliothèque.
@@ -52,10 +52,10 @@ fun MiniPlayer(
     val accent = rememberArtworkAccent(track.artworkUri)
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        // Teinte discrète reprise de la pochette, façon carte flottante.
+        shape = WaveFlowTheme.shapes.plate,
+        // Teinte discrète reprise de la pochette. Ni ombre ni bordure : la
+        // plaque se détache par son ton, comme toute surface des documents.
         color = lerp(accent, MaterialTheme.colorScheme.surface, MINI_ACCENT_BLEND),
-        shadowElevation = 6.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 8.dp),

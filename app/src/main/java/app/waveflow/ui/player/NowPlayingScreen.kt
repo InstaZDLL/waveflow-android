@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Bedtime
@@ -62,6 +60,7 @@ import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.RepeatMode
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.formatDuration
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
  * Lecteur plein écran.
@@ -151,11 +150,11 @@ fun NowPlayingScreen(
 
                 Artwork(
                     artworkUri = track.artworkUri,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = WaveFlowTheme.shapes.cover,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp)),
+                        .shadow(elevation = 24.dp, shape = WaveFlowTheme.shapes.cover),
                 )
 
                 Spacer(Modifier.weight(1f))
@@ -424,7 +423,7 @@ private fun PlayerControls(
         FilledIconButton(
             onClick = onTogglePlayPause,
             enabled = !isBuffering,
-            shape = CircleShape,
+            shape = WaveFlowTheme.shapes.pill,
             modifier = Modifier.size(72.dp),
         ) {
             if (isBuffering) {

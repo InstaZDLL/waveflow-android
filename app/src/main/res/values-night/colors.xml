@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Fluid Editorial, `bg`. -->
+    <color name="fond_fenetre">#FF0B0B0E</color>
+</resources>

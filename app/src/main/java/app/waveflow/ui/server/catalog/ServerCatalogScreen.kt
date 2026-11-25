@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -33,6 +32,7 @@ import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.CenteredMessage
 import app.waveflow.ui.components.MediaRow
 import app.waveflow.ui.search.SearchField
+import app.waveflow.ui.theme.WaveFlowTheme
 
 private enum class CatalogTab(val label: String) {
     Albums("Albums"),
@@ -187,7 +187,7 @@ private fun ArtistsTab(
                     title = artist.name,
                     subtitle = artist.albumCount?.let(::albumCountLabel).orEmpty(),
                     onClick = { onArtistClick(artist) },
-                    artworkShape = CircleShape,
+                    artworkShape = WaveFlowTheme.shapes.portrait,
                 )
             }
             item { PagedListFooter(state = state, onRetry = onRetry) }
@@ -266,7 +266,7 @@ private fun RemoteSearchResultsList(
                         title = artist.name,
                         subtitle = artist.albumCount?.let(::albumCountLabel).orEmpty(),
                         onClick = { onArtistClick(artist) },
-                        artworkShape = CircleShape,
+                        artworkShape = WaveFlowTheme.shapes.portrait,
                     )
                 }
             }
