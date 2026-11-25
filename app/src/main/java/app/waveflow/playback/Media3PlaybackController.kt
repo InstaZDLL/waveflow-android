@@ -12,6 +12,7 @@ import androidx.media3.session.SessionToken
 import app.waveflow.data.remote.ServerException
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.model.VoiceRequest
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,9 @@ class Media3PlaybackController(
     private var controller: MediaController? = null
     private var positionJob: Job? = null
 
+    /** La demande vocale arrivée avant la liaison, envoyée à la connexion. */
+    private var pendingVoiceRequest: VoiceRequest? = null
+
     private val playerListener = object : Player.Listener {
         // Un seul point de synchronisation plutôt qu'un callback par champ :
         // on relit l'état complet du lecteur à chaque salve d'événements.
@@ -81,6 +85,10 @@ class Media3PlaybackController(
                 controller = ctrl
                 ctrl.addListener(playerListener)
                 syncFrom(ctrl)
+                pendingVoiceRequest?.let { request ->
+                    pendingVoiceRequest = null
+                    sendVoiceRequest(ctrl, request)
+                }
             },
             ContextCompat.getMainExecutor(context),
         )
@@ -131,6 +139,30 @@ class Media3PlaybackController(
         ctrl.setMediaItems(songs.map { it.toMediaItem() }, songs.indices.random(), 0L)
         ctrl.prepare()
         ctrl.play()
+    }
+
+    override fun playFromSearch(request: VoiceRequest) {
+        val ctrl = controller
+        if (ctrl == null) {
+            // La dernière demande l'emporte : c'est celle que l'utilisateur
+            // vient de prononcer.
+            pendingVoiceRequest = request
+            return
+        }
+        sendVoiceRequest(ctrl, request)
+    }
+
+    /**
+     * La session résout la phrase, puis remplace la file et la lance ; si rien
+     * n'est trouvé, elle ne touche à rien (R9), pas même à une file en pause.
+     * D'où une seule commande plutôt que `setMediaItem`, `prepare` et `play` :
+     * voir [BrowseCallback.onCustomCommand].
+     *
+     * Le mode aléatoire n'est pas touché, à la différence de [play] : la
+     * voiture ne le touche pas non plus.
+     */
+    private fun sendVoiceRequest(ctrl: MediaController, request: VoiceRequest) {
+        ctrl.sendCustomCommand(PLAY_FROM_SEARCH, request.toExtras())
     }
 
     override fun playPause() {
@@ -197,6 +229,7 @@ class Media3PlaybackController(
 
     override fun release() {
         stopPositionUpdates()
+        pendingVoiceRequest = null
         controller?.removeListener(playerListener)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null

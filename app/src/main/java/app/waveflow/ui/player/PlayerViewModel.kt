@@ -9,6 +9,7 @@ import app.waveflow.WaveFlowApp
 import app.waveflow.data.PreferencesStore
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.model.VoiceRequest
 import app.waveflow.playback.AbLoop
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackFailure
@@ -123,6 +124,9 @@ class PlayerViewModel(
     }
 
     fun playShuffled(queue: List<Song>) = playbackController.playShuffled(queue)
+
+    /** Une demande vocale du téléphone (« joue Nevermind »), relayée au service. */
+    fun playFromSearch(request: VoiceRequest) = playbackController.playFromSearch(request)
 
     /**
      * Démarre [song] depuis une file de morceaux du serveur.

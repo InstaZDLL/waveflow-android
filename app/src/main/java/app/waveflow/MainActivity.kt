@@ -1,10 +1,12 @@
 package app.waveflow
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -49,6 +51,7 @@ import app.waveflow.model.AppPreferences
 import app.waveflow.model.Library
 import app.waveflow.model.Song
 import app.waveflow.model.ThemeChoice
+import app.waveflow.playback.voiceRequestOf
 import app.waveflow.ui.browse.AlbumDetailScreen
 import app.waveflow.ui.browse.AlbumsScreen
 import app.waveflow.ui.browse.ArtistDetailScreen
@@ -89,8 +92,20 @@ import app.waveflow.ui.theme.WaveFlowTheme
 
 class MainActivity : ComponentActivity() {
 
+    /**
+     * Le même que celui de l'écran : `viewModel()` le retrouve dans le magasin
+     * de l'activité sous la même clé. Il ne sert ici qu'à relayer une demande
+     * vocale.
+     */
+    private val playerViewModel: PlayerViewModel by viewModels { PlayerViewModel.Factory }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Une activité recréée (rotation, retour d'un processus tué) garde
+        // l'intention qui l'a lancée : la demande vocale a déjà été relayée.
+        // Rouverte depuis les récents, elle la reçoit aussi, marquée cette
+        // fois : `voiceRequestOf` l'écarte.
+        if (savedInstanceState == null) relayVoiceSearch(intent)
         enableEdgeToEdge()
         setContent {
             // Au-dessus du thème, et non dans un écran : le choix habille toute
@@ -105,6 +120,20 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        relayVoiceSearch(intent)
+    }
+
+    /**
+     * « Joue Nevermind » dit à l'Assistant du téléphone : l'intention
+     * `MEDIA_PLAY_FROM_SEARCH` est transmise au service, qui la résout comme
+     * celle d'Android Auto (R10 de `docs/recherche-vocale.md`).
+     */
+    private fun relayVoiceSearch(intent: Intent?) {
+        voiceRequestOf(intent)?.let(playerViewModel::playFromSearch)
     }
 }
 

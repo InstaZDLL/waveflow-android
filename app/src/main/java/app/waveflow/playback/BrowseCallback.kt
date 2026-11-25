@@ -1,11 +1,16 @@
 package app.waveflow.playback
 
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import app.waveflow.model.StreamRendering
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -26,10 +31,13 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * @param rendering le rendu à demander au serveur pour les pistes distantes,
  *   dès qu'il est connu.
+ * @param libraryRead se termine dès que l'arbre porte une bibliothèque lue ;
+ *   une demande vocale l'attend (R11 de `docs/recherche-vocale.md`).
  */
 class BrowseCallback(
     private val tree: BrowseTree,
     private val rendering: () -> ListenableFuture<StreamRendering>,
+    private val libraryRead: () -> ListenableFuture<*> = { Futures.immediateVoidFuture() },
 ) : MediaLibrarySession.Callback {
 
     /**
@@ -127,12 +135,75 @@ class BrowseCallback(
      *
      * Un élément qui porte déjà une URI est laissé tel quel : il vient alors de
      * l'application elle-même, qui construit ses files complètes.
+     *
+     * C'est aussi par ici qu'arrive une demande vocale — « joue Nevermind » —
+     * d'Android Auto comme du téléphone : voir `docs/recherche-vocale.md`.
      */
     override fun onAddMediaItems(
         mediaSession: MediaSession,
         controller: MediaSession.ControllerInfo,
         mediaItems: MutableList<MediaItem>,
     ): ListenableFuture<MutableList<MediaItem>> = addMediaItems(mediaItems)
+
+    /**
+     * Ajoute la commande de la recherche vocale du téléphone (R10 de
+     * `docs/recherche-vocale.md`) aux contrôleurs de confiance — dont
+     * l'application elle-même. Les autres gardent les commandes par défaut de
+     * Media3, en lecture seule.
+     *
+     * Non éprouvé : sous Robolectric, tout contrôleur est de confiance, et
+     * retirer la garde ne fait tomber aucun test.
+     */
+    override fun onConnectAsync(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+    ): ListenableFuture<MediaSession.ConnectionResult> {
+        val builder = MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+        if (controller.isTrusted) {
+            builder.setAvailableSessionCommands(
+                builder.build().availableSessionCommands.buildUpon().add(PLAY_FROM_SEARCH).build(),
+            )
+        }
+        return Futures.immediateFuture(builder.build())
+    }
+
+    /**
+     * La recherche vocale du téléphone : comme Media3 pour `onPlayFromSearch`,
+     * la file n'est remplacée, préparée et lancée **qu'une fois résolue**.
+     *
+     * Trois commandes envoyées à la suite par le contrôleur — `setMediaItem`,
+     * `prepare`, `play` — ne le permettent pas : la première échoue quand rien
+     * ne correspond (R9), et `play` relancerait la file en pause.
+     */
+    override fun onCustomCommand(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        customCommand: SessionCommand,
+        args: Bundle,
+    ): ListenableFuture<SessionResult> {
+        if (customCommand.customAction != PLAY_FROM_SEARCH.customAction) {
+            return super.onCustomCommand(session, controller, customCommand, args)
+        }
+
+        val player = session.player
+        val playerThread = Handler(player.applicationLooper)
+        val played = Futures.transform(
+            addMediaItems(listOf(voiceRequestOf(args).toSearchItem())),
+            { items ->
+                player.setMediaItems(items)
+                player.prepare()
+                player.play()
+                SessionResult(SessionResult.RESULT_SUCCESS)
+            },
+            { task -> if (Looper.myLooper() == playerThread.looper) task.run() else playerThread.post(task) },
+        )
+        return Futures.catching(
+            played,
+            NoSuchElementException::class.java,
+            { SessionResult(SessionError.ERROR_BAD_VALUE) },
+            MoreExecutors.directExecutor(),
+        )
+    }
 
     /**
      * Ce que [onAddMediaItems] répond, sans la session qu'il ne consulte pas.
@@ -152,8 +223,29 @@ class BrowseCallback(
      * qu'on voulait ménager.
      */
     internal fun addMediaItems(mediaItems: List<MediaItem>): ListenableFuture<MutableList<MediaItem>> {
+        if (mediaItems.none { it.voiceRequestOrNull() != null }) return translate(mediaItems)
+
+        // R11 : chercher dans une bibliothèque pas encore lue ne trouverait
+        // rien. Le cas est celui du démarrage à froid, où la demande arrive
+        // avec la liaison qui crée le service.
+        return Futures.transformAsync(libraryRead(), { translate(mediaItems) }, MoreExecutors.directExecutor())
+    }
+
+    private fun translate(mediaItems: List<MediaItem>): ListenableFuture<MutableList<MediaItem>> {
+        var voiceSearch = false
         val resolved = mediaItems.flatMap { item ->
-            if (item.localConfiguration != null) listOf(item) else tree.resolve(item.mediaId)
+            val voice = item.voiceRequestOrNull()
+            when {
+                item.localConfiguration != null -> listOf(item)
+                voice != null -> tree.search(voice).also { voiceSearch = true }
+                else -> tree.resolve(item.mediaId)
+            }
+        }
+
+        // R9 : une file vide viderait le lecteur. Un futur en échec, Media3
+        // ignore la demande et la lecture en cours continue.
+        if (voiceSearch && resolved.isEmpty()) {
+            return Futures.immediateFailedFuture(NoSuchElementException("Rien ne correspond à la demande vocale"))
         }
 
         return Futures.transform(
