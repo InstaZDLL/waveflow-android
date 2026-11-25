@@ -245,7 +245,12 @@ private fun AbLoopButton(abLoop: AbLoopState, onClick: () -> Unit) {
     }
 }
 
-/** La hauteur touchable de la ligne : bien plus que son trait, pour le pouce. */
+/**
+ * La hauteur de la ligne à l'écran : bien plus que son trait, pour le pouce.
+ * La cible est plus haute encore : Compose étend le toucher d'un pointerInput
+ * jusqu'à la cible minimale de 48 dp, 4 dp au-dessus et 4 dp en dessous,
+ * partout où rien d'autre ne le prend — la même cible que le `Slider`.
+ */
 private const val TOUCH_HEIGHT = 40
 
 private const val KEY_STEP_MS = 5_000L
