@@ -23,9 +23,9 @@ class ArtworkUrlsTest {
 
     @Test
     fun `une jaquette remplacee change d'adresse`() {
-        // C'est tout l'intérêt du hachage : sur l'identifiant de l'entité,
-        // l'adresse serait identique et le cache resservirait l'ancienne image
-        // — le serveur annonce `max-age=86400`.
+        // C'est ce qui permet au serveur de servir l'adresse par hachage en
+        // `immutable` pour un an : une jaquette remplacée n'est jamais
+        // resservie depuis le cache, puisqu'elle n'a plus la même clé.
         val avant = urls().forHash("abc123")
         val apres = urls().forHash("def456")
 
