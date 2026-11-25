@@ -406,12 +406,16 @@ class TranscodeRelaunchChainTest {
 
     /**
      * Laisse au lecteur et aux fils réels le temps d'agir encore : une demande
-     * de trop arriverait là.
+     * de trop arriverait là. Vingt secondes d'horloge du lecteur — au-delà du
+     * plus long délai de relance de Media3 (5 s) — et deux secondes réelles,
+     * pour que le réseau ait le temps de porter une demande partie au dernier
+     * pas. Une borne de temps, pas un signal : une demande plus lente encore
+     * échapperait à l'assertion.
      */
     private fun laisserPartir() {
         repeat(LAISSER_PARTIR_TOURS) {
             avancer(LAISSER_PARTIR_PAS_MS)
-            Thread.sleep(PAUSE_MS)
+            Thread.sleep(LAISSER_PARTIR_PAUSE_MS)
         }
     }
 
@@ -442,6 +446,7 @@ class TranscodeRelaunchChainTest {
         const val PAUSE_MS = 5L
         const val LAISSER_PARTIR_TOURS = 40
         const val LAISSER_PARTIR_PAS_MS = 500L
+        const val LAISSER_PARTIR_PAUSE_MS = 50L
 
         /** Le premier flux dure une minute, et se coupe en son milieu. */
         const val PREMIER_FLUX_S = 60

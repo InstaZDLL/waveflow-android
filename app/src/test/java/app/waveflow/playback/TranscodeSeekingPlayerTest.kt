@@ -509,6 +509,26 @@ class TranscodeSeekingPlayerTest {
     }
 
     @Test
+    fun `une nouvelle ecoute du meme titre remet le compte des reprises a zero`() {
+        // R30 : la piste qui revient — répétée ici, retrouvée par une file qui
+        // se répète ailleurs — garde son identifiant logique. Les reprises de
+        // l'écoute d'avant ne disent rien de celle-ci.
+        faux.dureeUs = { Util.msToUs(DUREE_MS) }
+        jouer(transcode())
+        lecteur.repeatMode = Player.REPEAT_MODE_ONE
+        faux.avancer(30_000L)
+        repeat(TranscodeSeekingPlayer.REPRISES_SANS_ECOUTE_MAX) {
+            lecteur.reprendreApresCoupure()
+            ecouler()
+        }
+
+        faux.finirLeFlux()
+        ecouler()
+
+        assertTrue(lecteur.reprendreApresCoupure())
+    }
+
+    @Test
     fun `revenir a la position par defaut repart du debut du morceau`() {
         // `seekToDefaultPosition()` sans rang, ce qu'un contrôleur envoie pour
         // revenir au début. Laissé à l'ExoPlayer, il revient au début du flux —

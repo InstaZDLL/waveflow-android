@@ -356,7 +356,8 @@ coupure suivante tombe au moins cinq secondes après elle ; trois reprises de
 suite sans cela, et la quatrième coupure remonte comme une panne du réseau,
 « serveur injoignable ». Une reprise entendue remet le compte à zéro — une
 liaison qui coupe toutes les deux minutes se reprend à chaque fois —, de même
-qu'un saut demandé ou un changement de piste.
+qu'un saut demandé, un changement de piste ou la répétition du titre : toute
+nouvelle écoute, même d'une piste déjà reprise que la file ramène.
 
 Une coupure **qui dure** n'a pas besoin de cette borne. La demande de reprise
 échoue alors à se connecter : une panne réseau ordinaire, que Media3 retente puis
@@ -435,9 +436,10 @@ Ce qui n'est **pas** éprouvé :
   servi en morceaux.
 - **Une coupure qui dure** n'est simulée que par une liaison qui tombe sitôt la
   demande partie ; ni l'absence de réseau ni un nom qui ne se résout plus.
-- **La série de reprises remise à zéro par un changement de piste ou par la
-  répétition du titre (R30)** : posée, aucun test ne la vise ; le saut et la
-  reprise entendue sont éprouvés.
+- **La série de reprises remise à zéro par une piste retrouvée dans une file
+  qui se répète (R30)** : c'est la même transition automatique que la
+  répétition d'un titre, qui est éprouvée ; le lecteur factice ne sait pas
+  revenir de lui-même au début de la file.
 
 Le jeu réel — un saut entendu au bon endroit, la notification et la voiture qui
 suivent, l'original qui prend le relais d'un transcodage refusé, une coupure
