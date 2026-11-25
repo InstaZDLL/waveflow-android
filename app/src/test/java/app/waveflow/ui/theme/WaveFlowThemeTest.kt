@@ -44,6 +44,7 @@ class WaveFlowThemeTest {
         val materialShapes: Shapes,
         val editorial: TextStyle,
         val ripple: RippleAlpha?,
+        val material: WaveFlowMaterial,
     )
 
     // `rippleAlpha` est déprécié sans remplaçant ; voir WaveFlowRippleAlpha.
@@ -59,6 +60,7 @@ class WaveFlowThemeTest {
                     materialShapes = MaterialTheme.shapes,
                     editorial = WaveFlowTheme.editorial,
                     ripple = LocalRippleConfiguration.current?.rippleAlpha,
+                    material = WaveFlowTheme.material,
                 )
             }
         }
@@ -75,6 +77,7 @@ class WaveFlowThemeTest {
         assertEquals(Emerald400, habit.scheme.primary)
         assertEquals(FluidAccentInk, habit.scheme.onPrimary)
         assertSame(FluidShapes, habit.shapes)
+        assertEquals(WaveFlowMaterial.Fluid, habit.material)
         // La ligne éditoriale de Fluid est la seule à porter l'empattement.
         assertEquals(FontStyle.Italic, habit.editorial.fontStyle)
     }
@@ -88,6 +91,7 @@ class WaveFlowThemeTest {
         assertEquals(Emerald600, habit.scheme.primary)
         assertEquals(Color.White, habit.scheme.onPrimary)
         assertSame(LiquidShapes, habit.shapes)
+        assertEquals(WaveFlowMaterial.Liquid, habit.material)
         assertNotEquals(FontStyle.Italic, habit.editorial.fontStyle)
     }
 

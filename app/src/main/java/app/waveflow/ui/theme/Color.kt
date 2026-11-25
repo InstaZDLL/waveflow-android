@@ -21,15 +21,16 @@ import androidx.compose.ui.graphics.Color
  * doivent rester translucides — les filets — le restent.
  */
 
-// ── Accent : la règle du palier, fixe dans ce ticket ─────────────────────────
+// ── Accent : la règle du palier ──────────────────────────────────────────────
 // Le palier 400 se lit sur le sombre et prend une encre sombre ; le palier 600
-// se lit sur le clair et prend une encre blanche. Le suivi de la pochette
-// viendra avec les composants.
+// se lit sur le clair et prend une encre blanche. C'est l'accent de toute
+// l'application ; le lecteur seul le remplace par celui de la pochette, tiré
+// au même palier (`ui/player/CoverColors.kt`, décision du 25/11).
 //
 // L'encre blanche sur le palier 600 ne donne que 3,77:1 : assez pour un grand
 // texte ou une icône, pas pour le libellé d'un bouton (4,5:1). C'est su et
-// voulu, à l'identique du bureau ; la question se tranche pour toutes les
-// plateformes avec le suivi de la pochette (#78).
+// voulu, à l'identique du bureau. L'accent tiré d'une pochette tient le même
+// seuil, 3:1, contre son encre et contre le fond.
 
 /** Émeraude, palier 400 : l'accent du sombre. */
 val Emerald400 = Color(0xFF34D399)
@@ -127,8 +128,8 @@ val LiquidGlow = Color(0xFF9FB8EE)
 val LiquidGlowDeep = Color(0xFFC9BDF6)
 
 // Les cinq teintes pastel : l'atmosphère et les humeurs, **jamais** le texte
-// ni les actions. Rien ne les emploie encore ; elles sont ici pour que les
-// composants du verre les prennent au thème plutôt qu'en dur.
+// ni les actions. Le lecteur en tire ses trois nappes de lumière ; les autres
+// composants du verre les prendront ici plutôt qu'en dur.
 
 /** Lavande — le sommeil ; la première nappe. */
 val LiquidLavender = Color(0xFFCFC3FA)
@@ -144,3 +145,16 @@ val LiquidMint = Color(0xFFC0ECD5)
 
 /** Rose — la fête. */
 val LiquidBlush = Color(0xFFF8C9D8)
+
+// Les paliers profonds de trois teintes : ceux que le document pose sur le
+// verre clair là où une teinte doit se voir, et non seulement colorer l'air —
+// la ligne de lumière du lecteur.
+
+/** Aqua profond — le départ de la ligne de lumière. */
+val LiquidAquaDeep = Color(0xFF3FA9AD)
+
+/** Lavande profonde — le milieu de la ligne de lumière, et son halo. */
+val LiquidLavenderDeep = Color(0xFF7C6AD6)
+
+/** Le liseré du verre : la lumière que prend le bord d'une plaque, blanc 80 %. */
+val LiquidGlassRim = Color(0xCCFFFFFF)

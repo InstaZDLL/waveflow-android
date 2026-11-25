@@ -216,6 +216,22 @@ internal val WaveFlowRippleAlpha = RippleAlpha(
 @Suppress("DEPRECATION")
 private val WaveFlowRipple = RippleConfiguration(rippleAlpha = WaveFlowRippleAlpha)
 
+/**
+ * La matière qui habille l'écran. Les jetons suffisent à presque tout ; il
+ * reste les composants que les deux documents dessinent **autrement**, et non
+ * seulement dans d'autres couleurs — la progression du lecteur est une onde en
+ * Fluid, une ligne de lumière en Liquid ; la lumière de la pochette y fait deux
+ * nappes sombres ou trois nappes pastel.
+ */
+enum class WaveFlowMaterial {
+    /** Fluid Editorial, le sombre. */
+    Fluid,
+
+    /** Liquid Aurora Glass, le clair. */
+    Liquid,
+}
+
+private val LocalWaveFlowMaterial = staticCompositionLocalOf { WaveFlowMaterial.Fluid }
 private val LocalWaveFlowColors = staticCompositionLocalOf { FluidColors }
 private val LocalWaveFlowShapes = staticCompositionLocalOf { FluidShapes }
 private val LocalWaveFlowMotion = staticCompositionLocalOf { WaveFlowMotion(reduced = false) }
@@ -227,7 +243,8 @@ private val LocalEditorialStyle = staticCompositionLocalOf { FluidEditorial }
  * [MaterialTheme] ; ce que Material n'a pas, par [WaveFlowTheme].
  *
  * Les couleurs du système (Material You) ne sont pas proposées : la direction
- * n'a qu'un accent, et c'est le sien — puis, plus tard, celui de la pochette.
+ * n'a qu'un accent, et c'est le sien — dans le lecteur seul, celui de la
+ * pochette, que `PlayerAccent` pose par-dessus.
  *
  * @param theme ce que l'utilisateur a choisi. La traduction en clair ou sombre
  *   se fait ici et nulle part ailleurs : un appelant qui la referait pourrait
@@ -247,6 +264,7 @@ fun WaveFlowTheme(
     val motion = remember(reducedMotion) { WaveFlowMotion(reducedMotion) }
 
     CompositionLocalProvider(
+        LocalWaveFlowMaterial provides if (darkTheme) WaveFlowMaterial.Fluid else WaveFlowMaterial.Liquid,
         LocalWaveFlowColors provides if (darkTheme) FluidColors else LiquidColors,
         LocalWaveFlowShapes provides if (darkTheme) FluidShapes else LiquidShapes,
         LocalWaveFlowMotion provides motion,
@@ -266,6 +284,11 @@ fun WaveFlowTheme(
 
 /** Les jetons de WaveFlow que [MaterialTheme] ne porte pas, lus comme les siens. */
 object WaveFlowTheme {
+
+    /** La matière en vigueur, pour les composants que les documents dessinent autrement. */
+    val material: WaveFlowMaterial
+        @Composable @ReadOnlyComposable
+        get() = LocalWaveFlowMaterial.current
 
     /** Les couleurs nommées par les documents et absentes de Material. */
     val colors: WaveFlowColors
