@@ -36,23 +36,23 @@ internal class TranscodeRefusalPolicy(
 ) : DefaultLoadErrorHandlingPolicy() {
 
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long {
-        // R25 : un transcodage coupé en route ne se reprend ni à l'octet
-        // atteint — le serveur refuse la plage — ni du début, ce que Media3
-        // ferait d'un flux sans longueur ni durée. L'erreur est définitive pour
-        // lui ; la reprise la répare plus haut, voir [TranscodeCutRecovery].
-        if (loadErrorInfo.exception.estUneLectureCoupee() &&
-            loadErrorInfo.loadEventInfo.dataSpec.uri.estUnTranscodage()
-        ) {
-            return C.TIME_UNSET
-        }
         val refus = loadErrorInfo.exception.refusDeTranscodage()
-            ?: return super.getRetryDelayMsFor(loadErrorInfo)
-        // Media3 rendrait de toute façon l'erreur au lecteur à ce compte-là ;
-        // dire qu'on renonce évite de laisser une relance en suspens derrière.
-        if (loadErrorInfo.errorCount > RELANCES_MAX) return C.TIME_UNSET
+        return when {
+            // R25 : un transcodage coupé en route ne se reprend ni à l'octet
+            // atteint — le serveur refuse la plage — ni du début, ce que Media3
+            // ferait d'un flux sans longueur ni durée. L'erreur est définitive
+            // pour lui ; la reprise la répare plus haut, voir [TranscodeCutRecovery].
+            loadErrorInfo.exception.estUneLectureCoupee() &&
+                loadErrorInfo.loadEventInfo.dataSpec.uri.estUnTranscodage() -> C.TIME_UNSET
 
-        val delaiMs = refus.delaiAnnonceMs()
-        return delaiMs + hasard.nextLong(delaiMs / 2 + 1)
+            refus == null -> super.getRetryDelayMsFor(loadErrorInfo)
+
+            // Media3 rendrait de toute façon l'erreur au lecteur à ce compte-là ;
+            // dire qu'on renonce évite de laisser une relance en suspens derrière.
+            loadErrorInfo.errorCount > RELANCES_MAX -> C.TIME_UNSET
+
+            else -> refus.delaiAnnonceMs().let { delaiMs -> delaiMs + hasard.nextLong(delaiMs / 2 + 1) }
+        }
     }
 
     companion object {
