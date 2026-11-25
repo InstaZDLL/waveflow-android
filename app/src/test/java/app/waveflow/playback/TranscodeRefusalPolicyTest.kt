@@ -170,13 +170,19 @@ class TranscodeRefusalPolicyTest {
         assertEquals(0L, politique.getRetryDelayMsFor(echec(introuvable, 1)))
     }
 
+    /** Une lecture coupée, et les en-têtes de la réponse qu'elle lisait. */
+    private class Coupure(val erreur: IOException, val entetes: Map<String, List<String>>)
+
     /**
      * Une coupure telle que la vraie source HTTP la lève : le serveur ferme la
-     * liaison au milieu d'un flux sans longueur, et la lecture échoue.
+     * liaison au milieu d'un flux sans longueur, et la lecture échoue. Le
+     * serveur dit `Accept-Ranges: none` d'un transcodage en direct, `bytes`
+     * d'un fichier entier.
      */
-    private fun coupure(): IOException {
+    private fun coupure(plages: String = "none"): Coupure {
         server.enqueue(
             MockResponse()
+                .setHeader("Accept-Ranges", plages)
                 .setChunkedBody(okio.Buffer().write(ByteArray(64 * 1_024)), 4_096)
                 .setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY),
         )
@@ -184,22 +190,37 @@ class TranscodeRefusalPolicyTest {
         return try {
             source.open(DataSpec(server.url("/api/v2/stream/t?format=opus").toString().toUri()))
             val tampon = ByteArray(4_096)
-            while (source.read(tampon, 0, tampon.size) != C.RESULT_END_OF_INPUT) Unit
+            do {
+                val lus = source.read(tampon, 0, tampon.size)
+            } while (lus != C.RESULT_END_OF_INPUT)
             throw AssertionError("le serveur factice devait couper")
-        } catch (coupure: IOException) {
-            coupure
+        } catch (erreur: IOException) {
+            Coupure(erreur, source.responseHeaders)
         } finally {
             source.close()
         }
     }
 
-    /** Une coupure vue par le lecteur : sur le flux d'un marqueur, et non sur l'URL résolue. */
-    private fun echecSur(marqueur: String, erreur: IOException, numero: Int = 1) = LoadErrorInfo(
-        LoadEventInfo.Builder(0L, DataSpec.Builder().setUri(marqueur).build(), 0L).build(),
+    /** Un échec vu par le lecteur : sur le flux d'un marqueur, et non sur l'URL résolue. */
+    private fun echecSur(
+        marqueur: String,
+        erreur: IOException,
+        numero: Int = 1,
+        entetes: Map<String, List<String>> = emptyMap(),
+    ) = LoadErrorInfo(
+        LoadEventInfo.Builder(0L, DataSpec.Builder().setUri(marqueur).build(), 0L)
+            .setResponseHeaders(entetes)
+            .build(),
         MediaLoadData(C.DATA_TYPE_MEDIA),
         erreur,
         numero,
     )
+
+    private fun echecSur(marqueur: String, coupure: Coupure) =
+        echecSur(marqueur, coupure.erreur, entetes = coupure.entetes)
+
+    private fun delaiDeMedia3(marqueur: String, coupure: Coupure) =
+        DefaultLoadErrorHandlingPolicy().getRetryDelayMsFor(echecSur(marqueur, coupure))
 
     @Test
     fun `un transcodage coupe en route n'est pas retente`() {
@@ -209,14 +230,23 @@ class TranscodeRefusalPolicyTest {
     }
 
     @Test
-    fun `un original coupe en route garde les delais de Media3`() {
-        // R26 : l'original accepte les plages, Media3 le rouvre à l'octet atteint.
-        val erreur = coupure()
+    fun `un transcodage servi entier et coupe en route garde les delais de Media3`() {
+        // R25 : le serveur avait le transcodage entier et l'a servi comme un
+        // fichier ; Media3 le rouvre à l'octet atteint, et le serveur l'accepte.
+        val coupure = coupure(plages = "bytes")
 
-        assertEquals(
-            DefaultLoadErrorHandlingPolicy().getRetryDelayMsFor(echecSur(ORIGINAL, erreur)),
-            politique.getRetryDelayMsFor(echecSur(ORIGINAL, erreur)),
-        )
+        assertEquals(delaiDeMedia3(TRANSCODE, coupure), politique.getRetryDelayMsFor(echecSur(TRANSCODE, coupure)))
+    }
+
+    @Test
+    fun `un original coupe en route garde les delais de Media3`() {
+        // R26 : l'original accepte les plages, Media3 le rouvre à l'octet
+        // atteint. C'est le marqueur qui en décide, même quand la réponse ne le
+        // dit pas — un mandataire peut retirer l'en-tête — : avec lui, ce test
+        // ne verrait plus que l'en-tête, et non le marqueur.
+        val coupure = coupure(plages = "none")
+
+        assertEquals(delaiDeMedia3(ORIGINAL, coupure), politique.getRetryDelayMsFor(echecSur(ORIGINAL, coupure)))
     }
 
     @Test

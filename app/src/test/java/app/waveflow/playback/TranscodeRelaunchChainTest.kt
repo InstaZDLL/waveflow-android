@@ -290,14 +290,15 @@ class TranscodeRelaunchChainTest {
         assertEquals(emptyList<Int>(), transitions)
     }
 
-    @Test
-    fun `une coupure dans l'original se rouvre a l'octet atteint, comme avant`() {
-        // R26 : l'original accepte les plages. Rien à relancer, et rien ne doit
-        // l'être.
-        //
-        // Servi en morceaux, comme le transcodage : un corps à longueur fixe
-        // coupé en son milieu n'a pas fait rouvrir le flux sur ce banc — une
-        // seule demande, la lecture menée jusqu'à la fin —, cause non élucidée.
+    /**
+     * Un fichier entier, qui accepte les plages : coupé en son milieu la
+     * première fois, rouvert à l'octet atteint ensuite.
+     *
+     * Servi en morceaux, comme le transcodage : un corps à longueur fixe coupé
+     * en son milieu n'a pas fait rouvrir le flux sur ce banc — une seule
+     * demande, la lecture menée jusqu'à la fin —, cause non élucidée.
+     */
+    private fun servirEnFichierCoupe() {
         val octets = wav(PREMIER_FLUX_S)
         repondre = { demande ->
             val debut = demande.plage?.removePrefix("bytes=")?.substringBefore('-')?.toInt() ?: 0
@@ -311,13 +312,35 @@ class TranscodeRelaunchChainTest {
                     .setHeader("Content-Range", "bytes $debut-${octets.size - 1}/${octets.size}")
             }
         }
-        jouer(original())
+    }
 
+    private fun assertRouvertALOctetAtteint() {
         attendre("la lecture au-delà de la coupure") { lecteur.currentPosition > COUPURE_MS + 5_000L }
 
         assertTrue("rouvert par une plage", demandes.any { it.rouvreEnRoute() })
         assertEquals("aucune relance", emptyList<Demande>(), demandes.filter { it.decalageMs > 0L })
         assertNull(lecteur.playerError)
+    }
+
+    @Test
+    fun `une coupure dans l'original se rouvre a l'octet atteint, comme avant`() {
+        // R26 : l'original accepte les plages. Rien à relancer, et rien ne doit
+        // l'être.
+        servirEnFichierCoupe()
+        jouer(original())
+
+        assertRouvertALOctetAtteint()
+    }
+
+    @Test
+    fun `une coupure dans un transcodage servi entier se rouvre a l'octet atteint`() {
+        // R25 : le serveur avait le transcodage entier, et l'a servi comme un
+        // fichier. La plage marche ; relancer coûterait un transcodage, et un
+        // 429 si le compte est déjà au plafond.
+        servirEnFichierCoupe()
+        jouer()
+
+        assertRouvertALOctetAtteint()
     }
 
     @Test

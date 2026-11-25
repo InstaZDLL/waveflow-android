@@ -337,10 +337,24 @@ en redemandant le flux, même rendu, à `offset_ms` = la **position logique** à
 instant — celui où le tampon s'est vidé : rien de ce qui a été entendu ne se
 rejoue, rien de ce qui ne l'a pas été ne se perd.
 
-Un transcodage que le serveur aurait déjà entier, et qu'il servirait avec sa
-longueur, accepterait la plage ; la reprise demande quand même un segment, que
-le serveur produit à nouveau. Le cas est rare et l'écart ne coûte qu'un
-transcodage : une règle de plus ne le vaut pas.
+Ce qui distingue le transcodage en direct, c'est la réponse : le serveur dit
+`Accept-Ranges: none` d'un transcodage qu'il produit encore
+(`src/media/transcode.rs`), `bytes` d'un fichier entier — l'original, ou **un
+transcodage qu'il avait déjà en cache**,
+qu'il sert alors comme un fichier, avec sa longueur (`src/media/stream.rs`).
+Celui-là se rouvre à l'octet atteint, comme l'original : le rendre définitif
+redemanderait à ffmpeg un segment que le serveur avait déjà, et pourrait se
+heurter au plafond de transcodages du compte (R17) là où la plage passait. Seule
+une réponse qui n'a pas dit accepter les plages rend donc la coupure
+définitive ; sans l'en-tête, c'est le direct qu'on suppose.
+
+L'erreur arrive au lecteur quand ce qui était reçu a été joué : en lecture,
+quand le tampon s'est vidé ; en chargement, sitôt la coupure — le lecteur est
+alors à l'arrêt, et ce qui était tamponné sans avoir été joué se redemande avec
+la reprise. Dans les deux cas, la position logique est celle où le son s'est
+tu ; en pause, rien ne se consomme, et l'erreur attend la reprise de la lecture.
+Ce qu'en disent les sources de Media3 1.11.1 (`ExoPlayerImplInternal.doSomeWork`) ;
+le banc ne montre que le premier cas.
 
 **R26. Seul un transcodage se reprend.** L'original accepte les plages : Media3
 le rouvre à l'octet atteint et la lecture continue, comme avant. L'original d'un

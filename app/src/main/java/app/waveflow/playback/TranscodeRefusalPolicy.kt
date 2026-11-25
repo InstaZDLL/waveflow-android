@@ -42,8 +42,11 @@ internal class TranscodeRefusalPolicy(
             // atteint — le serveur refuse la plage — ni du début, ce que Media3
             // ferait d'un flux sans longueur ni durée. L'erreur est définitive
             // pour lui ; la reprise la répare plus haut, voir [TranscodeCutRecovery].
+            // Un transcodage que le serveur avait entier se rouvre comme un
+            // fichier, à l'octet atteint : rien à reprendre.
             loadErrorInfo.exception.estUneLectureCoupee() &&
-                loadErrorInfo.loadEventInfo.dataSpec.uri.estUnTranscodage() -> C.TIME_UNSET
+                loadErrorInfo.loadEventInfo.dataSpec.uri.estUnTranscodage() &&
+                !loadErrorInfo.loadEventInfo.responseHeaders.acceptentLesPlages() -> C.TIME_UNSET
 
             refus == null -> super.getRetryDelayMsFor(loadErrorInfo)
 
@@ -107,6 +110,23 @@ internal fun InvalidResponseCodeException.delaiAnnonceMs(): Long {
     return secondes.coerceAtMost(TranscodeRefusalPolicy.DELAI_MAX_MS / MS_PAR_SECONDE) * MS_PAR_SECONDE
 }
 
+/**
+ * Vrai si la réponse a dit accepter les plages (`Accept-Ranges: bytes`) : le
+ * serveur la dit d'un fichier entier, l'original ou un transcodage qu'il avait
+ * déjà en cache, et `none` d'un transcodage en direct. Sans en-tête, faux :
+ * c'est le transcodage en direct qu'on suppose, celui qu'on sait reprendre.
+ *
+ * Les noms se lisent sans casse et comme nullables, pour la même raison que
+ * dans [delaiAnnonceMs].
+ */
+internal fun Map<String, List<String>>.acceptentLesPlages(): Boolean =
+    entries.any { (nom, valeurs) ->
+        (nom as String?)?.equals(ACCEPT_RANGES, ignoreCase = true) == true &&
+            valeurs.any { it.trim().equals(OCTETS, ignoreCase = true) }
+    }
+
+private const val ACCEPT_RANGES = "Accept-Ranges"
+private const val OCTETS = "bytes"
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val RETRY_AFTER = "Retry-After"
 private const val MS_PAR_SECONDE = 1_000L
