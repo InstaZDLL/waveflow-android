@@ -5,6 +5,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamRendering
@@ -63,7 +64,8 @@ internal class PistesAVenir(
      * lui-même à jour sur place un élément identique — **sans effet
      * observable**, donc non éprouvée.
      *
-     * L'ordre aléatoire est relevé avant et rétabli après (Q9).
+     * L'ordre aléatoire ne bouge à aucune étape des remplacements, et revient
+     * tel quel après (Q9).
      */
     fun reecrire(rendu: StreamRendering) {
         noterLaCourante()
@@ -87,12 +89,20 @@ internal class PistesAVenir(
         if (aReecrire.isEmpty()) return
 
         // Q9 : chaque remplacement ajoute la nouvelle source puis retire
-        // l'ancienne, et l'ajout la place à un rang tiré au hasard. Les rangs
-        // et la longueur ne changent pas : l'ordre relevé reste valable tel
-        // quel.
+        // l'ancienne, et le fil de lecture reçoit l'ordre de chaque étape.
+        // L'ordre par défaut placerait l'ajout à un rang tiré au hasard —
+        // parfois entre la courante et la suivante protégée, qu'il retirerait.
+        // Le temps des remplacements, l'ordre en place met la nouvelle juste
+        // après l'ancienne ; les rangs et la longueur ne changent pas, et
+        // l'ordre relevé est rétabli tel quel ensuite, même si un remplacement
+        // échoue (garde non éprouvée).
         val ordre = exoPlayer.shuffleOrder
-        aReecrire.forEach { (index, item) -> enveloppe.replaceMediaItem(index, item) }
-        exoPlayer.setShuffleOrder(ordre)
+        exoPlayer.setShuffleOrder(OrdreEnPlace.de(ordre))
+        try {
+            aReecrire.forEach { (index, item) -> enveloppe.replaceMediaItem(index, item) }
+        } finally {
+            exoPlayer.setShuffleOrder(ordre)
+        }
     }
 
     /**
@@ -129,6 +139,66 @@ internal class PistesAVenir(
          * la marge couvre le décodeur et l'imprécision de la position.
          */
         const val MARGE_ENCHAINEMENT_MS = 10_000L
+    }
+}
+
+/**
+ * Un ordre aléatoire figé, qui range chaque piste ajoutée **juste après celle
+ * qui la précède dans la file**, et non à un rang tiré au hasard.
+ *
+ * L'ExoPlayer remplace une piste en ajoutant la nouvelle juste derrière
+ * l'ancienne, puis en retirant l'ancienne : sous cet ordre, la nouvelle prend
+ * à chaque étape la place exacte de l'ancienne, et rien d'autre ne bouge (Q9).
+ *
+ * @param rangs les rangs des pistes dans la file, dans l'ordre de lecture.
+ */
+internal class OrdreEnPlace private constructor(private val rangs: IntArray) : ShuffleOrder {
+
+    /** La place de chaque rang dans [rangs]. */
+    private val places = IntArray(rangs.size).also { places ->
+        rangs.forEachIndexed { place, rang -> places[rang] = place }
+    }
+
+    override fun getLength(): Int = rangs.size
+
+    override fun getNextIndex(index: Int): Int = rangs.getOrElse(places[index] + 1) { C.INDEX_UNSET }
+
+    override fun getPreviousIndex(index: Int): Int = rangs.getOrElse(places[index] - 1) { C.INDEX_UNSET }
+
+    override fun getLastIndex(): Int = rangs.lastOrNull() ?: C.INDEX_UNSET
+
+    override fun getFirstIndex(): Int = rangs.firstOrNull() ?: C.INDEX_UNSET
+
+    override fun cloneAndInsert(insertionIndex: Int, insertionCount: Int): ShuffleOrder {
+        val decales = rangs.map { if (it >= insertionIndex) it + insertionCount else it }
+        // En tête quand rien ne les précède : `indexOf` rend alors -1.
+        val place = decales.indexOf(insertionIndex - 1) + 1
+        val ajoutes = List(insertionCount) { insertionIndex + it }
+        return OrdreEnPlace((decales.take(place) + ajoutes + decales.drop(place)).toIntArray())
+    }
+
+    override fun cloneAndRemove(indexFrom: Int, indexToExclusive: Int): ShuffleOrder {
+        val retires = indexToExclusive - indexFrom
+        return OrdreEnPlace(
+            rangs.filter { it !in indexFrom until indexToExclusive }
+                .map { if (it >= indexToExclusive) it - retires else it }
+                .toIntArray(),
+        )
+    }
+
+    override fun cloneAndClear(): ShuffleOrder = OrdreEnPlace(IntArray(0))
+
+    companion object {
+        /** L'ordre de lecture de [ordre], figé. */
+        fun de(ordre: ShuffleOrder): OrdreEnPlace {
+            val rangs = IntArray(ordre.length)
+            var rang = ordre.firstIndex
+            for (place in rangs.indices) {
+                rangs[place] = rang
+                rang = ordre.getNextIndex(rang)
+            }
+            return OrdreEnPlace(rangs)
+        }
     }
 }
 

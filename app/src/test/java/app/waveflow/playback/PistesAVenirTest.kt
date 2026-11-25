@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Looper
 import androidx.core.net.toUri
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -11,6 +12,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.test.core.app.ApplicationProvider
 import app.waveflow.model.StreamQuality
@@ -24,6 +26,7 @@ import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,13 +74,18 @@ class PistesAVenirTest {
      * L'ExoPlayer, l'enveloppe et la réécriture, branchés comme dans
      * [assemblerLaLecture]. Monté ici plutôt que par lui pour tenir l'ExoPlayer
      * et poser un ordre aléatoire connu.
+     *
+     * @param espion enveloppe, s'il le faut, le lecteur que la réécriture voit.
      */
-    private fun assembler(chaine: ResolvingDataSource.Factory? = null) {
+    private fun assembler(
+        chaine: ResolvingDataSource.Factory? = null,
+        espion: (Player) -> Player = { it },
+    ) {
         val builder = ExoPlayer.Builder(app)
         chaine?.let { builder.setMediaSourceFactory(DefaultMediaSourceFactory(it)) }
         exoPlayer = builder.build()
         lecteur = TranscodeSeekingPlayer(exoPlayer)
-        pistesAVenir = PistesAVenir(exoPlayer, lecteur)
+        pistesAVenir = PistesAVenir(exoPlayer, espion(lecteur))
     }
 
     private fun piste(id: String, rendu: StreamRendering = WIFI): MediaItem =
@@ -125,7 +133,8 @@ class PistesAVenirTest {
     fun `l'ordre aleatoire ne bouge pas`() {
         assembler()
         file(TAILLE_MELANGE, debut = 3)
-        exoPlayer.setShuffleOrder(DefaultShuffleOrder(intArrayOf(3, 0, 6, 1, 7, 2, 5, 4), SEMENCE))
+        val tire = DefaultShuffleOrder(intArrayOf(3, 0, 6, 1, 7, 2, 5, 4), SEMENCE)
+        exoPlayer.setShuffleOrder(tire)
         lecteur.shuffleModeEnabled = true
         ecouler()
         val avant = ordreAleatoire()
@@ -136,6 +145,48 @@ class PistesAVenirTest {
         // Le test ne vaut que si des pistes ont bien été remplacées.
         assertEquals(TAILLE_MELANGE - 1, rendus().count { it == MOBILE })
         assertEquals(avant, ordreAleatoire())
+        // L'ordre tiré revient lui-même : c'est lui qui placera au hasard les
+        // pistes ajoutées ensuite, pas l'ordre figé des remplacements.
+        assertSame(tire, exoPlayer.shuffleOrder)
+    }
+
+    @Test
+    fun `a chaque etape des remplacements, la suivante protegee suit la courante`() {
+        // Q8 et Q9 : entre l'ajout de la nouvelle source et le retrait de
+        // l'ancienne, l'ExoPlayer envoie au fil de lecture un ordre
+        // intermédiaire. Si la nouvelle s'y glisse entre la courante et la
+        // suivante qu'il lit déjà, il retire celle-ci et relance la courante :
+        // la coupure de Q6, que l'ordre rétabli à la fin ne rattrape pas.
+        val intermediaires = mutableListOf<Pair<Int, ShuffleOrder>>()
+        assembler(
+            espion = { enveloppe ->
+                object : ForwardingPlayer(enveloppe) {
+                    override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {
+                        // Ce que l'ExoPlayer tirera de l'ordre en vigueur : la
+                        // nouvelle source ajoutée juste derrière l'ancienne.
+                        intermediaires += index to exoPlayer.shuffleOrder.cloneAndInsert(index + 1, 1)
+                        super.replaceMediaItem(index, mediaItem)
+                    }
+                }
+            },
+        )
+        file(TAILLE_MELANGE, debut = COURANTE)
+        lecteur.seekTo(COURANTE, DUREE_MS - 3_000L)
+        ecouler()
+        // Posé après le saut, que l'enveloppe fait en relançant la courante.
+        exoPlayer.setShuffleOrder(DefaultShuffleOrder(intArrayOf(3, 0, 6, 1, 7, 2, 5, 4), SEMENCE_COUPURE))
+        lecteur.shuffleModeEnabled = true
+        ecouler()
+
+        pistesAVenir.reecrire(MOBILE)
+        ecouler()
+
+        // Toutes, sauf la courante et la suivante protégée (la première).
+        assertEquals(listOf(1, 2, 4, 5, 6, 7), intermediaires.map { it.first })
+        intermediaires.forEach { (index, ordre) ->
+            val courante = if (COURANTE > index) COURANTE + 1 else COURANTE
+            assertEquals("en remplaçant la piste $index", 0, ordre.getNextIndex(courante))
+        }
     }
 
     @Test
@@ -280,6 +331,13 @@ class PistesAVenirTest {
         const val DUREE_MS = 200_000L
         const val TAILLE_MELANGE = 8
         const val SEMENCE = 86L
+
+        /**
+         * Une semence sous laquelle l'ordre par défaut glisse une piste
+         * réécrite juste derrière la courante.
+         */
+        const val SEMENCE_COUPURE = 81L
+        const val COURANTE = 3
         const val TIMEOUT_S = 15L
         const val PAUSE_MS = 5L
     }

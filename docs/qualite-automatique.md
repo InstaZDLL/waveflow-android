@@ -93,9 +93,17 @@ l'ExoPlayer le fait en ajoutant la nouvelle source **puis** en retirant
 l'ancienne, et `DefaultShuffleOrder.cloneAndInsert` place la nouvelle à un rang
 **tiré au hasard** dans l'ordre aléatoire. Sans précaution, chaque piste
 réécrite changerait de place : déjà jouée, elle reviendrait ; à venir, elle
-pourrait ne plus venir. L'ordre tiré est donc relevé avant la réécriture et
-rétabli après (`ExoPlayer.setShuffleOrder`) : les rangs ne changent pas, la
-longueur non plus, et l'ordre rétabli est exactement celui d'avant.
+pourrait ne plus venir.
+
+Rétablir l'ordre après coup ne suffit pas : chaque étape — l'ajout, puis le
+retrait — part au fil de lecture avec son propre ordre. Un ajout glissé juste
+derrière la courante y passerait devant la suivante protégée par Q8, que
+l'ExoPlayer retirerait de sa file de lecture : la coupure de Q6. Le temps des
+remplacements, un ordre **en place** range donc chaque ajout juste derrière la
+piste qu'il remplace, et le retrait qui suit rend l'ordre d'avant, à chaque
+étape. L'ordre tiré, relevé avant la réécriture, est rétabli après
+(`ExoPlayer.setShuffleOrder`) : les rangs ne changent pas, la longueur non
+plus, et il sert de nouveau aux pistes ajoutées ensuite.
 
 ## Ce que cette version ne couvre pas
 
