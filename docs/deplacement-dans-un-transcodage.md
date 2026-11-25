@@ -185,25 +185,33 @@ viendra éventuellement plus tard — pas dans cette première version.
 segment. Laisser `REPEAT_MODE_ONE` à ExoPlayer pendant un segment rejouerait ses
 dernières secondes sans fin — le piège payé par Resonus (`applyLoop`).
 
-Toute relance de la piste courante suspend la répétition et l'ordre aléatoire
-le temps du remplacement. L'ExoPlayer remplace une source dont l'URI change en
-ajoutant la nouvelle juste après l'ancienne, puis en retirant l'ancienne ; et
-retirer la piste courante lui fait chercher la suivante, selon la répétition et
-l'ordre aléatoire. Sous `REPEAT_MODE_ONE`, c'était la piste elle-même, retirée :
-il s'arrêtait (`STATE_ENDED`). En aléatoire, c'était la piste tirée après elle :
-il changeait de morceau. Les deux constatés face à un vrai ExoPlayer 1.11.1.
-Suspendus, la suivante est la nouvelle source.
+Toute relance passe par un remplacement, que l'ExoPlayer fait en ajoutant la
+nouvelle source juste après l'ancienne, puis en retirant l'ancienne ; il envoie
+au fil de lecture l'ordre aléatoire de **chacune** de ces deux étapes. Deux
+pièges, constatés face à un vrai ExoPlayer 1.11.1 ou lus dans ses sources :
 
-**L'ordre aléatoire tiré survit au remplacement (#86).** L'ajout place la
-nouvelle source à un rang tiré au hasard dans l'ordre aléatoire — que l'aléatoire
-soit actif ou suspendu : ce qui suivait la piste relancée ne la suivait plus, et
-ce qui la précédait non plus. L'enveloppe relit donc l'ordre de l'ExoPlayer avant
-le remplacement et le repose après (`setShuffleOrder`) : un remplacement ne change
-ni le nombre de pistes ni leur index, l'ordre d'avant vaut tel quel. Cela vaut
-pour **toute** piste remplacée, courante ou non : la piste quittée qui retrouve
-son marqueur nu (R14) ou son rendu (R22) dérangeait l'ordre de la même façon.
-Reposer l'ordre ne dispense pas de suspendre l'aléatoire : la suivante se choisit
-pendant le remplacement, avant que l'ordre ne puisse être reposé.
+- retirer la piste courante lui fait chercher la suivante, selon la répétition
+  et l'ordre aléatoire. Sous `REPEAT_MODE_ONE`, c'était la piste elle-même,
+  retirée : il s'arrêtait (`STATE_ENDED`). La répétition est donc suspendue le
+  temps du remplacement de la piste courante ;
+- **l'ordre aléatoire (#86).** Par défaut, l'ajout place la nouvelle source à un
+  rang tiré au hasard, que l'aléatoire soit actif ou non. Ce qui suivait la piste
+  remplacée ne la suivait plus ; retirer la piste courante faisait passer à la
+  piste tirée après elle ; et, dans l'ordre de l'étape intermédiaire, la nouvelle
+  source pouvait se glisser entre la courante et la suivante — l'ExoPlayer retire
+  alors la suivante qu'il préparait et, s'il la lisait déjà pour l'enchaîner,
+  relance la courante (`MediaPeriodQueue.updateQueuedPeriods`, puis
+  `seekToCurrentPosition`) : une coupure.
+
+Le temps du remplacement, l'enveloppe pose donc un **ordre en place**
+(`OrdreEnPlace`, partagé avec la qualité automatique) : figé sur l'ordre tiré, il
+range la nouvelle source juste après l'ancienne. À chaque étape, la nouvelle
+prend la place exacte de l'ancienne, rien d'autre ne bouge, et la suivante de la
+piste courante retirée est la nouvelle source. L'ordre tiré est rétabli ensuite :
+c'est lui qui placera au hasard les pistes ajoutées plus tard. Cela vaut pour
+**toute** piste remplacée, courante ou non : la piste quittée qui retrouve son
+marqueur nu (R14) ou son rendu (R22). Suspendre l'aléatoire, comme le faisait la
+première parade, n'est plus nécessaire.
 
 **R13. « Précédent », « reculer » et « avancer » jugent sur la position
 logique.** `ForwardingSimpleBasePlayer.handleSeek` les transmet tels quels
@@ -424,7 +432,11 @@ L'ordre aléatoire après un remplacement (R12, R14) s'éprouve sur la même
 chaîne, `TranscodeRelaunchChainTest` : le lecteur factice remplace une piste sur
 place et ne peut pas le déranger. L'ExoPlayer tire son ordre sans graine ; une
 file de trente pistes et trois remplacements par test ramènent à moins d'un sur
-mille la chance qu'un ordre dérangé retombe sur l'ancien.
+mille la chance qu'un ordre dérangé retombe sur l'ancien. Ces deux tests ne
+voient que l'ordre final ; l'ordre de l'étape intermédiaire s'éprouve à part, sur
+un ExoPlayer espion qui relève, à chaque remplacement, ce que l'ordre en vigueur
+ferait de l'ajout — avec un ordre tiré posé à la main et une graine, pour que le
+résultat ne dépende pas du hasard.
 
 **R25 à R30 s'éprouvent sur la même chaîne**, face à un serveur factice qui
 coupe le flux en son milieu et refuse la plage comme le vrai. Robolectric ne
@@ -464,6 +476,9 @@ Ce qui n'est **pas** éprouvé :
   piste courante, ce qui suppose qu'ExoPlayer ne rende l'erreur d'une piste
   qu'une fois celle-ci devenue la courante. C'est ce que disent ses sources
   (`ExoPlayerImplInternal.handleIoException`, 1.11.1) ; aucun test ne le montre.
+- **La coupure qu'un ordre intermédiaire dérangé provoquait (R12)** : le test
+  éprouve l'ordre, non la relance de la piste courante qui en découlait, lue
+  dans les sources de Media3 (`updateQueuedPeriods`, `seekToCurrentPosition`).
 - **Une coupure sur un vrai flux Opus.** Le Matroska du banc reproduit ce qui
   décide du geste de Media3 — ni longueur ni durée —, mais l'extracteur Ogg n'y
   passe pas : rien n'a coupé un Opus.

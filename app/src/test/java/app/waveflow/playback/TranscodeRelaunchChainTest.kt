@@ -9,6 +9,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ShuffleOrder
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.test.core.app.ApplicationProvider
 import app.waveflow.model.StreamRendering
 import app.waveflow.testing.remoteSong
@@ -195,6 +199,44 @@ class TranscodeRelaunchChainTest {
             ecouler()
 
             assertEquals("après avoir quitté la piste n° ${tour + 1}", avant, ordreAleatoire())
+        }
+    }
+
+    @Test
+    fun `a chaque etape d'un remplacement, la nouvelle source prend la place de l'ancienne`() {
+        // R1, R12 et R14 : l'ExoPlayer envoie au fil de lecture l'ordre de
+        // l'étape intermédiaire — la nouvelle source ajoutée, l'ancienne pas
+        // encore retirée. Glissée entre la courante et la suivante, la
+        // nouvelle fait retirer la suivante qu'il préparait ou lisait déjà ;
+        // l'ordre reposé à la fin ne rattrape pas cette coupure, et les deux
+        // tests qui précèdent, qui ne voient que l'ordre final, non plus.
+        //
+        // L'ordre tiré est posé à la main, avec une graine : le résultat ne
+        // dépend pas du hasard. L'espion tire lui-même dans l'ordre en vigueur,
+        // ce qui avance son hasard : il juge cet ordre, non le tirage exact
+        // que fera l'ExoPlayer.
+        lecteur.release()
+        val exoPlayer = ExoPlayer.Builder(app)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(mediaCache.dataSourceFactory(resolveur)))
+            .build()
+        val espion = EspionDOrdre(exoPlayer)
+        lecteur = TranscodeSeekingPlayer(espion)
+        lecteur.setMediaItems(listOf(transcode()) + List(ORDRE_TIRE.size - 1) { transcode("autre-$it") })
+        exoPlayer.setShuffleOrder(DefaultShuffleOrder(ORDRE_TIRE, SEMENCE_ORDRE))
+        lecteur.shuffleModeEnabled = true
+        lecteur.prepare()
+        lecteur.play()
+        attendre("la première demande") { demandes.isNotEmpty() }
+
+        // Une relance de la courante, puis la piste quittée remise à nu (R14).
+        lecteur.seekTo(133_000L)
+        avancer(TranscodeSeekingPlayer.COALESCENCE_MS)
+        attendre("la relance") { demandes.any { it.piste == PISTE && it.decalageMs == 133_000L } }
+        lecteur.seekToNextMediaItem()
+        attendre("la piste quittée remise à nu") { espion.intermediaires.size >= 2 }
+
+        espion.intermediaires.forEach { (index, ordre) ->
+            assertEquals("la nouvelle source du rang $index suit l'ancienne", index + 1, ordre.getNextIndex(index))
         }
     }
 
@@ -465,6 +507,8 @@ class TranscodeRelaunchChainTest {
         const val DUREE_MS = 245_000L
         const val PISTE = "c07f8d98"
         const val FILE = 30
+        val ORDRE_TIRE = intArrayOf(3, 0, 6, 1, 7, 2, 5, 4)
+        const val SEMENCE_ORDRE = 86L
         const val SEMENCE = 60
         const val TIMEOUT_S = 20L
         const val PAS_MS = 50L
@@ -561,3 +605,20 @@ private fun uint(identifiant: Int, valeur: Long): ByteArray = ebml(
 )
 
 private fun uint(identifiant: Int, valeur: Int): ByteArray = uint(identifiant, valeur.toLong())
+
+/**
+ * Un ExoPlayer qui relève, à chaque remplacement, l'ordre que l'ExoPlayer
+ * tirera de l'ordre en vigueur pour l'étape intermédiaire : la nouvelle source
+ * ajoutée juste derrière l'ancienne (`cloneAndInsert(index + 1, 1)`), comme le
+ * fait `ExoPlayerImpl.replaceMediaItems` en 1.11.1.
+ */
+private class EspionDOrdre(private val exoPlayer: ExoPlayer) : ExoPlayer by exoPlayer {
+
+    /** Le rang remplacé, et l'ordre intermédiaire qu'en aurait tiré l'ExoPlayer. */
+    val intermediaires = mutableListOf<Pair<Int, ShuffleOrder>>()
+
+    override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {
+        intermediaires += index to exoPlayer.shuffleOrder.cloneAndInsert(index + 1, 1)
+        exoPlayer.replaceMediaItem(index, mediaItem)
+    }
+}

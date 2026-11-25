@@ -423,34 +423,39 @@ internal class TranscodeSeekingPlayer(
      * ni la piste qu'il joue, ni l'ordre de lecture.
      *
      * L'ExoPlayer ajoute la nouvelle source juste après l'ancienne, puis retire
-     * l'ancienne ; retirer la piste courante lui fait chercher la suivante, selon
-     * la répétition et l'ordre aléatoire (éprouvé en 1.11.1). Sous
-     * `REPEAT_MODE_ONE`, c'est l'ancienne elle-même, retirée : il s'arrête. En
-     * aléatoire, c'est la piste tirée après elle : il change de morceau. Les deux
-     * sont suspendus le temps du remplacement, et la suivante est alors la
-     * nouvelle source.
+     * l'ancienne, et envoie au fil de lecture l'ordre aléatoire de **chaque**
+     * étape (éprouvé en 1.11.1). Par défaut, l'ajout place la nouvelle source à
+     * un rang tiré au hasard, que l'aléatoire soit actif ou non. Glissée entre
+     * la courante et la suivante, elle fait retirer à l'ExoPlayer la suivante
+     * qu'il préparait ; s'il la lisait déjà pour l'enchaîner, il relance la
+     * courante — une coupure, que reposer l'ordre à la fin ne rattrape pas (R1).
+     * Retirer la piste courante lui fait chercher la suivante dans ce même ordre :
+     * il changeait de morceau.
      *
-     * L'ajout, lui, place la nouvelle source à un rang tiré au hasard dans
-     * l'ordre aléatoire, que celui-ci soit actif ou non : ce qui suivait la piste
-     * ne la suivrait plus (R1). Un remplacement ne change pas le nombre de
-     * pistes, et chacune garde son index : l'ordre d'avant se repose tel quel.
-     * Toute piste remplacée y passe, courante ou non (R14). Reposer l'ordre ne
-     * dispense pas de suspendre l'aléatoire : la suivante se choisit pendant le
+     * Le temps du remplacement, l'ordre en place ([OrdreEnPlace]) range la
+     * nouvelle source juste après l'ancienne : à chaque étape, elle en prend la
+     * place exacte, et la suivante de la piste courante retirée est la nouvelle
+     * source. Toute piste remplacée y passe, courante ou non (R14, R22). L'ordre
+     * tiré est rétabli ensuite : c'est lui qui placera au hasard les pistes
+     * ajoutées plus tard.
+     *
+     * Sous `REPEAT_MODE_ONE`, la suivante de l'ancienne est l'ancienne elle-même,
+     * retirée : il s'arrêtait. La répétition est suspendue le temps du
      * remplacement.
      */
     private fun remplacerSansDeranger(index: Int, item: MediaItem) {
         val courante = index == player.currentMediaItemIndex
         val repetition = player.repeatMode
-        val melange = player.shuffleModeEnabled
         val exoPlayer = player as? ExoPlayer
         val ordre = exoPlayer?.shuffleOrder
         if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = REPEAT_MODE_OFF
-        if (courante && melange) player.shuffleModeEnabled = false
+        if (ordre != null) exoPlayer.setShuffleOrder(OrdreEnPlace.de(ordre))
         try {
             player.replaceMediaItem(index, item)
         } finally {
+            // Un remplacement interrompu entre ses deux étapes laisserait une
+            // longueur que l'ordre relevé ne couvre plus (garde non éprouvée).
             if (ordre != null && exoPlayer.shuffleOrder.length == ordre.length) exoPlayer.shuffleOrder = ordre
-            if (courante && melange) player.shuffleModeEnabled = true
             if (courante && repetition != REPEAT_MODE_OFF) player.repeatMode = repetition
         }
     }
