@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.test.core.app.ApplicationProvider
 import app.waveflow.model.StreamNetwork
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.toList
@@ -145,11 +146,44 @@ class UnmeteredLinkTest {
     }
 
     @Test
+    fun `un collecteur en retard recoit quand meme le dernier reseau`() {
+        // Le rappel ne peut pas attendre le collecteur : passé la contenance
+        // d'un canal borné, le dernier changement se perdrait sans bruit.
+        reseauActif(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        val payant = description(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        val gratuit =
+            description(NetworkCapabilities.NET_CAPABILITY_INTERNET, NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+
+        val vus = runBlocking {
+            val vus = mutableListOf<StreamNetwork>()
+            val retard = CompletableDeferred<Unit>()
+            val suivi = launch(Dispatchers.Unconfined) {
+                app.reseauxSuccessifs().collect {
+                    vus += it
+                    retard.await()
+                }
+            }
+            repeat(ANNONCES_EN_RETARD) { annoncer(payant) }
+            annoncer(gratuit)
+            retard.complete(Unit)
+            suivi.cancelAndJoin()
+            vus
+        }
+
+        assertEquals(StreamNetwork.Unmetered, vus.last())
+    }
+
+    @Test
     fun `le suivi termine, le rappel est desinscrit`() {
         reseauActif(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 
         suivre { assertEquals(1, shadowOf(connectivite).networkCallbacks.size) }
 
         assertEquals(0, shadowOf(connectivite).networkCallbacks.size)
+    }
+
+    private companion object {
+        /** De quoi déborder un canal `BUFFERED` et ses 64 places. */
+        const val ANNONCES_EN_RETARD = 100
     }
 }

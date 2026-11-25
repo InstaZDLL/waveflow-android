@@ -8,6 +8,7 @@ import app.waveflow.model.StreamNetwork
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
@@ -50,8 +51,10 @@ private fun NetworkCapabilities?.nonFacturee(): Boolean =
  * celui qui viendra, et une coupure passagère ne doit pas réécrire la file deux
  * fois. On garde le dernier réseau connu jusqu'au suivant.
  *
- * Le rappel arrive sur un fil du système ; `trySend` y suffit, le canal ne
- * bornant rien et le flux ne gardant que des changements.
+ * Le rappel arrive sur un fil du système, où `trySend` ne peut pas attendre :
+ * le canal ne garde donc que le dernier réseau annoncé — un collecteur en
+ * retard saute les intermédiaires, jamais le dernier —, et le flux que des
+ * changements.
  */
 internal fun Context.reseauxSuccessifs(): Flow<StreamNetwork> = callbackFlow {
     trySend(StreamNetwork.of(surLiaisonNonFacturee()))
@@ -71,4 +74,4 @@ internal fun Context.reseauxSuccessifs(): Flow<StreamNetwork> = callbackFlow {
     }
 
     awaitClose { inscrite?.unregisterNetworkCallback(rappel) }
-}.distinctUntilChanged()
+}.conflate().distinctUntilChanged()
