@@ -178,8 +178,10 @@ private fun LigneCurseur(
     onChange: (Float) -> Unit,
 ) {
     val etat = remember(valeur) {
-        // Les crans intérieurs : de −borne à +borne par pas, sans les deux bouts.
-        SliderState(valeur, (2 * borne / pas).roundToInt() - 1, -borne..borne)
+        // Sans crans : Material en dessine un par pas, soixante points sur ±15 dB
+        // qui brouillent la piste. Le pas est tenu par l'arrondi de
+        // `onValueChange`, au même effet.
+        SliderState(valeur, 0, -borne..borne)
     }
     val affichee = formatDb(etat.value)
     Column(
@@ -194,7 +196,7 @@ private fun LigneCurseur(
         }
         Slider(
             state = etat,
-            onValueChange = { etat.value = it },
+            onValueChange = { etat.value = (it / pas).roundToInt() * pas },
             onValueChangeFinished = { if (etat.value != valeur) onChange(etat.value) },
             modifier = Modifier.semantics {
                 contentDescription = titre

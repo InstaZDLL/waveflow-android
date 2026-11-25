@@ -59,13 +59,24 @@ internal class Egaliseur {
      */
     private var preampliCible = 1f
 
+    /** L'égaliseur était-il actif au tampon précédent ? Voir [traiter]. */
+    private var actif = false
+
     /**
      * Applique la cascade en place à un tampon entrelacé de [trames] trames.
      *
-     * Rien quand l'égaliseur est inactif : le tampon passe tel quel (E2).
+     * Rien quand l'égaliseur est inactif : le tampon passe tel quel (E2). Le
+     * couper oublie la mémoire des filtres : reprise à la réactivation, elle
+     * rejouerait un reste du signal d'avant, parfois de plusieurs secondes.
      */
     fun traiter(tampon: FloatArray, trames: Int, canaux: Int, frequence: Float, reglages: ReglagesEgaliseur) {
-        if (!reglages.actif || canaux <= 0 || trames <= 0) return
+        if (!reglages.actif) {
+            if (actif) oublier()
+            actif = false
+            return
+        }
+        actif = true
+        if (canaux <= 0 || trames <= 0) return
         if (reglages.bandesDb != bandesCalculees || frequence != frequenceCalculee) {
             recalculer(reglages.bandesDb, frequence)
         }

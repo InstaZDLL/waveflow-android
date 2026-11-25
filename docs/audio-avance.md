@@ -212,7 +212,8 @@ nombre de canaux) et à la libération du lecteur, pas au `flush` qui marque une
 nouvelle piste ou un saut : vider la mémoire à la frontière couperait la
 résonance de la fin d'une piste dans un enchaînement sans blanc. Les
 coefficients se recalculent quand les bandes ou la fréquence d'échantillonnage
-changent.
+changent. **Couper l'égaliseur oublie sa mémoire** : réactivé, il ne rejoue pas
+un reste du signal d'avant.
 
 **E6. Les préréglages du bureau**, mêmes valeurs, mêmes noms français : Plat,
 Acoustique, Amplification des graves, Réduction des graves, Classique, Dance,
@@ -251,9 +252,13 @@ du MP3, `iTunSMPB` du MP4, pré-saut de l'Opus), en amont des traitements. Que
 l'enchaînement soit vraiment sans blanc ne se voit pas sous Robolectric, qui ne
 décode pas l'audio.
 
-**C4. Pas de sortie déchargée.** En mode `offload`, Media3 contourne les
-traitements : ni gain ni égaliseur. Le lecteur ne l'active pas ; l'activer un
-jour ferait disparaître les deux sans bruit.
+**C4. Pas de sortie déchargée, et le passthrough n'est pas traité.** En mode
+`offload`, Media3 contourne les traitements : ni gain ni égaliseur. Le lecteur ne
+l'active pas ; l'activer un jour ferait disparaître les deux sans bruit. De même,
+un flux AC-3, E-AC-3 ou DTS que Media3 enverrait tel quel à un ampli HDMI qui le
+décode (passthrough) ne passe par aucun traitement : seul le PCM en reçoit. Le
+cas ne se présente pas pour une bibliothèque musicale ordinaire, et il n'est pas
+empêché.
 
 ## Ce que cette version ne couvre pas
 

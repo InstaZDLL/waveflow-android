@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -15,11 +16,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
 import app.waveflow.model.ModeDeGain
 import app.waveflow.model.Prereglage
 import app.waveflow.model.ReglagesEgaliseur
 import app.waveflow.model.ReglagesReplayGain
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -95,6 +98,43 @@ class SonSectionTest {
             .performSemanticsAction(SemanticsActions.SetProgress) { it(3f) }
 
         assertEquals(listOf<GesteSon>(GesteSon.Preampli(3f)), gestes)
+    }
+
+    /**
+     * E7, au doigt : rien ne part pendant le glissement, une seule valeur au
+     * relâchement. Un enregistrement déplacé dans `onValueChange` écrirait le
+     * fichier à chaque image du geste.
+     */
+    @Test
+    fun `un glissement ne remonte rien avant d'etre relache`() {
+        afficher()
+        val curseur = compose.onNodeWithContentDescription("Pré-amplification").performScrollTo()
+
+        curseur.performTouchInput {
+            down(center)
+            moveBy(Offset(width / 10f, 0f))
+            moveBy(Offset(width / 10f, 0f))
+            moveBy(Offset(width / 10f, 0f))
+        }
+        compose.waitForIdle()
+        assertEquals(emptyList<GesteSon>(), gestes)
+
+        curseur.performTouchInput { up() }
+        compose.waitForIdle()
+        assertEquals(1, gestes.size)
+        assertTrue(gestes.single().toString(), (gestes.single() as GesteSon.Preampli).db > 0f)
+    }
+
+    /** Le curseur est continu, sans crans dessinés : le demi-dB est tenu par l'arrondi. */
+    @Test
+    fun `un curseur s'arrondit au demi-decibel`() {
+        afficher()
+
+        compose.onNodeWithContentDescription("Gain par défaut")
+            .performScrollTo()
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(-3.3f) }
+
+        assertEquals(listOf<GesteSon>(GesteSon.GainParDefaut(-3.5f)), gestes)
     }
 
     @Test

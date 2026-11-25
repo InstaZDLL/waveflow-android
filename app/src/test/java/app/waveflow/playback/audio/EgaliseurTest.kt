@@ -166,4 +166,21 @@ class EgaliseurTest {
 
         assertArrayEquals(dUnBloc, premier + second, 0f)
     }
+
+    /**
+     * Couper l'égaliseur oublie sa mémoire : réactivé après un silence, il part
+     * comme un égaliseur neuf, sans rejouer le reste du signal d'avant.
+     */
+    @Test
+    fun `reactive, l'egaliseur ne rejoue pas le signal d'avant`() {
+        val reglages = reglage(0 to 9f)
+        val egaliseur = Egaliseur()
+        egaliseur.traiter(FloatArray(400) { sin(it * 0.05).toFloat() * 0.8f }, 400, 1, frequence, reglages)
+        egaliseur.traiter(FloatArray(400), 400, 1, frequence, reglages.avecActif(false))
+
+        val silence = FloatArray(64)
+        egaliseur.traiter(silence, 64, 1, frequence, reglages)
+
+        assertArrayEquals(FloatArray(64), silence, 0f)
+    }
 }
