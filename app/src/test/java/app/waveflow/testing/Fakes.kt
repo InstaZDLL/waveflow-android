@@ -12,6 +12,7 @@ import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
+import app.waveflow.model.VoiceRequest
 import app.waveflow.playback.PlaybackController
 import app.waveflow.playback.PlaybackState
 import app.waveflow.playback.PlayingTrack
@@ -154,6 +155,7 @@ class FakePlaybackController : PlaybackController {
     val playRemoteCalls = mutableListOf<Pair<List<RemoteSong>, Int>>()
     val playShuffledCalls = mutableListOf<List<Song>>()
     val playRemoteShuffledCalls = mutableListOf<List<RemoteSong>>()
+    val playFromSearchCalls = mutableListOf<VoiceRequest>()
 
     /** Les gestes sur la file, dans l'ordre où l'écran les a demandés. */
     val queueCalls = mutableListOf<String>()
@@ -194,6 +196,10 @@ class FakePlaybackController : PlaybackController {
 
     override fun playRemoteShuffled(songs: List<RemoteSong>) {
         playRemoteShuffledCalls += songs
+    }
+
+    override fun playFromSearch(request: VoiceRequest) {
+        playFromSearchCalls += request
     }
 
     override fun playPause() = Unit

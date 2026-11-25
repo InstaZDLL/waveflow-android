@@ -70,7 +70,14 @@ class PlaybackService : MediaLibraryService() {
      * parce qu'il faut pouvoir lui redemander de prévenir ses abonnés à chaque
      * fois que [browseSnapshot] change.
      */
-    private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot }, ::renduDemande)
+    private val browseCallback = BrowseCallback(BrowseTree { browseSnapshot }, ::renduDemande, ::bibliothequeLue)
+
+    /**
+     * `Unit` dès que [browseSnapshot] porte une bibliothèque lue — ou en échec,
+     * faute de permission : la lecture se termine alors elle aussi. Une demande
+     * vocale l'attend (R11 de `docs/recherche-vocale.md`).
+     */
+    private val premiereLecture = MutableStateFlow<Unit?>(null)
 
     /**
      * Le rendu de la qualité choisie, `null` tant que le réglage n'a pas été lu.
@@ -161,6 +168,9 @@ class PlaybackService : MediaLibraryService() {
      * même. Voir [firstValueAsFuture].
      */
     private fun renduDemande(): ListenableFuture<StreamRendering> = rendu.firstValueAsFuture(artworkScope)
+
+    /** Voir [premiereLecture]. */
+    private fun bibliothequeLue(): ListenableFuture<Unit> = premiereLecture.firstValueAsFuture(artworkScope)
 
     /**
      * Met la lecture en pause quand la minuterie de veille arrive à échéance.
@@ -297,6 +307,7 @@ class PlaybackService : MediaLibraryService() {
                 BrowseSnapshot(library, playlists, entries)
             }.collect { snapshot ->
                 browseSnapshot = snapshot
+                if (!snapshot.library.isLoading) premiereLecture.value = Unit
                 // L'instantané seul ne suffit pas : un navigateur déjà connecté
                 // ne redemande rien de lui-même, il attend qu'on lui dise que
                 // ce qu'il affiche a changé.

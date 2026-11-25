@@ -2,6 +2,7 @@ package app.waveflow.playback
 
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
+import app.waveflow.model.VoiceRequest
 import kotlinx.coroutines.flow.StateFlow
 
 /** Mode de répétition, indépendant des constantes Media3. */
@@ -103,6 +104,16 @@ interface PlaybackController {
 
     /** Même chose pour des morceaux du serveur. */
     fun playRemoteShuffled(songs: List<RemoteSong>)
+
+    /**
+     * Transmet une demande vocale du téléphone au service, qui la résout comme
+     * celles d'Android Auto (R10 de `docs/recherche-vocale.md`).
+     *
+     * Contrairement aux autres commandes, elle n'est **pas** ignorée avant la
+     * connexion : elle arrive le plus souvent au démarrage à froid, avant la
+     * liaison au service, et part dès que celle-ci est établie.
+     */
+    fun playFromSearch(request: VoiceRequest)
 
     fun playPause()
 

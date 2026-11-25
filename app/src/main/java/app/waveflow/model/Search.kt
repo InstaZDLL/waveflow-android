@@ -69,7 +69,7 @@ private fun String.matchRank(key: String): Int = when {
  * La décomposition NFD sépare la lettre de son accent, qui devient alors un
  * caractère combinant retirable.
  */
-private fun String.searchKey(): String =
+internal fun String.searchKey(): String =
     Normalizer.normalize(trim(), Normalizer.Form.NFD)
         .replace(COMBINING_MARKS, "")
         .lowercase()

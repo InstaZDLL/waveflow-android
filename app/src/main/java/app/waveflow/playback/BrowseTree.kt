@@ -6,6 +6,8 @@ import app.waveflow.model.Library
 import app.waveflow.model.Playlist
 import app.waveflow.model.PlaylistEntry
 import app.waveflow.model.Song
+import app.waveflow.model.VoiceRequest
+import app.waveflow.model.voiceSearch
 
 /**
  * Ce qu'un hôte extérieur — Android Auto, Assistant — voit de la bibliothèque.
@@ -88,6 +90,16 @@ class BrowseTree(private val snapshot: () -> BrowseSnapshot) {
         // la file avant de rendre la main à l'hôte.
         return state.songsUnder(mediaId).orEmpty().map { it.toMediaItem() }
     }
+
+    /**
+     * Ce qu'il faut mettre dans le lecteur pour une demande vocale : les
+     * pistes que [voiceSearch] retient, jouables comme celles de [resolve].
+     *
+     * Une liste vide si rien ne correspond — à l'appelant de ne pas vider le
+     * lecteur pour autant (R9 de `docs/recherche-vocale.md`).
+     */
+    fun search(request: VoiceRequest): List<MediaItem> =
+        snapshot().library.voiceSearch(request).map { it.toMediaItem() }
 
     private fun rootSections(state: BrowseSnapshot): List<MediaItem> = buildList {
         add(browsableNode(ALBUMS_ID, "Albums"))

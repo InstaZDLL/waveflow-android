@@ -39,6 +39,15 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- « Joue Nevermind » dit à l'Assistant du téléphone, relayé au
+                 service. Android Auto passe par la session, mais le lint
+                 (MissingIntentFilterForMediaSearch) exige ce filtre de toute
+                 application qu'il voit. Voir docs/recherche-vocale.md. -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!-- Déclare l'application à Android Auto. Sans cette entrée, Auto ne la
