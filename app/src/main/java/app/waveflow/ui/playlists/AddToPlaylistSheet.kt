@@ -13,11 +13,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Playlist
 import app.waveflow.model.Song
+import app.waveflow.ui.components.WaveFlowSheet
 import app.waveflow.ui.trackCountLabel
 
 /**
@@ -41,7 +40,6 @@ import app.waveflow.ui.trackCountLabel
  * c'est le geste attendu quand on part d'un titre plutôt que de l'onglet
  * Playlists.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddToPlaylistSheet(
     song: Song,
@@ -53,7 +51,7 @@ fun AddToPlaylistSheet(
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    WaveFlowSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
