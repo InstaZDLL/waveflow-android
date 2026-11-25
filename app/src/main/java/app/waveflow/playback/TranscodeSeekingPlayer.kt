@@ -366,6 +366,10 @@ internal class TranscodeSeekingPlayer(
         if (nombre > REPRISES_SANS_ECOUTE_MAX) return false
         reprises = Reprises(ecoute, position, nombre)
 
+        // R28 : le saut est pris en charge par la reprise. Le remplacement
+        // suffirait d'ailleurs à le rendre caduc — la fenêtre qu'il visait
+        // change d'identifiant —, si bien que cette annulation, qui retire
+        // aussi le rappel de la minuterie, n'est éprouvée par aucun test.
         annulerSautEnAttente()
         relancer(index, fenetre, bornerAuMorceau(position, item))
         player.prepare()
