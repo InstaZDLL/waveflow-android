@@ -1,9 +1,11 @@
 package app.waveflow.ui.browse
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -12,11 +14,17 @@ import app.waveflow.model.Artist
 import app.waveflow.model.Library
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.LibraryStateContainer
-import app.waveflow.ui.components.MediaRow
-import app.waveflow.ui.theme.WaveFlowTheme
+import app.waveflow.ui.components.PortraitTile
+import app.waveflow.ui.components.PortraitTileMinWidth
+import app.waveflow.ui.components.TileGutter
+import app.waveflow.ui.components.TileRowSpacing
+import app.waveflow.ui.components.TileSpacing
 import app.waveflow.ui.trackCountLabel
 
-/** Onglet Artistes. */
+/**
+ * Onglet Artistes : une grille de portraits, en disques — le repère habituel
+ * d'un artiste —, le nom et ce qu'on a de lui dessous.
+ */
 @Composable
 fun ArtistsScreen(
     library: Library,
@@ -33,19 +41,24 @@ fun ArtistsScreen(
         onRetry = onRetry,
         modifier = modifier,
     ) {
-        LazyColumn(
-            contentPadding = PaddingValues(bottom = bottomPadding),
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = PortraitTileMinWidth),
+            contentPadding = PaddingValues(
+                start = TileGutter,
+                end = TileGutter,
+                top = 16.dp,
+                bottom = bottomPadding + TileGutter,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(TileSpacing),
+            verticalArrangement = Arrangement.spacedBy(TileRowSpacing),
             modifier = Modifier.fillMaxSize(),
         ) {
             items(library.artists, key = { it.id }) { artist ->
-                MediaRow(
+                PortraitTile(
                     artworkUri = artist.artworkUri,
-                    title = artist.name,
+                    name = artist.name,
                     subtitle = "${albumCountLabel(artist.albumCount)} · ${trackCountLabel(artist.trackCount)}",
                     onClick = { onArtistClick(artist) },
-                    // Rond plutôt que carré : le repère visuel habituel pour
-                    // un artiste.
-                    artworkShape = WaveFlowTheme.shapes.portrait,
                 )
             }
         }

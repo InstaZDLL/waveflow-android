@@ -51,6 +51,7 @@ fun AlbumDetailScreen(
         item(key = "header") {
             DetailHeader(
                 artworkUri = album.artworkUri,
+                kicker = "Album",
                 title = album.title,
                 subtitle = album.displayArtist,
                 trackCount = album.trackCount,

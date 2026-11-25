@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -95,13 +95,15 @@ fun PagedListFooter(
  */
 @Composable
 fun LoadMoreOnApproachingEnd(
-    listState: LazyListState,
+    gridState: LazyGridState,
     itemCount: Int,
     onLoadMore: () -> Unit,
 ) {
+    // Le catalogue est une grille de tuiles : l'approche de la fin se lit au
+    // dernier élément visible, quelle que soit la colonne où il tombe.
     val shouldLoad by remember(itemCount) {
         derivedStateOf {
-            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
             last >= itemCount - PREFETCH_DISTANCE
         }
     }

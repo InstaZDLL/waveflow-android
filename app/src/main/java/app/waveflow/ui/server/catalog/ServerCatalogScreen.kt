@@ -1,5 +1,6 @@
 package app.waveflow.ui.server.catalog
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -7,13 +8,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,7 +34,16 @@ import app.waveflow.model.RemoteSong
 import app.waveflow.model.orUnknownArtist
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.components.CenteredMessage
+import app.waveflow.ui.components.CoverTile
+import app.waveflow.ui.components.CoverTileMinWidth
 import app.waveflow.ui.components.MediaRow
+import app.waveflow.ui.components.PortraitTile
+import app.waveflow.ui.components.PortraitTileMinWidth
+import app.waveflow.ui.components.TileGutter
+import app.waveflow.ui.components.TileRowSpacing
+import app.waveflow.ui.components.TileSpacing
+import app.waveflow.ui.components.WaveMark
+import app.waveflow.ui.navigation.MarkedTab
 import app.waveflow.ui.search.SearchField
 import app.waveflow.ui.theme.WaveFlowTheme
 
@@ -42,9 +55,10 @@ private enum class CatalogTab(val label: String) {
 /**
  * Catalogue d'un serveur connecté.
  *
- * En listes et non en grille de pochettes, contrairement aux albums locaux :
- * le catalogue d'un serveur se parcourt volontiers par recherche et par nom,
- * là où la bibliothèque de l'appareil tient dans quelques écrans.
+ * En tuiles, comme la bibliothèque de l'appareil : la direction met des
+ * tuiles partout où l'on parcourt des disques, et le catalogue ne s'en
+ * distingue que par sa source. La recherche, elle, reste en lignes — elle
+ * mêle morceaux, albums et artistes dans une seule liste.
  */
 @Composable
 fun ServerCatalogScreen(
@@ -67,8 +81,8 @@ fun ServerCatalogScreen(
     // Remontés ici : l'onglet masqué quitte la composition, et un état déclaré
     // à l'intérieur repartirait donc du haut à chaque retour. `rememberSaveable`
     // les fait aussi survivre à une rotation.
-    val albumsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val artistsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val albumsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val artistsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
 
     Column(modifier = modifier.fillMaxSize()) {
         // Le champ vit dans la section Serveur : aucune ambiguïté sur ce qu'il
@@ -94,12 +108,18 @@ fun ServerCatalogScreen(
             return@Column
         }
 
-        PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+        // Les mêmes onglets que ceux de la bibliothèque : du texte, l'onde
+        // sous l'ouvert, aucun filet dessous.
+        PrimaryTabRow(
+            selectedTabIndex = tab.ordinal,
+            indicator = { WaveMark(Modifier.tabIndicatorOffset(tab.ordinal, matchContentSize = true)) },
+            divider = {},
+        ) {
             CatalogTab.entries.forEach { entry ->
-                Tab(
+                MarkedTab(
                     selected = tab == entry,
                     onClick = { tab = entry },
-                    text = { Text(entry.label) },
+                    label = entry.label,
                 )
             }
         }
@@ -107,7 +127,7 @@ fun ServerCatalogScreen(
         when (tab) {
             CatalogTab.Albums -> AlbumsTab(
                 state = albums,
-                listState = albumsListState,
+                gridState = albumsGridState,
                 onAlbumClick = onAlbumClick,
                 onLoadMore = onLoadMoreAlbums,
                 onRetry = onRetryAlbums,
@@ -116,7 +136,7 @@ fun ServerCatalogScreen(
 
             CatalogTab.Artists -> ArtistsTab(
                 state = artists,
-                listState = artistsListState,
+                gridState = artistsGridState,
                 onArtistClick = onArtistClick,
                 onLoadMore = onLoadMoreArtists,
                 onRetry = onRetryArtists,
@@ -129,33 +149,29 @@ fun ServerCatalogScreen(
 @Composable
 private fun AlbumsTab(
     state: PagedList<RemoteAlbum>,
-    listState: LazyListState,
+    gridState: LazyGridState,
     onAlbumClick: (RemoteAlbum) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     bottomPadding: Dp,
 ) {
-    LoadMoreOnApproachingEnd(listState, state.items.size, onLoadMore)
+    LoadMoreOnApproachingEnd(gridState, state.items.size, onLoadMore)
 
     PagedListContainer(
         state = state,
         emptyMessage = "Ce serveur n'a aucun album. Lancez une analyse depuis son administration.",
         onRetry = onRetry,
     ) {
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(bottom = bottomPadding),
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        TileGrid(gridState = gridState, minTileWidth = CoverTileMinWidth, bottomPadding = bottomPadding) {
             items(state.items, key = { it.id }) { album ->
-                MediaRow(
+                CoverTile(
                     artworkUri = album.artworkUri,
                     title = album.title,
                     subtitle = album.artist.orUnknownArtist(),
                     onClick = { onAlbumClick(album) },
                 )
             }
-            item { PagedListFooter(state = state, onRetry = onRetry) }
+            item(span = { GridItemSpan(maxLineSpan) }) { PagedListFooter(state = state, onRetry = onRetry) }
         }
     }
 }
@@ -163,36 +179,55 @@ private fun AlbumsTab(
 @Composable
 private fun ArtistsTab(
     state: PagedList<RemoteArtist>,
-    listState: LazyListState,
+    gridState: LazyGridState,
     onArtistClick: (RemoteArtist) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     bottomPadding: Dp,
 ) {
-    LoadMoreOnApproachingEnd(listState, state.items.size, onLoadMore)
+    LoadMoreOnApproachingEnd(gridState, state.items.size, onLoadMore)
 
     PagedListContainer(
         state = state,
         emptyMessage = "Ce serveur n'a aucun artiste.",
         onRetry = onRetry,
     ) {
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(bottom = bottomPadding),
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        TileGrid(gridState = gridState, minTileWidth = PortraitTileMinWidth, bottomPadding = bottomPadding) {
             items(state.items, key = { it.id }) { artist ->
-                MediaRow(
+                PortraitTile(
                     artworkUri = artist.artworkUri,
-                    title = artist.name,
-                    subtitle = artist.albumCount?.let(::albumCountLabel).orEmpty(),
+                    name = artist.name,
+                    subtitle = artist.albumCount?.let(::albumCountLabel),
                     onClick = { onArtistClick(artist) },
-                    artworkShape = WaveFlowTheme.shapes.portrait,
                 )
             }
-            item { PagedListFooter(state = state, onRetry = onRetry) }
+            item(span = { GridItemSpan(maxLineSpan) }) { PagedListFooter(state = state, onRetry = onRetry) }
         }
     }
+}
+
+/** La trame commune des deux onglets : celle des grilles de la bibliothèque. */
+@Composable
+private fun TileGrid(
+    gridState: LazyGridState,
+    minTileWidth: Dp,
+    bottomPadding: Dp,
+    content: LazyGridScope.() -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = minTileWidth),
+        state = gridState,
+        contentPadding = PaddingValues(
+            start = TileGutter,
+            end = TileGutter,
+            top = 16.dp,
+            bottom = bottomPadding + TileGutter,
+        ),
+        horizontalArrangement = Arrangement.spacedBy(TileSpacing),
+        verticalArrangement = Arrangement.spacedBy(TileRowSpacing),
+        modifier = Modifier.fillMaxSize(),
+        content = content,
+    )
 }
 
 /**

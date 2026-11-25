@@ -1,31 +1,28 @@
 package app.waveflow.ui.browse
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Album
 import app.waveflow.model.Library
-import app.waveflow.ui.components.Artwork
+import app.waveflow.ui.components.CoverTile
+import app.waveflow.ui.components.CoverTileMinWidth
 import app.waveflow.ui.components.LibraryStateContainer
-import app.waveflow.ui.theme.WaveFlowTheme
+import app.waveflow.ui.components.TileGutter
+import app.waveflow.ui.components.TileRowSpacing
+import app.waveflow.ui.components.TileSpacing
 
-/** Onglet Albums : grille de pochettes, adaptative selon la largeur d'écran. */
+/**
+ * Onglet Albums : une grille de tuiles — la pochette, le titre, l'artiste —,
+ * adaptative selon la largeur d'écran.
+ */
 @Composable
 fun AlbumsScreen(
     library: Library,
@@ -43,48 +40,25 @@ fun AlbumsScreen(
         modifier = modifier,
     ) {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 150.dp),
+            columns = GridCells.Adaptive(minSize = CoverTileMinWidth),
             contentPadding = PaddingValues(
-                start = 12.dp,
-                end = 12.dp,
-                top = 12.dp,
-                bottom = bottomPadding + 12.dp,
+                start = TileGutter,
+                end = TileGutter,
+                top = 16.dp,
+                bottom = bottomPadding + TileGutter,
             ),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(TileSpacing),
+            verticalArrangement = Arrangement.spacedBy(TileRowSpacing),
             modifier = Modifier.fillMaxSize(),
         ) {
             items(library.albums, key = { it.id }) { album ->
-                AlbumCell(album = album, onClick = { onAlbumClick(album) })
+                CoverTile(
+                    artworkUri = album.artworkUri,
+                    title = album.title,
+                    subtitle = album.displayArtist,
+                    onClick = { onAlbumClick(album) },
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun AlbumCell(album: Album, onClick: () -> Unit) {
-    Column(modifier = Modifier.clickable(onClick = onClick)) {
-        Artwork(
-            artworkUri = album.artworkUri,
-            shape = WaveFlowTheme.shapes.tile,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = album.title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = album.displayArtist,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
