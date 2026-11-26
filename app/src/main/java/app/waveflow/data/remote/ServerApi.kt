@@ -57,8 +57,14 @@ sealed class ServerException(
     /** Identifiants refusés, ou jeton de rafraîchissement périmé. */
     class Unauthorized(message: String) : ServerException(message)
 
-    /** Requête rejetée : adresse mal formée, nom d'appareil vide. */
-    class Rejected(message: String) : ServerException(message)
+    /**
+     * Requête rejetée : adresse mal formée, nom d'appareil vide.
+     *
+     * @property httpCode le code de la réponse quand le serveur en a rendu
+     *   une, `null` pour un refus du client lui-même. Un `404` (ressource
+     *   inconnue) ne se traite pas comme un `429` (réessayer plus tard).
+     */
+    class Rejected(message: String, val httpCode: Int? = null) : ServerException(message)
 
     /** Serveur injoignable, TLS invalide, coupure en cours de route. */
     class Unreachable(message: String, cause: Throwable? = null) :

@@ -1,5 +1,6 @@
 package app.waveflow.data.remote
 
+import app.waveflow.model.Lyrics
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
@@ -111,6 +112,29 @@ class HttpCatalogApi(
     }
 
     /**
+     * Une piste que le serveur ne connaît pas (`404`) n'a pas de paroles : elle a
+     * pu disparaître d'une bibliothèque rescannée pendant qu'elle restait dans
+     * la file. Ce n'est pas une panne à réessayer. Tout autre refus — un `429`
+     * d'abord — remonte : il dit « pas maintenant », pas « pas de paroles ».
+     */
+    override suspend fun lyrics(serverUrl: String, accessToken: String, trackId: String): Lyrics? {
+        // L'identifiant entre dans le chemin, suivi de `/lyrics` : il ne doit
+        // pouvoir désigner aucune autre route. Le serveur n'en émet pas d'autres,
+        // et une piste qu'on ne sait pas nommer n'a pas de paroles à demander.
+        if (!trackId.matches(IDENTIFIANT_DE_PISTE)) return null
+        return try {
+            http.get(
+                serverUrl = serverUrl,
+                path = "$TRACKS/$trackId/lyrics",
+                accessToken = accessToken,
+            ).decode<LyricsListResponse>().toModel()
+        } catch (refus: ServerException.Rejected) {
+            if (refus.httpCode != HTTP_NOT_FOUND) throw refus
+            null
+        }
+    }
+
+    /**
      * L'original ne dit rien : le serveur le sert par défaut, et refuse qu'on
      * lui donne un débit ou un décalage.
      */
@@ -143,6 +167,10 @@ class HttpCatalogApi(
         const val ARTISTS = "api/v2/artists"
         const val TRACKS = "api/v2/tracks"
         const val SEARCH = "api/v2/search"
+        const val HTTP_NOT_FOUND = 404
+
+        /** Un UUID, ou tout identifiant fait de lettres, chiffres et tirets. */
+        val IDENTIFIANT_DE_PISTE = Regex("[A-Za-z0-9-]+")
 
         /** Sans numéro de piste, on retombe sur le titre plutôt que sur rien. */
         val BY_TRACK_THEN_TITLE = compareBy<app.waveflow.model.RemoteSong>(

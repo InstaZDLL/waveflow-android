@@ -691,6 +691,10 @@ private fun WaveFlowRoot(
             exit = slideOutVertically(animationSpec = WaveFlowTheme.motion.shape()) { it },
             modifier = Modifier.fillMaxSize(),
         ) {
+            // Observées le temps que le lecteur est ouvert, et cherchées
+            // seulement quand elles remplacent la pochette (P6 de
+            // `docs/paroles.md`).
+            val lyricsState by playerViewModel.lyrics.collectAsStateWithLifecycle()
             NowPlayingScreen(
                 state = playerState,
                 onCollapse = { playerExpanded = false },
@@ -708,6 +712,9 @@ private fun WaveFlowRoot(
                 onSleepTimerRemainingMs = playerViewModel::sleepTimerRemainingMs,
                 onSetPlaybackSpeed = playerViewModel::setPlaybackSpeed,
                 onMarkAbLoop = playerViewModel::markAbLoop,
+                lyrics = lyricsState,
+                onToggleLyrics = playerViewModel::toggleLyrics,
+                onRetryLyrics = playerViewModel::retryLyrics,
             )
         }
     }

@@ -172,7 +172,7 @@ class ServerHttp(
 
         return when (code) {
             401, 403 -> ServerException.Unauthorized(message)
-            in 400..499 -> ServerException.Rejected(message)
+            in 400..499 -> ServerException.Rejected(message, httpCode = code)
             else -> ServerException.Unexpected(message)
         }
     }

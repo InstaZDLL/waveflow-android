@@ -1,5 +1,6 @@
 package app.waveflow.data.remote
 
+import app.waveflow.model.Lyrics
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
@@ -44,6 +45,10 @@ class CatalogRepository(
      */
     suspend fun streamUrl(trackId: String, rendering: StreamRendering, offsetMs: Long = 0L): String =
         authorized { url, token -> api.streamTicket(url, token, trackId, rendering, offsetMs) }
+
+    /** Les paroles d'une piste du serveur, `null` s'il n'en connaît pas. */
+    suspend fun lyrics(trackId: String): Lyrics? =
+        authorized { url, token -> api.lyrics(url, token, trackId) }
 
     /**
      * Exécute [call] avec un jeton valide, en réessayant une fois sur refus.

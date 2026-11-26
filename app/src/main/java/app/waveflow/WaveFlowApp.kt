@@ -13,6 +13,9 @@ import app.waveflow.data.PreferencesStore
 import app.waveflow.data.RoomPlayHistoryRepository
 import app.waveflow.data.RoomPlaylistRepository
 import app.waveflow.data.local.WaveFlowDatabase
+import app.waveflow.data.lyrics.EmbeddedLyricsReader
+import app.waveflow.data.lyrics.LyricsRepository
+import app.waveflow.data.lyrics.SidecarLyricsReader
 import app.waveflow.data.preferencesStoreOf
 import app.waveflow.data.remote.CatalogRepository
 import app.waveflow.data.remote.DataStoreSessionStore
@@ -174,6 +177,21 @@ class AppContainer(app: Application) {
         api = HttpCatalogApi(serverHttp),
         sessionRepository = serverSessionRepository,
     )
+
+    /**
+     * Les paroles, pour tous les écrans qui en montrent : un seul cache pour le
+     * processus (`docs/paroles.md`, P7). Une piste locale ne passe jamais par le
+     * catalogue, une piste du serveur jamais par les fichiers (P1, P5).
+     */
+    val lyricsRepository: LyricsRepository by lazy {
+        val tags = EmbeddedLyricsReader(appContext)
+        val voisin = SidecarLyricsReader(app.contentResolver)
+        LyricsRepository(
+            embedded = tags::read,
+            sidecar = voisin::read,
+            server = catalogRepository::lyrics,
+        )
+    }
 
     /** Relit la session persistée, sans bloquer le démarrage. */
     fun restoreServerSession() {

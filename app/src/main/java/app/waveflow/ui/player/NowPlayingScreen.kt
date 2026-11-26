@@ -1,5 +1,6 @@
 package app.waveflow.ui.player
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,10 +43,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +91,9 @@ fun NowPlayingScreen(
     onSleepTimerRemainingMs: () -> Long?,
     onSetPlaybackSpeed: (Float) -> Unit,
     onMarkAbLoop: () -> Unit,
+    lyrics: LyricsUiState,
+    onToggleLyrics: () -> Unit,
+    onRetryLyrics: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Local et non remonté : voir la file est une façon de regarder le lecteur,
@@ -150,11 +156,32 @@ fun NowPlayingScreen(
                         onRemove = onRemoveQueueItem,
                         modifier = Modifier.weight(1f),
                     )
+                } else if (lyrics.shown) {
+                    // Les paroles prennent toute la place de la pochette et de
+                    // ses marges : plus de lignes se lisent d'un regard.
+                    LyricsPane(
+                        state = lyrics,
+                        trackKey = track.mediaId,
+                        source = track.source,
+                        positionMs = state.positionMs,
+                        playing = state.isPlaying,
+                        playbackSpeed = state.playbackSpeed,
+                        glow = light.glow,
+                        onSeek = onSeek,
+                        onHide = onToggleLyrics,
+                        onRetry = onRetryLyrics,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                    )
                 } else {
                     Spacer(Modifier.weight(1f))
 
                     // La seule ombre que la direction permet : sous une
-                    // pochette, et teintée de sa lumière plutôt que grise.
+                    // pochette, et teintée de sa lumière plutôt que grise. Un
+                    // appui la remplace par les paroles (P11 de
+                    // `docs/paroles.md`) : l'en-tête n'a plus de place.
                     Artwork(
                         artworkUri = track.artworkUri,
                         shape = WaveFlowTheme.shapes.cover,
@@ -166,7 +193,14 @@ fun NowPlayingScreen(
                                 shape = WaveFlowTheme.shapes.cover,
                                 ambientColor = light.glow,
                                 spotColor = light.glow,
-                            ),
+                            )
+                            .clip(WaveFlowTheme.shapes.cover)
+                            .clickable(
+                                onClickLabel = "Afficher les paroles",
+                                role = Role.Button,
+                                onClick = onToggleLyrics,
+                            )
+                            .semantics { contentDescription = "Pochette" },
                     )
 
                     Spacer(Modifier.weight(1f))

@@ -61,6 +61,11 @@ androidx-media3-session = { group = "androidx.media3", name = "media3-session", 
 androidx-media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 androidx-media3-database = { group = "androidx.media3", name = "media3-database", version.ref = "media3" }
 
+# Lecture des tags sans lecture du son : les paroles embarquées (docs/paroles.md, P2).
+# Le module de Media3 qui porte MetadataRetriever en 1.11 ; il ne tire que
+# l'exoplayer, déjà là.
+androidx-media3-inspector = { group = "androidx.media3", name = "media3-inspector", version.ref = "media3" }
+
 # Coil — chargement des pochettes
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 

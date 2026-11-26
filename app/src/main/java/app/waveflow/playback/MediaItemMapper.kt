@@ -204,7 +204,7 @@ internal fun trackIdOfRemoteUri(uri: android.net.Uri): String? =
     uri.lastPathSegment?.takeIf { uri.scheme == REMOTE_SCHEME }
 
 private const val LOCAL_PREFIX = "local:"
-private const val REMOTE_PREFIX = "remote:"
+internal const val REMOTE_PREFIX = "remote:"
 
 /** Schéma interne : aucune pile réseau ne sait le résoudre, et c'est voulu. */
 internal const val REMOTE_SCHEME = "waveflow"

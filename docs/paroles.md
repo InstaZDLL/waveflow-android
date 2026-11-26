@@ -41,6 +41,12 @@ Entre plusieurs paroles embarquées, **des synchronisées passent devant des
 simples** : un `SYLT`, ou un texte qui se lit comme un LRC (P9), avant un texte
 simple. Un tag vide ne compte pas.
 
+D'un `SYLT`, seuls se lisent les instants en millisecondes (format 2) et les
+paroles ou la transcription (types 1 et 2) : des accords horodatés ne passent
+pas pour des paroles. Un `SYLT` horodaté syllabe par syllabe porte le saut de
+ligne en tête du fragment qui ouvre la ligne suivante : ses fragments se
+regroupent alors en lignes, chacune au début de son premier fragment.
+
 **P3. Le `.lrc` voisin : même dossier, même nom, extension remplacée.**
 `Chanson.flac` → `Chanson.lrc`, puis `Chanson.LRC`. Le fichier est lu en entier
 s'il fait 1 Mio au plus (la limite du serveur), ignoré au-delà. Son encodage :
@@ -48,13 +54,20 @@ celui que nomme une marque d'ordre d'octets (UTF-8, UTF-16), sinon UTF-8 s'il en
 est, sinon Windows-1252. Un fichier absent ou que le système refuse d'ouvrir vaut
 absence, sans erreur affichée.
 
+Le fichier se lit par son chemin, avec la seule permission audio : le MediaStore
+range `.lrc` en `application/lrc`, parmi les sous-titres, que le stockage
+cloisonné laisse lire. **Vérifié sur l'émulateur Android 17 (API 37) ; non
+vérifié sur Android 11 à 16**, où un refus rendrait le `.lrc` muet sans erreur.
+
 **P4. Une piste du serveur prend la première feuille de `GET
 /api/v2/tracks/{id}/lyrics`.** Le serveur trie déjà ses feuilles (RFC-012,
 décision 6 : synchronisées avant simples, envois de l'utilisateur, fichier
 voisin, tags, LRCLIB) et en écarte les vides ; le client montre la première sans
 la rejuger. Les débuts de ligne (`start`) sont en millisecondes. Une feuille
 annoncée `synced` dont une ligne n'a pas de `start` se montre en paroles
-simples. Une liste vide vaut absence ; une piste inconnue (`404`) aussi.
+simples. Une liste vide vaut absence ; une piste inconnue (`404`) aussi. Tout
+autre refus — un `429` d'abord — dit « pas maintenant », pas « pas de paroles » :
+c'est une panne au sens de P7.
 
 **P5. Pas de source prioritaire entre l'appareil et le serveur.** La RFC-003
 interdit de dire qu'une piste locale et une piste du serveur sont le même
@@ -87,8 +100,9 @@ du point ; les minutes peuvent dépasser 59. Plusieurs horodatages sur une ligne
 la répètent à chaque instant. Les lignes sont rangées par instant, l'ordre du
 fichier départageant les égalités. `[offset:±n]` décale tout de *n*
 millisecondes, un décalage positif avançant les paroles (convention du format).
-Les autres balises (`[ar:]`, `[ti:]`, `[al:]`, `[by:]`, `[length:]`…) sont
-ignorées. Les horodatages de mot du LRC enrichi (`<mm:ss.xx>`) sont retirés du
+Les autres balises d'en-tête du format, seules sur leur ligne (`ar`, `ti`, `al`,
+`au`, `by`, `re`, `ve`, `la`, `length`, `tool`, `id`, `#`), sont ignorées ; une
+ligne comme `[Chorus: Kanye West]` n'en est pas une et reste du texte. Les horodatages de mot du LRC enrichi (`<mm:ss.xx>`) sont retirés du
 texte : la ligne seule est suivie. Une ligne horodatée vide est gardée : elle
 dit que la ligne précédente est finie.
 
@@ -111,7 +125,7 @@ premier début, aucune ligne n'est chantée et les paroles restent en tête.
 celle du lecteur.** L'état du lecteur ne se reconstruit qu'aux tics de position,
 toutes les 500 ms : une ligne attendrait jusqu'à une demi-seconde. Entre deux
 tics, la position se prolonge sur l'horloge d'images, à la vitesse de lecture,
-**sans jamais dépasser d'un tic** la dernière position reçue — un lecteur qui
+**sans jamais prolonger plus d'un tic** la dernière position reçue — un lecteur qui
 cale sans le dire ne fait pas défiler des paroles qu'il ne chante pas. En
 pause, plus rien ne se prolonge. **Un déplacement en pause publie sa
 position** : la ligne chantée est juste après un déplacement, que la lecture

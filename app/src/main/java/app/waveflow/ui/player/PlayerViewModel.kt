@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.PreferencesStore
+import app.waveflow.data.lyrics.LyricsRepository
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.model.VoiceRequest
@@ -40,6 +41,7 @@ class PlayerViewModel(
     private val preferencesStore: PreferencesStore,
     private val abLoop: AbLoop,
     private val playbackNotices: PlaybackNotices,
+    lyricsRepository: LyricsRepository,
 ) : ViewModel() {
 
     // Plus de croisement avec la bibliothèque : le lecteur décrit lui-même sa
@@ -119,6 +121,25 @@ class PlayerViewModel(
             }
         },
     ).shareIn(viewModelScope, SharingStarted.Eagerly, replay = 0)
+
+    /**
+     * Les paroles du morceau courant (`docs/paroles.md`). Cherchées par le dépôt,
+     * jamais par l'écran, et seulement quand elles sont affichées.
+     */
+    private val lyricsFeed = LyricsFeed(
+        scope = viewModelScope,
+        mediaIds = playbackController.state.map { it.current?.mediaId },
+        repository = lyricsRepository,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+    )
+
+    val lyrics: StateFlow<LyricsUiState> = lyricsFeed.state
+
+    /** Remplace la pochette par les paroles, ou l'inverse (P11). */
+    fun toggleLyrics() = lyricsFeed.toggle()
+
+    /** Cherche de nouveau les paroles après un serveur muet (P17). */
+    fun retryLyrics() = lyricsFeed.retry()
 
     fun connect() = playbackController.connect()
 
@@ -245,6 +266,7 @@ class PlayerViewModel(
                     preferencesStore = app.container.preferencesStore,
                     abLoop = app.container.abLoop,
                     playbackNotices = app.container.playbackNotices,
+                    lyricsRepository = app.container.lyricsRepository,
                 )
             }
         }
