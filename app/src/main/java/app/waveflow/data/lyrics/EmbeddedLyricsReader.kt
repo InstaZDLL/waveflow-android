@@ -135,10 +135,11 @@ private val CLES_VORBIS = setOf("LYRICS", "UNSYNCEDLYRICS")
 
 /**
  * Le texte d'un cadre ID3 `USLT` : encodage (1 octet), langue (3), descripteur
- * terminé, puis le texte. `null` si le cadre est tronqué ou le texte vide.
+ * terminé, puis le texte. `null` si le cadre est tronqué, plus grand que
+ * [TRAME_MAX_OCTETS], ou le texte vide.
  */
 internal fun decodeUslt(data: ByteArray): String? {
-    if (data.size < ENTETE_USLT) return null
+    if (data.size < ENTETE_USLT || data.size > TRAME_MAX_OCTETS) return null
     val encodage = data[0].toInt()
     val apresDescripteur = finDeChaine(data, ENTETE_USLT, encodage) ?: return null
     return decoder(data, apresDescripteur.debutSuivant, data.size, encodage)
@@ -161,9 +162,13 @@ internal fun decodeUslt(data: ByteArray): String? {
  * fragments se regroupent dans ce cas en lignes, chacune au début de son
  * premier fragment ; sinon chaque fragment est une ligne. Les lignes sont
  * rangées par instant ; `null` si aucune n'a de texte.
+ *
+ * Un cadre de plus de [TRAME_MAX_OCTETS] ne se lit pas : chaque fragment de
+ * quelques octets deviendrait une ligne, et un cadre fabriqué de plusieurs
+ * centaines de Mo, des dizaines de millions d'objets.
  */
 internal fun decodeSylt(data: ByteArray): List<SyncedLine>? {
-    val lisible = data.size >= ENTETE_SYLT &&
+    val lisible = data.size in ENTETE_SYLT..TRAME_MAX_OCTETS &&
         data[OCTET_FORMAT_SYLT].toInt() == SYLT_EN_MILLISECONDES &&
         data[OCTET_CONTENU_SYLT].toInt() in SYLT_CONTENUS_PAROLES
     val encodage = data.firstOrNull()?.toInt() ?: 0
@@ -246,6 +251,13 @@ private fun decoder(data: ByteArray, debut: Int, fin: Int, encodage: Int): Strin
 private const val ID3_UTF16 = 1
 private const val ID3_UTF16BE = 2
 private const val ID3_UTF8 = 3
+
+/**
+ * La taille au-delà de laquelle un cadre `USLT` ou `SYLT` ne se décode pas :
+ * 1 Mio, comme le `.lrc` voisin (P3). Media3 tient déjà ces octets ; le
+ * plafond borne ce que le décodage en ferait, pas leur lecture.
+ */
+internal const val TRAME_MAX_OCTETS = 1 shl 20
 
 /** Encodage et langue. */
 private const val ENTETE_USLT = 4

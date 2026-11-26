@@ -45,8 +45,15 @@ D'un `SYLT`, seuls se lisent les instants en millisecondes (format 2) et les
 paroles ou la transcription (types 1 et 2) : des accords horodatés ne passent
 pas pour des paroles. Un `SYLT` horodaté syllabe par syllabe porte le saut de
 ligne en tête du fragment qui ouvre la ligne suivante : ses fragments se
-regroupent alors en lignes, chacune au début de son premier fragment. Un
-fragment vide y est une ligne vide à son instant, comme en LRC (P9) : il ferme
+regroupent alors en lignes, chacune au début de son premier fragment.
+
+Un cadre `USLT` ou `SYLT` de plus d'1 Mio, comme le `.lrc` voisin (P3), ne se
+décode pas. Media3 a déjà lu ses octets : le plafond borne ce que le décodage
+en ferait — une ligne par fragment de quelques octets —, pas leur lecture. Les
+paroles Vorbis et MP4 arrivent de Media3 déjà en texte, et P10 les plafonne.
+
+Dans un `SYLT` syllabique, un
+fragment vide est une ligne vide à son instant, comme en LRC (P9) : il ferme
 la ligne en cours, et le fragment qui le suit en ouvre une nouvelle.
 
 **P3. Le `.lrc` voisin : même dossier, même nom, extension remplacée.**

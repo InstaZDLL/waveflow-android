@@ -31,6 +31,19 @@ class EmbeddedLyricsTest {
     }
 
     @Test
+    fun `un cadre USLT ou SYLT de plus d'1 Mio ne se decode pas`() {
+        // Juste au-dessus du plafond, et des paroles bien formées : seule la
+        // taille les écarte.
+        val texte = "[00:01.00]" + "x".repeat(TRAME_MAX_OCTETS)
+        assertNull(decodeUslt(uslt(LATIN1, "", texte)))
+
+        val fragments = List(TRAME_MAX_OCTETS / 6 + 1) { "a" to it }
+        val cadre = sylt(UTF8, MILLISECONDES, fragments)
+        assertTrue(cadre.size > TRAME_MAX_OCTETS)
+        assertNull(decodeSylt(cadre))
+    }
+
+    @Test
     fun `un USLT tronque ou vide ne donne rien`() {
         assertNull(decodeUslt(byteArrayOf(3, 'f'.code.toByte())))
         assertNull(decodeUslt(uslt(UTF8, "desc", "   ")))
@@ -71,20 +84,21 @@ class EmbeddedLyricsTest {
     }
 
     /**
-     * 400 000 syllabes sur une seule ligne : recoller la ligne entière à chaque
-     * syllabe prend une demi-minute ; l'assembler dans un tampon, une fraction
-     * de seconde. La durée se mesure ici : Robolectric n'applique pas le
-     * `timeout` de `@Test`.
+     * 170 000 syllabes sur une seule ligne, sous le plafond d'1 Mio : recoller
+     * la ligne entière à chaque syllabe prend plusieurs secondes ; l'assembler
+     * dans un tampon, une fraction de seconde. La durée se mesure ici :
+     * Robolectric n'applique pas le `timeout` de `@Test`.
      */
     @Test
     fun `une ligne SYLT de tres nombreuses syllabes s'assemble en un passage`() {
-        val cadre = sylt(UTF8, MILLISECONDES, List(400_000) { "a" to it } + ("\nfin" to 400_000))
+        val cadre = sylt(UTF8, MILLISECONDES, List(170_000) { "a" to it } + ("\nfin" to 170_000))
+        assertTrue(cadre.size <= TRAME_MAX_OCTETS)
 
         var lignes: List<SyncedLine>? = null
         val dureeMs = measureTimeMillis { lignes = decodeSylt(cadre) }
 
-        assertEquals(listOf(400_000, 3), lignes?.map { it.text.length })
-        assertTrue("décodage en $dureeMs ms", dureeMs < 5_000)
+        assertEquals(listOf(170_000, 3), lignes?.map { it.text.length })
+        assertTrue("décodage en $dureeMs ms", dureeMs < 2_000)
     }
 
     @Test
