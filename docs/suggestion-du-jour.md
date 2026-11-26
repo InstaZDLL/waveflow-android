@@ -123,8 +123,8 @@ ne bloque rien ; à écrire, il ne s'écrit pas.
 retentée au calcul suivant. La bande garde ce qu'elle montre : l'accueil retient
 aussi en mémoire la suggestion qu'il a tirée pour ce jour et ce nombre d'appuis,
 et la préfère tant qu'il vit — sans quoi la piste suggérée, une fois écoutée, ne
-serait plus tirée —, sauf quand le fichier porte une épinglée pour ce jour et ce
-nombre d'appuis : celle-là passe avant. « Autre suggestion » reste sans effet
+serait plus tirée —, sauf quand le fichier porte, pour ce jour et ce nombre
+d'appuis, une épinglée encore dans la bibliothèque : celle-là passe avant. « Autre suggestion » reste sans effet
 tant que le fichier refuse d'écrire.
 
 ### L'affichage
