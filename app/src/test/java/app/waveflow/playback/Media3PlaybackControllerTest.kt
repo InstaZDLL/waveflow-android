@@ -3,6 +3,8 @@ package app.waveflow.playback
 import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
+import android.os.Looper
 import androidx.media3.session.MediaSessionService
 import androidx.test.core.app.ApplicationProvider
 import app.waveflow.testing.remoteSong
@@ -21,6 +23,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.shadows.ShadowLooper
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
@@ -316,6 +321,63 @@ class Media3PlaybackControllerTest {
             listOf("local:3", "local:1", "local:2"),
             controleur.state.value.queue.map { it.mediaId },
         )
+    }
+
+    // ------------------------------------------------------------------
+    // La position en pause
+    // ------------------------------------------------------------------
+
+    /**
+     * L'état ne se reconstruit qu'aux tics de position, et aucun ne vient en
+     * pause. Ce qui suit la position en pause — la ligne chantée des paroles
+     * (P13 de `docs/paroles.md`) — compte sur ce qu'un déplacement publie la
+     * sienne, sans attendre la reprise.
+     *
+     * Un vrai fichier, déplaçable : un WAV de dix secondes de silence, que
+     * l'extracteur prépare sans décodeur.
+     *
+     * Robolectric, d'ordinaire, ne fait rien jouer (voir plus haut) ; un WAV si,
+     * le PCM n'ayant pas besoin de codec.
+     */
+    @Test
+    fun `un deplacement en pause publie sa position`() {
+        val wav = File.createTempFile("silence", ".wav").apply {
+            deleteOnExit()
+            writeBytes(wavSilencieux(secondes = 10))
+        }
+        val controleur = controleurConnecte()
+        val morceau = song(1).copy(uri = Uri.fromFile(wav), durationMs = 10_000L)
+
+        controleur.play(listOf(morceau), startIndex = 0)
+        // Du PCM se joue sans décodeur : sous Robolectric, celui-ci tourne pour
+        // de bon. On attend qu'il tourne, puis on le met en pause — sans
+        // pousser l'horloge, qui l'amènerait au bout du morceau.
+        attendre("la lecture") { controleur.state.value.isPlaying }
+        controleur.playPause()
+        attendre("la pause") { !controleur.state.value.isPlaying }
+
+        // Le `MediaController` ne croit une position reçue en pause que si elle
+        // date d'**après** le dernier `play` ou `pause`
+        // (`MediaUtils.getUpdatedCurrentPositionMs`, 1.11.1). L'horloge de
+        // Robolectric est figée : sans ce pas, la pause et le déplacement
+        // tombent à la même milliseconde et la position masquée est ignorée.
+        // Un geste humain les sépare toujours.
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(10))
+        controleur.seekTo(4_000L)
+
+        attendre("la position du déplacement") { controleur.state.value.positionMs == 4_000L }
+        assertFalse(controleur.state.value.isPlaying)
+    }
+
+    /** Un WAV PCM 16 bits mono à 8 kHz, tout en silence. */
+    private fun wavSilencieux(secondes: Int): ByteArray {
+        val donnees = 8_000 * 2 * secondes
+        return ByteBuffer.allocate(44 + donnees).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()).putInt(36 + donnees).put("WAVE".toByteArray())
+            put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1)
+            putInt(8_000).putInt(8_000 * 2).putShort(2).putShort(16)
+            put("data".toByteArray()).putInt(donnees)
+        }.array()
     }
 
     private fun controleurConnecte(): Media3PlaybackController {

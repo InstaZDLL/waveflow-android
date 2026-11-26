@@ -1,5 +1,6 @@
 package app.waveflow.data.remote
 
+import app.waveflow.model.Lyrics
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
@@ -75,6 +76,12 @@ interface CatalogApi {
         rendering: StreamRendering,
         offsetMs: Long = 0L,
     ): String
+
+    /**
+     * `GET /api/v2/tracks/{id}/lyrics` : la feuille de paroles que le serveur
+     * place en tête, ou `null` si la piste n'en a pas (`docs/paroles.md`, P4).
+     */
+    suspend fun lyrics(serverUrl: String, accessToken: String, trackId: String): Lyrics?
 }
 
 /**

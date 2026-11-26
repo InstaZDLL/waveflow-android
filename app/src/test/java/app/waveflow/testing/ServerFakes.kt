@@ -5,6 +5,7 @@ import app.waveflow.data.remote.CatalogApi
 import app.waveflow.data.remote.ServerApi
 import app.waveflow.data.remote.ServerException
 import app.waveflow.data.remote.SessionStore
+import app.waveflow.model.Lyrics
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteAlbumDetail
 import app.waveflow.model.RemoteArtist
@@ -186,6 +187,19 @@ class FakeCatalogApi(
         return "$serverUrl/api/v2/stream/ticket-$trackId"
     }
 
+    /** Les paroles que le serveur rend, pour toute piste. */
+    var lyrics: Lyrics? = null
+
+    /** La piste dont les paroles ont été demandées en dernier. */
+    var lastLyricsTrackId: String? = null
+        private set
+
+    override suspend fun lyrics(serverUrl: String, accessToken: String, trackId: String): Lyrics? {
+        record(serverUrl, accessToken, null)
+        lastLyricsTrackId = trackId
+        return lyrics
+    }
+
     /** Le rendu demandé au dernier ticket. */
     var lastRendering: StreamRendering? = null
         private set
@@ -324,6 +338,8 @@ class PagingCatalogApi(
         rendering: StreamRendering,
         offsetMs: Long,
     ): String = "$serverUrl/api/v2/stream/ticket-$trackId"
+
+    override suspend fun lyrics(serverUrl: String, accessToken: String, trackId: String): Lyrics? = null
 
     private fun failIfDue(call: Int) {
         if (failFromCall > 0 && call >= failFromCall) {

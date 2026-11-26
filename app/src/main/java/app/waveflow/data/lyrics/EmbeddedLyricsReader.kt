@@ -1,0 +1,304 @@
+package app.waveflow.data.lyrics
+
+import android.content.Context
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Metadata
+import androidx.media3.exoplayer.source.TrackGroupArray
+import androidx.media3.extractor.metadata.id3.BinaryFrame
+import androidx.media3.extractor.metadata.id3.TextInformationFrame
+import androidx.media3.extractor.metadata.vorbis.VorbisComment
+import androidx.media3.inspector.MetadataRetriever
+import app.waveflow.model.Lyrics
+import app.waveflow.model.SyncedLine
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
+import java.util.concurrent.ExecutionException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+/**
+ * Les paroles embarquées dans un fichier de l'appareil (`docs/paroles.md`, P2).
+ *
+ * Lues par l'extracteur de Media3, celui-là même qui joue le fichier : aucune
+ * bibliothèque de tags. [MetadataRetriever] prépare le fichier sans le décoder
+ * et rend les métadonnées de chaque piste ; [lyricsOf] y cherche les paroles.
+ *
+ * @param analyse où se décodent les métadonnées rendues : jamais le fil de
+ *   l'appelant, qui est celui de l'écran quand le ViewModel demande.
+ */
+class EmbeddedLyricsReader(
+    private val context: Context,
+    private val analyse: CoroutineDispatcher = Dispatchers.Default,
+) {
+
+    /**
+     * Les paroles du fichier [uri], ou `null` s'il n'en porte pas.
+     *
+     * Un fichier que l'extracteur ne sait pas ouvrir n'a pas de paroles : ce
+     * n'est pas une panne à montrer, le lecteur dira lui-même s'il ne le joue
+     * pas. L'annulation, elle, remonte : la recherche a été abandonnée, pas
+     * manquée.
+     *
+     * `MetadataRetriever` garde ses contraintes : il se construit et se ferme
+     * ici, sur le fil de l'appelant, et prépare le fichier sur le sien. Seul le
+     * parcours des métadonnées et leur décodage passent sur [analyse].
+     */
+    suspend fun read(uri: Uri): Lyrics? {
+        val groupes = try {
+            MetadataRetriever.Builder(context, MediaItem.fromUri(uri)).build().use { retriever ->
+                retriever.retrieveTrackGroups().attendre()
+            }
+        } catch (annulation: CancellationException) {
+            throw annulation
+        } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") illisible: Exception) {
+            return null
+        }
+        return withContext(analyse) { lyricsOf(groupes.entrees()) }
+    }
+}
+
+/** Toutes les entrées de métadonnées de toutes les pistes du fichier. */
+private fun TrackGroupArray.entrees(): List<Metadata.Entry> = buildList {
+    val groupes = this@entrees
+    for (g in 0 until groupes.length) {
+        val groupe = groupes[g]
+        for (f in 0 until groupe.length) {
+            val metadata = groupe.getFormat(f).metadata ?: continue
+            for (e in 0 until metadata.length()) add(metadata[e])
+        }
+    }
+}
+
+/**
+ * Attend le futur sans bloquer de fil, et l'annule si l'attente l'est.
+ *
+ * Sa panne remonte telle quelle, débarrassée de l'enveloppe
+ * [ExecutionException].
+ */
+private suspend fun <T> ListenableFuture<T>.attendre(): T = suspendCancellableCoroutine { suite ->
+    addListener(
+        {
+            try {
+                suite.resume(get())
+            } catch (enveloppe: ExecutionException) {
+                suite.resumeWithException(enveloppe.cause ?: enveloppe)
+            } catch (annule: CancellationException) {
+                suite.cancel(annule)
+            }
+        },
+        MoreExecutors.directExecutor(),
+    )
+    suite.invokeOnCancellation { cancel(true) }
+}
+
+/**
+ * Les paroles que portent ces entrées de métadonnées, telles que Media3 1.11.1
+ * les rend :
+ * - ID3 `SYLT` et `USLT` (`SLT` et `ULT` en ID3v2.2) : un [BinaryFrame] brut, décodé ici ([decodeSylt],
+ *   [decodeUslt]) ;
+ * - commentaire Vorbis `LYRICS` ou `UNSYNCEDLYRICS` (FLAC, Ogg, Opus) : un
+ *   [VorbisComment] ;
+ * - atome MP4 `©lyr` : un [TextInformationFrame] d'identifiant `USLT`.
+ *
+ * Des paroles synchronisées passent devant des simples (P2), quel que soit
+ * l'ordre des tags : un texte qui se lit comme un LRC compte comme
+ * synchronisé. Les entrées se décodent dans l'ordre du fichier, et le
+ * décodage s'arrête à la première feuille synchronisée : c'est elle qui
+ * l'emporte, celles d'après ne changeraient rien.
+ *
+ * Un fichier ne fait jamais décoder plus de [PAROLES_MAX_PAR_FICHIER] en
+ * tout : une entrée qui ne tient plus dans ce qui reste est passée sans être
+ * décodée. Le plafond d'un cadre ne borne pas leur nombre, et un fichier
+ * fabriqué peut en porter des dizaines.
+ */
+internal fun lyricsOf(entries: List<Metadata.Entry>): Lyrics? {
+    var reste = PAROLES_MAX_PAR_FICHIER
+    // Une séquence : chaque entrée n'est décodée que si la boucle la demande.
+    val decodees = entries.asSequence()
+        .mapNotNull { it.porteur() }
+        .filter { porteur -> (porteur.taille <= reste).also { tient -> if (tient) reste -= porteur.taille } }
+        .mapNotNull { it.decoder() }
+    var simples: Lyrics? = null
+    for (paroles in decodees) {
+        if (paroles is Lyrics.Synced) return paroles
+        if (simples == null) simples = paroles
+    }
+    return simples
+}
+
+/** Une entrée qui porte des paroles : sa taille, et comment les décoder. */
+private class Porteur(val taille: Int, val decoder: () -> Lyrics?)
+
+/**
+ * Le [Porteur] de cette entrée, ou `null` si elle ne porte pas de paroles. La
+ * taille est celle de la trame en octets, ou du texte en caractères pour ce
+ * que Media3 rend déjà en texte.
+ */
+private fun Metadata.Entry.porteur(): Porteur? = when (this) {
+    is BinaryFrame -> when (id) {
+        // ID3v2.2 nomme ses cadres en trois lettres, et Media3 les garde.
+        "SYLT", "SLT" -> Porteur(data.size) { decodeSylt(data)?.let(Lyrics::Synced) }
+        "USLT", "ULT" -> Porteur(data.size) { decodeUslt(data)?.let(Lrc::parse) }
+        else -> null
+    }
+    is VorbisComment -> if (key.uppercase() in CLES_VORBIS) Porteur(value.length) { Lrc.parse(value) } else null
+    is TextInformationFrame ->
+        if (id == "USLT") Porteur(values.sumOf { it.length }) { Lrc.parse(values.joinToString("\n")) } else null
+    else -> null
+}
+
+/** Ce qu'un fichier peut faire décoder de paroles, toutes entrées confondues : 1 Mio. */
+internal const val PAROLES_MAX_PAR_FICHIER = 1 shl 20
+
+private val CLES_VORBIS = setOf("LYRICS", "UNSYNCEDLYRICS")
+
+/**
+ * Le texte d'un cadre ID3 `USLT` : encodage (1 octet), langue (3), descripteur
+ * terminé, puis le texte. `null` si le cadre est tronqué, plus grand que
+ * [TRAME_MAX_OCTETS], ou le texte vide.
+ */
+internal fun decodeUslt(data: ByteArray): String? {
+    if (data.size < ENTETE_USLT || data.size > TRAME_MAX_OCTETS) return null
+    val encodage = data[0].toInt()
+    val apresDescripteur = finDeChaine(data, ENTETE_USLT, encodage) ?: return null
+    return decoder(data, apresDescripteur.debutSuivant, data.size, encodage)
+        .trimEnd('\u0000')
+        .takeIf { it.isNotBlank() }
+}
+
+/**
+ * Les lignes d'un cadre ID3 `SYLT` : encodage (1 octet), langue (3), format des
+ * instants (1), type de contenu (1), descripteur terminé, puis des paires
+ * « texte terminé, instant sur 4 octets ».
+ *
+ * Seuls les instants en millisecondes (format 2) se lisent : en trames MPEG
+ * (format 1), il faudrait la cadence du flux, que les métadonnées ne donnent
+ * pas. Seuls les paroles (type 1) et la transcription (type 2) en sont : des
+ * accords ou des liens horodatés ne se montrent pas comme des paroles.
+ *
+ * Un `SYLT` peut horodater des syllabes plutôt que des lignes : le saut de
+ * ligne est alors porté en tête du fragment qui ouvre la ligne suivante. Les
+ * fragments se regroupent dans ce cas en lignes, chacune au début de son
+ * premier fragment ; sinon chaque fragment est une ligne. Les lignes sont
+ * rangées par instant ; `null` si aucune n'a de texte.
+ *
+ * Un cadre de plus de [TRAME_MAX_OCTETS] ne se lit pas : chaque fragment de
+ * quelques octets deviendrait une ligne, et un cadre fabriqué de plusieurs
+ * centaines de Mo, des dizaines de millions d'objets.
+ */
+internal fun decodeSylt(data: ByteArray): List<SyncedLine>? {
+    val lisible = data.size in ENTETE_SYLT..TRAME_MAX_OCTETS &&
+        data[OCTET_FORMAT_SYLT].toInt() == SYLT_EN_MILLISECONDES &&
+        data[OCTET_CONTENU_SYLT].toInt() in SYLT_CONTENUS_PAROLES
+    val encodage = data.firstOrNull()?.toInt() ?: 0
+    var position = if (lisible) finDeChaine(data, ENTETE_SYLT, encodage)?.debutSuivant else null
+
+    val fragments = mutableListOf<SyncedLine>()
+    while (position != null) {
+        val fin = finDeChaine(data, position, encodage)
+        position = if (fin != null && fin.debutSuivant + Int.SIZE_BYTES <= data.size) {
+            val texte = decoder(data, position, fin.finTexte, encodage)
+            val instant = ByteBuffer.wrap(data, fin.debutSuivant, Int.SIZE_BYTES).int.toUInt().toLong()
+            fragments += SyncedLine(instant, texte)
+            fin.debutSuivant + Int.SIZE_BYTES
+        } else {
+            null
+        }
+    }
+    return enLignes(fragments).sortedBy { it.startMs }.takeIf { liste -> liste.any { it.text.isNotEmpty() } }
+}
+
+/**
+ * Des fragments `SYLT` aux lignes : regroupés quand un fragment après le premier
+ * ouvre sa ligne par un saut de ligne, un par ligne sinon.
+ *
+ * Regroupés, un fragment sans texte (ou fait de sauts de ligne seuls) est une
+ * ligne à lui seul, comme une ligne horodatée vide d'un LRC : il dit, à son
+ * instant, que la ligne précédente est finie. Le fragment qui le suit ouvre une
+ * nouvelle ligne, saut de ligne ou non.
+ *
+ * Chaque ligne s'assemble dans un tampon : une ligne de milliers de fragments
+ * ne recopie pas son début à chaque fragment.
+ */
+private fun enLignes(fragments: List<SyncedLine>): List<SyncedLine> {
+    val syllabique = fragments.drop(1).any { it.text.startsWith('\n') || it.text.startsWith('\r') }
+    if (!syllabique) return fragments.map { it.copy(text = it.text.trim()) }
+
+    val debuts = mutableListOf<Long>()
+    val textes = mutableListOf<StringBuilder>()
+    var fermee = true
+    for (fragment in fragments) {
+        val marqueur = fragment.text.all { it == '\n' || it == '\r' }
+        val ouvre = fermee || marqueur || fragment.text.startsWith('\n') || fragment.text.startsWith('\r')
+        if (ouvre) {
+            debuts += fragment.startMs
+            textes += StringBuilder(fragment.text)
+        } else {
+            textes.last().append(fragment.text)
+        }
+        fermee = marqueur
+    }
+    return debuts.zip(textes) { debut, texte -> SyncedLine(debut, texte.toString().trim()) }
+}
+
+/** Où s'arrête une chaîne terminée, et où commence ce qui la suit. */
+private class FinDeChaine(val finTexte: Int, val debutSuivant: Int)
+
+/**
+ * La fin de la chaîne qui commence à [debut] : un octet nul en Latin-1 et en
+ * UTF-8, deux octets nuls alignés en UTF-16. `null` sans terminaison.
+ */
+private fun finDeChaine(data: ByteArray, debut: Int, encodage: Int): FinDeChaine? {
+    val largeur = if (encodage == ID3_UTF16 || encodage == ID3_UTF16BE) 2 else 1
+    val fin = (debut..data.size - largeur step largeur).firstOrNull { i ->
+        (0 until largeur).all { data[i + it].toInt() == 0 }
+    }
+    return fin?.let { FinDeChaine(it, it + largeur) }
+}
+
+private fun decoder(data: ByteArray, debut: Int, fin: Int, encodage: Int): String {
+    if (fin <= debut) return ""
+    val jeu: Charset = when (encodage) {
+        ID3_UTF16 -> Charsets.UTF_16 // la marque d'ordre d'octets décide
+        ID3_UTF16BE -> Charsets.UTF_16BE
+        ID3_UTF8 -> Charsets.UTF_8
+        else -> Charsets.ISO_8859_1
+    }
+    return String(data, debut, fin - debut, jeu).removePrefix(Char(BOM_CODE).toString())
+}
+
+private const val ID3_UTF16 = 1
+private const val ID3_UTF16BE = 2
+private const val ID3_UTF8 = 3
+
+/**
+ * La taille au-delà de laquelle un cadre `USLT` ou `SYLT` ne se décode pas :
+ * 1 Mio, comme le `.lrc` voisin (P3). Media3 tient déjà ces octets ; le
+ * plafond borne ce que le décodage en ferait, pas leur lecture.
+ */
+internal const val TRAME_MAX_OCTETS = 1 shl 20
+
+/** Encodage et langue. */
+private const val ENTETE_USLT = 4
+
+/** Encodage, langue, format des instants et type de contenu. */
+private const val ENTETE_SYLT = 6
+
+/** Le format des instants suit l'encodage et la langue. */
+private const val OCTET_FORMAT_SYLT = 4
+
+private const val SYLT_EN_MILLISECONDES = 2
+
+/** Le type de contenu suit le format des instants. */
+private const val OCTET_CONTENU_SYLT = 5
+
+/** Paroles (1) et transcription (2) : les autres types ne se chantent pas. */
+private val SYLT_CONTENUS_PAROLES = setOf(1, 2)

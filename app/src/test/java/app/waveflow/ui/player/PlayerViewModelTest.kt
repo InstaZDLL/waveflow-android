@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.data.PreferencesStore
+import app.waveflow.data.lyrics.LyricsRepository
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.PlaybackSpeed
 import app.waveflow.playback.AbLoop
@@ -77,6 +78,7 @@ class PlayerViewModelTest {
         preferencesStore = preferencesStore,
         abLoop = abLoop,
         playbackNotices = notices,
+        lyricsRepository = LyricsRepository(embedded = { null }, sidecar = { null }, server = { null }),
     )
 
     @Test
