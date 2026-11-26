@@ -58,8 +58,9 @@ absence, sans erreur affichée.
 
 Le fichier se lit par son chemin, avec la seule permission audio : le MediaStore
 range `.lrc` en `application/lrc`, parmi les sous-titres, que le stockage
-cloisonné laisse lire. **Vérifié sur l'émulateur Android 17 (API 37) ; non
-vérifié sur Android 11 à 16**, où un refus rendrait le `.lrc` muet sans erreur.
+cloisonné laisse lire. **Vérifié sur les émulateurs Android 17 (API 37) et
+Android 16 (API 36) ; non vérifié sur Android 11 à 15**, où un refus rendrait le
+`.lrc` muet sans erreur.
 
 **P4. Une piste du serveur prend la première feuille de `GET
 /api/v2/tracks/{id}/lyrics`.** Le serveur trie déjà ses feuilles (RFC-012,
