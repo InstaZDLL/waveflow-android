@@ -146,11 +146,13 @@ class HomeViewModel(
         // Pendant un rechargement, la bibliothèque garde ses morceaux : la
         // bande reste. Au premier chargement, elle est vide et rien n'est tiré.
         val depuis = enregistre.pour(jour)
-        // Une épinglée enregistrée passe avant celle tenue en mémoire : après une
-        // lecture en échec, qui rend « aucun tirage », la mémoire a pu en tirer
-        // une autre, et l'épinglée relue ensuite doit rester.
+        // Une épinglée enregistrée, et toujours dans la bibliothèque, passe avant
+        // celle tenue en mémoire : après une lecture en échec, qui rend « aucun
+        // tirage », la mémoire a pu en tirer une autre, et l'épinglée relue
+        // ensuite doit rester. Disparue, elle ne compte plus (S9).
+        val enregistreeValable = depuis.epinglee?.songId?.let(library.songsById::containsKey) == true
         val effectif = tenu?.takeIf {
-            depuis.epinglee == null && it.jour == depuis.jour && it.essais == depuis.essais
+            !enregistreeValable && it.jour == depuis.jour && it.essais == depuis.essais
         } ?: depuis
         val tiree = suggestionDuJour(effectif, library, ecoutes, horloge.millis())
         val aEpingler = tiree?.epinglee()?.takeIf { it != depuis.epinglee }

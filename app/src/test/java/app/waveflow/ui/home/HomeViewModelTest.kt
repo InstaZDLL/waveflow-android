@@ -169,6 +169,28 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `une epinglee disparue de l'appareil ne fait pas oublier celle tiree a sa place`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Le fichier garde la piste 99, effacée depuis, et refuse d'écrire la
+            // remplaçante : c'est la mémoire qui la tient, même une fois écoutée.
+            val historique = FakeHistory(emptyList())
+            val effacee = SuggestionEpinglee(SorteDeSuggestion.JamaisEcoutee, 99, Raison(ajouteeMs = 1))
+            val vue = accueil(
+                bibliotheque(song(1), song(2), song(3)),
+                historique,
+                FakeTirageStore(TirageDuJour(JOUR_DU_26, 0, effacee), refuse = true),
+            )
+            backgroundScope.launch { vue.state.collect {} }
+            runCurrent()
+            val avant = vue.state.value.suggestion!!
+
+            historique.ecouter("local:${avant.song.id}", LE_26_NOVEMBRE_10H.toEpochMilli())
+            runCurrent()
+
+            assertEquals(avant, vue.state.value.suggestion)
+        }
+
+    @Test
     fun `autre suggestion vaut pour le jour que la bande montre, meme apres un changement de fuseau`() =
         runTest(mainDispatcherRule.dispatcher) {
             // 23 h 30 en UTC ; le voyageur passe à UTC+3, où il est déjà 2 h 30
