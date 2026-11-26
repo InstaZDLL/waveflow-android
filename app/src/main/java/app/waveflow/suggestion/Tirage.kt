@@ -8,7 +8,7 @@ package app.waveflow.suggestion
  */
 
 /**
- * Les sortes à essayer pour le jour [jour] après [essais] appuis sur « Une autre
+ * Les sortes à essayer pour le jour [jour] après [essais] appuis sur « Autre
  * suggestion », la première d'abord (S1). Les deux autres servent de repli quand
  * elle n'a rien à offrir.
  *

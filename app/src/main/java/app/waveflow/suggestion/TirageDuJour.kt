@@ -1,7 +1,7 @@
 package app.waveflow.suggestion
 
 /**
- * Où en est la suggestion du jour : le jour du tirage, les appuis sur « Une autre
+ * Où en est la suggestion du jour : le jour du tirage, les appuis sur « Autre
  * suggestion » depuis, et la suggestion qu'il a donnée (S9 de
  * `docs/suggestion-du-jour.md`).
  *
@@ -21,7 +21,7 @@ data class TirageDuJour(
 fun TirageDuJour?.pour(jour: Long): TirageDuJour =
     if (this != null && this.jour == jour) this else TirageDuJour(jour)
 
-/** Après un appui sur « Une autre suggestion » ce jour-là : un appui de plus, rien d'épinglé (S11). */
+/** Après un appui sur « Autre suggestion » ce jour-là : un appui de plus, rien d'épinglé (S11). */
 fun TirageDuJour?.apresUnAppui(jour: Long): TirageDuJour {
     val courant = pour(jour)
     val essais = if (courant.essais < Int.MAX_VALUE) courant.essais + 1 else courant.essais

@@ -37,7 +37,7 @@ inventer un.
 **S1. Trois sortes, qui tournent.** *Oubliée* (un morceau beaucoup écouté puis
 délaissé), *Dans l'esprit* (un morceau d'un artiste écouté ces jours-ci),
 *Jamais écoutée* (un morceau jamais lancé). Pour le jour `j` et `e` appuis sur
-« Une autre suggestion », la sorte essayée d'abord est la `((j + e) mod 3)`ᵉ de
+« Autre suggestion », la sorte essayée d'abord est la `((j + e) mod 3)`ᵉ de
 cette liste — modulo euclidien, jamais négatif —, puis les deux suivantes dans
 l'ordre circulaire, en repli quand la première n'a rien à offrir (une
 bibliothèque neuve n'a pas de favori oublié). C'est `kind_order` du bureau.
@@ -108,7 +108,7 @@ tirer de nouveau, et le nouveau tirage remplace l'ancien.
 **S10. Le tirage d'un autre jour est périmé.** Il compte pour zéro appui et rien
 d'épinglé : le jour recommence à sa première suggestion.
 
-**S11. « Une autre suggestion » ajoute un appui et efface l'épinglée**, en une
+**S11. « Autre suggestion » ajoute un appui et efface l'épinglée**, en une
 seule écriture faite sur ce que le fichier contient au moment d'écrire, et non
 sur l'état affiché : deux appuis rapides valent deux appuis. Un nouveau tirage ne
 s'écrit que si le fichier porte encore le jour, le nombre d'appuis et l'épinglée

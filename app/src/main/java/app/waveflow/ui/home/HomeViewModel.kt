@@ -192,7 +192,7 @@ class HomeViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(ARRET_MS), HomeUiState())
 
     /**
-     * « Une autre suggestion » : un appui de plus pour aujourd'hui, écrit d'après
+     * « Autre suggestion » : un appui de plus pour aujourd'hui, écrit d'après
      * ce que le fichier contient et non d'après l'écran (S11).
      */
     fun anotherSuggestion() {

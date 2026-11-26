@@ -52,9 +52,13 @@ class DataStoreTirageStore(
 ) : TirageStore {
 
     /**
-     * Comme les préférences : une lecture en échec reprend au lieu de terminer le
-     * flux, qui figerait la bande — « Une autre suggestion » écrirait sans que
-     * rien ne bouge.
+     * Comme les préférences : une lecture en échec rend « aucun tirage » et
+     * reprend, trois fois, au lieu de terminer le flux tout de suite — terminé,
+     * il figerait la bande, et « Autre suggestion » écrirait sans que rien ne
+     * bouge. Un fichier encore illisible après elles est tenu pour durablement
+     * cassé : le flux se termine sur « aucun tirage », sans boucler sur une cause
+     * qui ne disparaîtra pas. Il est relu quand l'accueil revient à l'écran, sa
+     * collecte reprenant alors de zéro.
      */
     override val tirage: Flow<TirageDuJour?> = dataStore.data
         .retryWhen { erreur, tentative ->
