@@ -69,6 +69,27 @@ class EmbeddedLyricsTest {
     }
 
     @Test
+    fun `un fragment vide d'un SYLT syllabique ferme sa ligne a son instant`() {
+        val lignes = decodeSylt(
+            sylt(
+                UTF8,
+                MILLISECONDES,
+                listOf("Bon" to 1_000, "jour" to 1_300, "" to 1_800, "Pause" to 5_000, "\nFin" to 7_000),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                SyncedLine(1_000, "Bonjour"),
+                SyncedLine(1_800, ""),
+                SyncedLine(5_000, "Pause"),
+                SyncedLine(7_000, "Fin"),
+            ),
+            lignes,
+        )
+    }
+
+    @Test
     fun `les cadres ID3v2_2 ULT et SLT portent aussi des paroles`() {
         // ID3v2.2 nomme ses cadres en trois lettres, et Media3 les garde tels quels.
         assertEquals(

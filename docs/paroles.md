@@ -45,7 +45,9 @@ D'un `SYLT`, seuls se lisent les instants en millisecondes (format 2) et les
 paroles ou la transcription (types 1 et 2) : des accords horodatés ne passent
 pas pour des paroles. Un `SYLT` horodaté syllabe par syllabe porte le saut de
 ligne en tête du fragment qui ouvre la ligne suivante : ses fragments se
-regroupent alors en lignes, chacune au début de son premier fragment.
+regroupent alors en lignes, chacune au début de son premier fragment. Un
+fragment vide y est une ligne vide à son instant, comme en LRC (P9) : il ferme
+la ligne en cours, et le fragment qui le suit en ouvre une nouvelle.
 
 **P3. Le `.lrc` voisin : même dossier, même nom, extension remplacée.**
 `Chanson.flac` → `Chanson.lrc`, puis `Chanson.LRC`. Le fichier est lu en entier
@@ -136,7 +138,9 @@ ligne devient la ligne chantée, y compris en pause (P13).
 
 **P15. Les paroles suivent la ligne chantée, sauf quand on les parcourt.** Le
 défilement garde la ligne chantée vers le tiers haut de la zone. Un défilement
-de l'utilisateur suspend ce suivi ; un bouton *Revenir à la ligne*, dans
+de l'utilisateur — au doigt, à la molette, au clavier (`PageUp`, `PageDown`) ou
+au lecteur d'écran — suspend ce suivi ; le défilement du suivi lui-même ne
+compte pas. Un bouton *Revenir à la ligne*, dans
 l'accent, le rétablit, et le suivi reprend de lui-même cinq secondes après le
 dernier défilement. Toucher une ligne le rétablit aussi.
 

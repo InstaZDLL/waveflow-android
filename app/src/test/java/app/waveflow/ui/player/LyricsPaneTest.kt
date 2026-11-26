@@ -8,6 +8,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -15,13 +19,18 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.swipeUp
 import app.waveflow.data.lyrics.LyricsResult
 import app.waveflow.model.Lyrics
@@ -62,6 +71,9 @@ class LyricsPaneTest {
     private var position by mutableLongStateOf(0L)
     private var lecture by mutableStateOf(false)
 
+    /** Pour passer en mode clavier, où une ligne peut prendre le focus. */
+    private lateinit var modes: InputModeManager
+
     private fun afficher(
         result: LyricsResult? = LyricsResult.Found(Lyrics.Synced(lignes)),
         mediaId: String = PISTE,
@@ -74,6 +86,7 @@ class LyricsPaneTest {
         },
     ) {
         compose.setContent {
+            modes = LocalInputModeManager.current
             WaveFlowTheme {
                 LyricsPane(
                     state = LyricsUiState(shown = true, mediaId = mediaId, result = result),
@@ -307,6 +320,56 @@ class LyricsPaneTest {
         compose.onNodeWithText("Revenir à la ligne").assertIsDisplayed()
         compose.mainClock.advanceTimeBy(1_500)
         compose.onNodeWithText("Revenir à la ligne").assertDoesNotExist()
+    }
+
+    @Test
+    fun `le lecteur d'ecran qui fait defiler les paroles suspend aussi le suivi`() {
+        afficher(result = LyricsResult.Found(Lyrics.Synced(beaucoupDeLignes)))
+
+        compose.onNode(hasScrollAction()).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 600f) }
+
+        compose.onNodeWithText("Revenir à la ligne").assertIsDisplayed()
+    }
+
+    @Test
+    fun `un doigt pose et immobile tient le parcours ouvert`() {
+        afficher(result = LyricsResult.Found(Lyrics.Synced(beaucoupDeLignes)))
+        compose.onNodeWithTag(PANNEAU).performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -300f))
+        }
+
+        compose.mainClock.advanceTimeBy(6_000)
+        compose.onNodeWithText("Revenir à la ligne").assertIsDisplayed()
+
+        compose.onNodeWithTag(PANNEAU).performTouchInput { up() }
+    }
+
+    @Test
+    fun `page suivante au clavier suspend aussi le suivi`() {
+        afficher(result = LyricsResult.Found(Lyrics.Synced(beaucoupDeLignes)))
+        compose.runOnIdle { modes.requestInputMode(InputMode.Keyboard) }
+        compose.onNodeWithText("Ligne 1").requestFocus()
+
+        compose.onNodeWithText("Ligne 1").performKeyInput { pressKey(Key.PageDown) }
+
+        compose.onNodeWithText("Revenir à la ligne").assertIsDisplayed()
+    }
+
+    @Test
+    fun `suivre la ligne chantee n'est pas un parcours`() {
+        afficher(result = LyricsResult.Found(Lyrics.Synced(beaucoupDeLignes)))
+
+        // « Ligne 2 » est en vue : le suivi y glisse.
+        position = 4_100L
+        compose.waitForIdle()
+        compose.onNodeWithText("Revenir à la ligne").assertDoesNotExist()
+
+        // « Ligne 40 » est hors de vue : le suivi y saute d'un coup.
+        position = 80_100L
+        compose.waitForIdle()
+        compose.onNodeWithText("Revenir à la ligne").assertDoesNotExist()
+        chantee().assert(hasText("Ligne 40"))
     }
 
     private val beaucoupDeLignes = (0 until 60).map { SyncedLine(it * 2_000L, "Ligne $it") }

@@ -5,7 +5,6 @@ import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,14 +27,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LongState
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -50,6 +52,9 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -170,13 +175,15 @@ private fun SyncedLyrics(
     val chantee by remember(lines, position) { derivedStateOf { currentLineIndex(lines, position.longValue) } }
     val liste = rememberLazyListState()
     var parcours by remember(trackKey) { mutableStateOf(false) }
+    val defilements = remember { Defilements() }
 
-    SuivreLeParcours(liste, onBrowse = { parcours = it })
+    SuivreLeParcours(liste, defilements, onBrowse = { parcours = it })
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val hauteur = maxHeight
         SuivreLaLigne(
             liste,
+            defilements,
             cible = chantee.coerceAtLeast(0),
             suivre = !parcours,
             reduced = reduced,
@@ -197,6 +204,7 @@ private fun SyncedLyrics(
             ),
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(defilements)
                 .debordant(GLOW_SPREAD)
                 .fondu(),
         ) {
@@ -255,23 +263,63 @@ private fun rememberLyricsPosition(positionMs: Long, playing: Boolean, speed: Fl
 }
 
 /**
- * Un défilement de l'utilisateur suspend le suivi ; il reprend de lui-même
- * cinq secondes après le dernier (P15). Un nouveau défilement relance
- * l'attente : `collectLatest` annule la précédente.
+ * Ce qui fait défiler les paroles, pour distinguer l'utilisateur du suivi.
+ *
+ * Les défilements de [SuivreLaLigne] se comptent tant qu'ils tournent
+ * ([programmes]) ; aucun ne traverse le défilement imbriqué. Ceux de
+ * l'utilisateur se voient de deux façons :
+ * - par le défilement imbriqué, que traversent le doigt, l'élan, la molette, le
+ *   clavier et le lecteur d'écran (Compose 1.13) — `PageUp` et `PageDown` font
+ *   défiler d'un coup, sans qu'un défilement reste en cours le temps d'être
+ *   vu : chaque pas avance [pas] ;
+ * - par un défilement en cours qu'aucun programme ne mène : un doigt posé qui
+ *   ne bouge plus tient le parcours ouvert, et l'attente ne court qu'une fois
+ *   levé.
+ */
+@Stable
+private class Defilements : NestedScrollConnection {
+    var programmes by mutableIntStateOf(0)
+        private set
+    var pas by mutableIntStateOf(0)
+        private set
+
+    suspend fun programme(defilement: suspend () -> Unit) {
+        programmes++
+        try {
+            defilement()
+        } finally {
+            programmes--
+        }
+    }
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (consumed != Offset.Zero) pas++
+        return Offset.Zero
+    }
+}
+
+/**
+ * Un défilement de l'utilisateur, quelle que soit son entrée ([Defilements]),
+ * suspend le suivi ; il reprend de lui-même cinq secondes après la fin du
+ * dernier (P15). Un nouveau défilement relance l'attente : `collectLatest`
+ * annule la précédente. Hors d'un parcours, l'attente aboutit sans rien
+ * changer.
  */
 @Composable
-private fun SuivreLeParcours(liste: LazyListState, onBrowse: (Boolean) -> Unit) {
+private fun SuivreLeParcours(liste: LazyListState, defilements: Defilements, onBrowse: (Boolean) -> Unit) {
     val signaler by rememberUpdatedState(onBrowse)
-    LaunchedEffect(liste) {
-        liste.interactionSource.interactions.collectLatest { interaction ->
-            when (interaction) {
-                is DragInteraction.Start -> signaler(true)
-                is DragInteraction.Stop, is DragInteraction.Cancel -> {
+    LaunchedEffect(liste, defilements) {
+        var pasVus = defilements.pas
+        snapshotFlow { (liste.isScrollInProgress && defilements.programmes == 0) to defilements.pas }
+            .collectLatest { (enCours, pas) ->
+                val aDefile = pas != pasVus
+                pasVus = pas
+                if (enCours || aDefile) signaler(true)
+                if (!enCours) {
                     delay(BROWSE_RESUME_MS)
                     signaler(false)
                 }
             }
-        }
     }
 }
 
@@ -281,16 +329,25 @@ private fun SuivreLeParcours(liste: LazyListState, onBrowse: (Boolean) -> Unit) 
  * courbe de la direction ; d'un coup toujours sous mouvement réduit.
  */
 @Composable
-private fun SuivreLaLigne(liste: LazyListState, cible: Int, suivre: Boolean, reduced: Boolean, trackKey: String) {
+private fun SuivreLaLigne(
+    liste: LazyListState,
+    defilements: Defilements,
+    cible: Int,
+    suivre: Boolean,
+    reduced: Boolean,
+    trackKey: String,
+) {
     var place by remember(trackKey) { mutableStateOf(false) }
     val glissement = WaveFlowTheme.motion.shape<Float>()
     LaunchedEffect(cible, suivre, trackKey) {
         if (!suivre) return@LaunchedEffect
         val visible = liste.layoutInfo.visibleItemsInfo.firstOrNull { it.index == cible }
-        if (!place || reduced || visible == null) {
-            liste.scrollToItem(cible)
-        } else {
-            liste.animateScrollBy(visible.offset.toFloat(), glissement)
+        defilements.programme {
+            if (!place || reduced || visible == null) {
+                liste.scrollToItem(cible)
+            } else {
+                liste.animateScrollBy(visible.offset.toFloat(), glissement)
+            }
         }
         place = true
     }

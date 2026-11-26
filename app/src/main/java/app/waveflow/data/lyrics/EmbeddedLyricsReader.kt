@@ -174,19 +174,27 @@ internal fun decodeSylt(data: ByteArray): List<SyncedLine>? {
 /**
  * Des fragments `SYLT` aux lignes : regroupés quand un fragment après le premier
  * ouvre sa ligne par un saut de ligne, un par ligne sinon.
+ *
+ * Regroupés, un fragment sans texte (ou fait de sauts de ligne seuls) est une
+ * ligne à lui seul, comme une ligne horodatée vide d'un LRC : il dit, à son
+ * instant, que la ligne précédente est finie. Le fragment qui le suit ouvre une
+ * nouvelle ligne, saut de ligne ou non.
  */
 private fun enLignes(fragments: List<SyncedLine>): List<SyncedLine> {
     val syllabique = fragments.drop(1).any { it.text.startsWith('\n') || it.text.startsWith('\r') }
     if (!syllabique) return fragments.map { it.copy(text = it.text.trim()) }
 
     val lignes = mutableListOf<SyncedLine>()
+    var fermee = true
     for (fragment in fragments) {
-        val ouvre = lignes.isEmpty() || fragment.text.startsWith('\n') || fragment.text.startsWith('\r')
+        val marqueur = fragment.text.all { it == '\n' || it == '\r' }
+        val ouvre = fermee || marqueur || fragment.text.startsWith('\n') || fragment.text.startsWith('\r')
         if (ouvre) {
             lignes += fragment
         } else {
             lignes[lignes.lastIndex] = lignes.last().let { it.copy(text = it.text + fragment.text) }
         }
+        fermee = marqueur
     }
     return lignes.map { it.copy(text = it.text.trim()) }
 }
