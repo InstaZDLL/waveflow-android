@@ -40,6 +40,22 @@ data class RemoteSong(
     val trackNumber: Int?,
     val durationMs: Long,
     val artworkUri: Uri?,
+    val replayGain: RemoteReplayGain = RemoteReplayGain(),
+)
+
+/**
+ * Les quatre mesures `replay_gain_*` que le serveur publie pour une piste, en dB
+ * sur l'échelle ReplayGain 2.0 pour les gains, linéaires pour les pics. Chacune
+ * peut manquer : le serveur ne les remplit qu'au scan qui suit leur apparition.
+ *
+ * Le serveur ne met de gain dans aucun flux de l'API v2 : c'est au client de les
+ * appliquer. Voir `docs/audio-avance.md`, G2.
+ */
+data class RemoteReplayGain(
+    val trackGainDb: Double? = null,
+    val trackPeak: Double? = null,
+    val albumGainDb: Double? = null,
+    val albumPeak: Double? = null,
 )
 
 /** Un album et son contenu, tels que renvoyés d'un seul appel. */

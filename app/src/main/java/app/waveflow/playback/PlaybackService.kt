@@ -12,6 +12,7 @@ import app.waveflow.WaveFlowApp
 import app.waveflow.data.PlayHistoryRepository
 import app.waveflow.data.PreferencesStore
 import app.waveflow.model.StreamRendering
+import app.waveflow.playback.audio.ChaineAudio
 import coil.imageLoader
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
@@ -85,6 +86,14 @@ class PlaybackService : MediaLibraryService() {
      */
     private val rendu = MutableStateFlow<StreamRendering?>(null)
 
+    /**
+     * Le ReplayGain et l'égaliseur de la sortie audio, que [observeAudioSettings]
+     * tient à jour. Lisible des tests, qui n'ont pas d'autre moyen de voir ce
+     * que les traitements recevront : Robolectric ne décode pas l'audio.
+     */
+    internal var chaineAudio: ChaineAudio? = null
+        private set
+
     override fun onCreate() {
         super.onCreate()
 
@@ -124,6 +133,8 @@ class PlaybackService : MediaLibraryService() {
         observeSleepTimer(container.sleepTimer, player)
         observePlaybackSpeed(container.preferencesStore, player)
         observeStreamQuality(container.preferencesStore, lecture.pistesAVenir)
+        chaineAudio = lecture.chaineAudio
+        observeAudioSettings(container.preferencesStore, lecture.chaineAudio)
         observeAbLoop(container.abLoop, player)
 
         // Après la session, et pas avant : la première valeur du flux arrive
@@ -196,6 +207,30 @@ class PlaybackService : MediaLibraryService() {
                 .map { it.playbackSpeed }
                 .distinctUntilChanged()
                 .collect { player.setPlaybackSpeed(it) }
+        }
+    }
+
+    /**
+     * Pose le ReplayGain et l'égaliseur choisis sur la chaîne audio, et les y
+     * repose quand ils changent.
+     *
+     * Observés ici pour la même raison que la vitesse : le service joue aussi
+     * écran fermé. Les traitements relisent la chaîne à chaque tampon : un
+     * réglage s'entend sans attendre la piste suivante (A4 de
+     * `docs/audio-avance.md`).
+     */
+    private fun observeAudioSettings(preferences: PreferencesStore, chaine: ChaineAudio) {
+        artworkScope.launch {
+            preferences.preferences
+                .map { it.replayGain }
+                .distinctUntilChanged()
+                .collect { chaine.replayGain = it }
+        }
+        artworkScope.launch {
+            preferences.preferences
+                .map { it.equalizer }
+                .distinctUntilChanged()
+                .collect { chaine.egaliseur = it }
         }
     }
 

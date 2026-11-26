@@ -14,6 +14,9 @@ package app.waveflow.model
  * @property unmeteredQuality le profil *Wi-Fi* de la qualité automatique.
  * @property meteredQuality le profil *Données mobiles* de la qualité
  *   automatique : Économie par défaut, puisque c'est le forfait qu'on ménage.
+ * @property replayGain le ReplayGain : actif par défaut, en mode Automatique.
+ *   Voir `docs/audio-avance.md`.
+ * @property equalizer l'égaliseur à six bandes : inactif et plat par défaut.
  */
 data class AppPreferences(
     val theme: ThemeChoice = ThemeChoice.System,
@@ -22,6 +25,8 @@ data class AppPreferences(
     val automaticQuality: Boolean = false,
     val unmeteredQuality: StreamQuality = StreamQuality.Original,
     val meteredQuality: StreamQuality = StreamQuality.Economie,
+    val replayGain: ReglagesReplayGain = ReglagesReplayGain(),
+    val equalizer: ReglagesEgaliseur = ReglagesEgaliseur.PAR_DEFAUT,
 ) {
 
     /** Le profil que la qualité automatique prend sur ce réseau. */

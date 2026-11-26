@@ -6,6 +6,7 @@ import androidx.media3.common.MediaMetadata
 import app.waveflow.model.RemoteSong
 import app.waveflow.model.Song
 import app.waveflow.model.StreamRendering
+import app.waveflow.playback.audio.ExtrasAudio
 
 /**
  * Traduction des morceaux vers [MediaItem], et retour.
@@ -25,6 +26,9 @@ fun Song.toMediaItem(): MediaItem =
                 .setArtist(artist)
                 .setAlbumTitle(album)
                 .setArtworkUri(artworkUri)
+                // L'album, pour savoir si l'on écoute un disque en entier
+                // (G7 de `docs/audio-avance.md`).
+                .setExtras(ExtrasAudio.de(album = "$LOCAL_PREFIX$albumId"))
                 .build(),
         )
         .build()
@@ -52,6 +56,17 @@ fun RemoteSong.toMediaItem(): MediaItem =
                 .setAlbumTitle(album)
                 .setArtworkUri(artworkUri)
                 .setDurationMs(durationMs.takeIf { it > 0L })
+                // L'album pour l'écoute, et le gain que publie le serveur, qui
+                // ne l'applique à aucun flux (G2 et G7 de `docs/audio-avance.md`).
+                .setExtras(
+                    ExtrasAudio.de(
+                        album = albumId?.let { "$REMOTE_PREFIX$it" },
+                        gainTitreDb = replayGain.trackGainDb,
+                        picTitre = replayGain.trackPeak,
+                        gainAlbumDb = replayGain.albumGainDb,
+                        picAlbum = replayGain.albumPeak,
+                    ),
+                )
                 .build(),
         )
         .build()

@@ -12,7 +12,11 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.waveflow.model.AppPreferences
+import app.waveflow.model.ModeDeGain
 import app.waveflow.model.PlaybackSpeed
+import app.waveflow.model.Prereglage
+import app.waveflow.model.ReglagesEgaliseur
+import app.waveflow.model.ReglagesReplayGain
 import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.model.ThemeChoice
@@ -66,6 +70,23 @@ interface PreferencesStore {
 
     /** Change le profil que la qualité automatique prend sur ce réseau. */
     suspend fun setQualityOn(network: StreamNetwork, quality: StreamQuality)
+
+    /**
+     * Change les réglages du ReplayGain, d'après ceux qui sont enregistrés.
+     *
+     * Une transformation et non une valeur : elle s'applique à ce que le fichier
+     * contient **au moment d'écrire**, dans la même opération. Deux gestes
+     * rapprochés — couper la saturation, puis bouger la pré-amplification — ne
+     * peuvent donc pas s'écraser l'un l'autre, comme le feraient deux valeurs
+     * entières bâties sur le même état lu avant.
+     *
+     * Comme la vitesse, c'est le service qui l'observe et l'applique, écran
+     * fermé compris. Voir `docs/audio-avance.md`, A3 et A4.
+     */
+    suspend fun updateReplayGain(transform: (ReglagesReplayGain) -> ReglagesReplayGain)
+
+    /** Change les réglages de l'égaliseur, comme [updateReplayGain]. */
+    suspend fun updateEqualizer(transform: (ReglagesEgaliseur) -> ReglagesEgaliseur)
 }
 
 /**
@@ -158,6 +179,33 @@ class DataStorePreferencesStore(
         ecrire("Qualité sur ${network.label}") { it[network.cle()] = quality.name }
 
     /**
+     * Lu, transformé et écrit dans la même opération : voir l'interface. Borné à
+     * l'écriture **et** à la relecture, comme la vitesse (A3).
+     */
+    override suspend fun updateReplayGain(transform: (ReglagesReplayGain) -> ReglagesReplayGain) =
+        ecrire("ReplayGain") { fichier ->
+            val nouveau = transform(fichier.asMap().reglagesReplayGain()).bornes()
+            fichier[REPLAYGAIN_ACTIF] = nouveau.actif
+            fichier[REPLAYGAIN_MODE] = nouveau.mode.name
+            fichier[REPLAYGAIN_PREAMPLI] = nouveau.preampliDb
+            fichier[REPLAYGAIN_PAR_DEFAUT] = nouveau.gainParDefautDb
+            fichier[REPLAYGAIN_SATURATION] = nouveau.eviterSaturation
+        }
+
+    /**
+     * Les six bandes s'écrivent ensemble, en une chaîne : une bande ne peut pas
+     * être relue d'un réglage et sa voisine d'un autre. Le préréglage s'écrit par
+     * sa clé, celle du bureau ; [PERSONNALISE] pour un réglage fait à la main.
+     */
+    override suspend fun updateEqualizer(transform: (ReglagesEgaliseur) -> ReglagesEgaliseur) =
+        ecrire("Égaliseur") { fichier ->
+            val nouveau = transform(fichier.asMap().reglagesEgaliseur())
+            fichier[EGALISEUR_ACTIF] = nouveau.actif
+            fichier[EGALISEUR_BANDES] = nouveau.bandesDb.joinToString(SEPARATEUR_BANDES)
+            fichier[EGALISEUR_PREREGLAGE] = nouveau.prereglage?.cle ?: PERSONNALISE
+        }
+
+    /**
      * Écrit une préférence sans faire tomber celui qui la demande.
      *
      * L'échec d'écriture est retenu ici, comme l'est déjà celui de lecture. Les
@@ -221,7 +269,42 @@ class DataStorePreferencesStore(
                 ?: AppPreferences().unmeteredQuality,
             meteredQuality = (valeurs[StreamNetwork.Metered.cle()] as? String)?.enProfil()
                 ?: AppPreferences().meteredQuality,
+            replayGain = valeurs.reglagesReplayGain(),
+            equalizer = valeurs.reglagesEgaliseur(),
         )
+    }
+
+    /**
+     * Le ReplayGain enregistré, chaque valeur absente ou illisible valant son
+     * défaut. Les ajustements sont bornés à la relecture ; un mode inconnu relit
+     * Automatique (A3).
+     */
+    private fun Map<Preferences.Key<*>, Any>.reglagesReplayGain(): ReglagesReplayGain {
+        val defaut = ReglagesReplayGain()
+        return ReglagesReplayGain(
+            actif = this[REPLAYGAIN_ACTIF] as? Boolean ?: defaut.actif,
+            mode = (this[REPLAYGAIN_MODE] as? String)
+                ?.let { nom -> ModeDeGain.entries.firstOrNull { it.name == nom } }
+                ?: defaut.mode,
+            preampliDb = this[REPLAYGAIN_PREAMPLI] as? Float ?: defaut.preampliDb,
+            gainParDefautDb = this[REPLAYGAIN_PAR_DEFAUT] as? Float ?: defaut.gainParDefautDb,
+            eviterSaturation = this[REPLAYGAIN_SATURATION] as? Boolean ?: defaut.eviterSaturation,
+        ).bornes()
+    }
+
+    /**
+     * L'égaliseur enregistré. Des bandes illisibles, ou qui ne sont pas six,
+     * relisent l'égaliseur plat (A3) ; un préréglage inconnu relit un réglage
+     * personnalisé, qui garde les bandes telles qu'elles sont.
+     */
+    private fun Map<Preferences.Key<*>, Any>.reglagesEgaliseur(): ReglagesEgaliseur {
+        val defaut = ReglagesEgaliseur.PAR_DEFAUT
+        val actif = this[EGALISEUR_ACTIF] as? Boolean ?: defaut.actif
+        val bandes = (this[EGALISEUR_BANDES] as? String)
+            ?.split(SEPARATEUR_BANDES)
+            ?.map { it.toFloatOrNull() ?: return defaut.avecActif(actif) }
+            ?: return defaut.avecActif(actif)
+        return ReglagesEgaliseur.de(actif, bandes, Prereglage.deCle(this[EGALISEUR_PREREGLAGE] as? String))
     }
 
     private fun String.enProfil(): StreamQuality? = StreamQuality.entries.firstOrNull { it.name == this }
@@ -241,6 +324,20 @@ class DataStorePreferencesStore(
         val AUTOMATIC_QUALITY = booleanPreferencesKey("stream_quality_automatic")
         val UNMETERED_QUALITY = stringPreferencesKey("stream_quality_unmetered")
         val METERED_QUALITY = stringPreferencesKey("stream_quality_metered")
+
+        val REPLAYGAIN_ACTIF = booleanPreferencesKey("replaygain")
+        val REPLAYGAIN_MODE = stringPreferencesKey("replaygain_mode")
+        val REPLAYGAIN_PREAMPLI = floatPreferencesKey("replaygain_preamp_db")
+        val REPLAYGAIN_PAR_DEFAUT = floatPreferencesKey("replaygain_fallback_db")
+        val REPLAYGAIN_SATURATION = booleanPreferencesKey("replaygain_prevent_clipping")
+
+        val EGALISEUR_ACTIF = booleanPreferencesKey("equalizer")
+        val EGALISEUR_BANDES = stringPreferencesKey("equalizer_bands_db")
+        val EGALISEUR_PREREGLAGE = stringPreferencesKey("equalizer_preset")
+
+        /** Le point décimal de `Float.toString` ne se confond pas avec ce séparateur. */
+        const val SEPARATEUR_BANDES = ","
+        const val PERSONNALISE = "custom"
 
         /** Trois reprises : de quoi passer un incident, pas une corruption. */
         const val MAX_TENTATIVES = 3L

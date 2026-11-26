@@ -2,6 +2,7 @@ package app.waveflow.data.remote
 
 import app.waveflow.model.RemoteAlbum
 import app.waveflow.model.RemoteArtist
+import app.waveflow.model.RemoteReplayGain
 import app.waveflow.model.RemoteSong
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -97,6 +98,10 @@ internal data class SongResponse(
     val track: Int? = null,
     @SerialName("duration_ms") val durationMs: Long,
     @SerialName("artwork_hash") val artworkHash: String? = null,
+    @SerialName("replay_gain_track_gain") val replayGainTrackGain: Double? = null,
+    @SerialName("replay_gain_track_peak") val replayGainTrackPeak: Double? = null,
+    @SerialName("replay_gain_album_gain") val replayGainAlbumGain: Double? = null,
+    @SerialName("replay_gain_album_peak") val replayGainAlbumPeak: Double? = null,
 ) {
     fun toModel(artwork: ArtworkUrls) = RemoteSong(
         id = id,
@@ -107,6 +112,12 @@ internal data class SongResponse(
         trackNumber = track,
         durationMs = durationMs,
         artworkUri = artwork.forHash(artworkHash),
+        replayGain = RemoteReplayGain(
+            trackGainDb = replayGainTrackGain,
+            trackPeak = replayGainTrackPeak,
+            albumGainDb = replayGainAlbumGain,
+            albumPeak = replayGainAlbumPeak,
+        ),
     )
 }
 
