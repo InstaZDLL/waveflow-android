@@ -141,12 +141,12 @@ class SonSectionTest {
     }
 
     /**
-     * Au clavier, une flèche avance d'un cran, un demi-dB. Sans crans, le
-     * curseur avancerait d'un centième de sa course, 0,24 dB sur ±12, et
-     * l'arrondi le ramènerait sur place.
+     * Au clavier, une flèche avance d'un cran : un dixième de dB pour une
+     * bande, la résolution du bureau. Sans crans, le curseur avancerait d'un
+     * centième de sa course, 0,24 dB sur ±12.
      */
     @Test
-    fun `une fleche du clavier deplace une bande d'un demi-decibel`() {
+    fun `une fleche du clavier deplace une bande d'un dixieme de decibel`() {
         afficher(egaliseur = ReglagesEgaliseur.PAR_DEFAUT.avecActif(true))
         val bande = compose.onNodeWithContentDescription("60 Hz").performScrollTo()
 
@@ -154,7 +154,10 @@ class SonSectionTest {
         bande.performKeyInput { pressKey(Key.DirectionRight) }
         compose.waitForIdle()
 
-        assertEquals(listOf<GesteSon>(GesteSon.Bande(0, 0.5f)), gestes)
+        val geste = gestes.single() as GesteSon.Bande
+        assertEquals(0, geste.index)
+        // Le cran tombe sur un flottant voisin de 0,1 ; le magasin le range au dixième.
+        assertEquals(0.1f, geste.db, 1e-4f)
     }
 
     @Test

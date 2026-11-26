@@ -188,8 +188,8 @@ l'aléatoire en plein album change le gain sans attendre la piste suivante.
 
 **E1. Six bandes, celles du bureau.** Filtres en cloche (« peaking ») du
 *Audio EQ Cookbook* de RBJ, en série, à 60, 150, 400, 1000, 2400 et 15 000 Hz,
-Q = 0,707, ±12 dB par bande, au dixième de dB. Forme directe II transposée, une
-mémoire par canal et par bande.
+Q = 0,707, ±12 dB par bande, au dixième de dB, le pas des curseurs. Forme
+directe II transposée, une mémoire par canal et par bande.
 
 **Écart assumé : une bande qui n'est pas sous la fréquence de Nyquist est
 neutre.** Le bureau rééchantillonne tout vers la fréquence de sa sortie

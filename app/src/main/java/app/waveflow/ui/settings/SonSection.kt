@@ -289,7 +289,9 @@ internal fun nomDeBande(frequenceHz: Float): String {
 }
 
 private const val PERSONNALISE = "Personnalisé"
-private const val PAS_EGALISEUR_DB = 0.5f
+
+/** Le pas d'une bande : le dixième de dB que le bureau stocke (`eq.rs`, `set_band_db`). */
+private const val PAS_EGALISEUR_DB = 0.1f
 private const val DIXIEMES = 10
 private const val MILLE = 1000
 private const val CENT = 100
