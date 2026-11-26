@@ -110,26 +110,53 @@ private suspend fun <T> ListenableFuture<T>.attendre(): T = suspendCancellableCo
  *
  * Des paroles synchronisées passent devant des simples (P2), quel que soit
  * l'ordre des tags : un texte qui se lit comme un LRC compte comme
- * synchronisé.
+ * synchronisé. Les entrées se décodent dans l'ordre du fichier, et le
+ * décodage s'arrête à la première feuille synchronisée : c'est elle qui
+ * l'emporte, celles d'après ne changeraient rien.
+ *
+ * Un fichier ne fait jamais décoder plus de [PAROLES_MAX_PAR_FICHIER] en
+ * tout : une entrée qui ne tient plus dans ce qui reste est passée sans être
+ * décodée. Le plafond d'un cadre ne borne pas leur nombre, et un fichier
+ * fabriqué peut en porter des dizaines.
  */
 internal fun lyricsOf(entries: List<Metadata.Entry>): Lyrics? {
-    val trouvees = entries.mapNotNull { entree ->
-        when (entree) {
-            is BinaryFrame -> when (entree.id) {
-                // ID3v2.2 nomme ses cadres en trois lettres, et Media3 les garde.
-                "SYLT", "SLT" -> decodeSylt(entree.data)?.let(Lyrics::Synced)
-                "USLT", "ULT" -> decodeUslt(entree.data)?.let(Lrc::parse)
-                else -> null
-            }
-            is VorbisComment ->
-                entree.value.takeIf { entree.key.uppercase() in CLES_VORBIS }?.let(Lrc::parse)
-            is TextInformationFrame ->
-                entree.values.takeIf { entree.id == "USLT" }?.joinToString("\n")?.let(Lrc::parse)
-            else -> null
-        }
+    var reste = PAROLES_MAX_PAR_FICHIER
+    // Une séquence : chaque entrée n'est décodée que si la boucle la demande.
+    val decodees = entries.asSequence()
+        .mapNotNull { it.porteur() }
+        .filter { porteur -> (porteur.taille <= reste).also { tient -> if (tient) reste -= porteur.taille } }
+        .mapNotNull { it.decoder() }
+    var simples: Lyrics? = null
+    for (paroles in decodees) {
+        if (paroles is Lyrics.Synced) return paroles
+        if (simples == null) simples = paroles
     }
-    return trouvees.firstOrNull { it is Lyrics.Synced } ?: trouvees.firstOrNull()
+    return simples
 }
+
+/** Une entrée qui porte des paroles : sa taille, et comment les décoder. */
+private class Porteur(val taille: Int, val decoder: () -> Lyrics?)
+
+/**
+ * Le [Porteur] de cette entrée, ou `null` si elle ne porte pas de paroles. La
+ * taille est celle de la trame en octets, ou du texte en caractères pour ce
+ * que Media3 rend déjà en texte.
+ */
+private fun Metadata.Entry.porteur(): Porteur? = when (this) {
+    is BinaryFrame -> when (id) {
+        // ID3v2.2 nomme ses cadres en trois lettres, et Media3 les garde.
+        "SYLT", "SLT" -> Porteur(data.size) { decodeSylt(data)?.let(Lyrics::Synced) }
+        "USLT", "ULT" -> Porteur(data.size) { decodeUslt(data)?.let(Lrc::parse) }
+        else -> null
+    }
+    is VorbisComment -> if (key.uppercase() in CLES_VORBIS) Porteur(value.length) { Lrc.parse(value) } else null
+    is TextInformationFrame ->
+        if (id == "USLT") Porteur(values.sumOf { it.length }) { Lrc.parse(values.joinToString("\n")) } else null
+    else -> null
+}
+
+/** Ce qu'un fichier peut faire décoder de paroles, toutes entrées confondues : 1 Mio. */
+internal const val PAROLES_MAX_PAR_FICHIER = 1 shl 20
 
 private val CLES_VORBIS = setOf("LYRICS", "UNSYNCEDLYRICS")
 

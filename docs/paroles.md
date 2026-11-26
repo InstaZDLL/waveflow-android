@@ -51,6 +51,9 @@ Un cadre `USLT` ou `SYLT` de plus d'1 Mio, comme le `.lrc` voisin (P3), ne se
 décode pas. Media3 a déjà lu ses octets : le plafond borne ce que le décodage
 en ferait — une ligne par fragment de quelques octets —, pas leur lecture. Les
 paroles Vorbis et MP4 arrivent de Media3 déjà en texte, et P10 les plafonne.
+Un fichier ne fait jamais décoder plus d'1 Mio de paroles en tout, quel que soit
+le nombre de ses tags : le décodage suit l'ordre du fichier et s'arrête à la
+première feuille synchronisée.
 
 Dans un `SYLT` syllabique, un
 fragment vide est une ligne vide à son instant, comme en LRC (P9) : il ferme

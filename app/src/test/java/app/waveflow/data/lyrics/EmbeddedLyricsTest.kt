@@ -1,5 +1,6 @@
 package app.waveflow.data.lyrics
 
+import androidx.media3.common.Metadata
 import androidx.media3.extractor.metadata.id3.BinaryFrame
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.extractor.metadata.vorbis.VorbisComment
@@ -160,6 +161,49 @@ class EmbeddedLyricsTest {
         val cadre = TextInformationFrame("USLT", null, ImmutableList.of("Première\nSeconde"))
 
         assertEquals(Lyrics.Plain(listOf("Première", "Seconde")), lyricsOf(listOf(cadre)))
+    }
+
+    @Test
+    fun `un fichier ne fait jamais decoder plus d'1 Mio de paroles en tout`() {
+        // Quarante cadres juste sous le plafond d'un cadre, quarante Mio de
+        // texte, puis des paroles synchronisées qui l'emporteraient si on
+        // allait jusqu'à elles.
+        val presquePlein = BinaryFrame("USLT", uslt(LATIN1, "", "Premier vers\n" + "x".repeat(TRAME_MAX_OCTETS - 20)))
+        assertTrue(presquePlein.data.size in TRAME_MAX_OCTETS - 8..TRAME_MAX_OCTETS)
+        val tropTard = BinaryFrame("USLT", uslt(LATIN1, "", "[00:01.00]Trop tard"))
+
+        val paroles = lyricsOf(List(40) { presquePlein } + tropTard)
+
+        assertEquals("Premier vers", (paroles as Lyrics.Plain).lines.first())
+    }
+
+    @Test
+    fun `le decodage s'arrete a la premiere feuille synchronisee`() {
+        val synchro = BinaryFrame("SYLT", sylt(UTF8, MILLISECONDES, listOf("chantée" to 2_000)))
+        val entrees = ListeComptee(
+            listOf(
+                BinaryFrame("USLT", uslt(UTF8, "", "Texte simple")),
+                synchro,
+                BinaryFrame("USLT", uslt(UTF8, "", "[00:03.00]Une autre")),
+                VorbisComment("LYRICS", "[00:04.00]Encore une"),
+            ),
+        )
+
+        assertEquals(Lyrics.Synced(listOf(SyncedLine(2_000, "chantée"))), lyricsOf(entrees))
+        assertEquals(2, entrees.lues)
+    }
+
+    /** Une liste qui retient jusqu'où on l'a lue. */
+    private class ListeComptee(private val entrees: List<Metadata.Entry>) : AbstractList<Metadata.Entry>() {
+        var lues = 0
+            private set
+
+        override val size get() = entrees.size
+
+        override fun get(index: Int): Metadata.Entry {
+            lues = maxOf(lues, index + 1)
+            return entrees[index]
+        }
     }
 
     @Test
