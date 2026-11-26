@@ -107,16 +107,29 @@ class HomeViewModel(
 ) : ViewModel() {
 
     /**
-     * Le dernier tirage que cet accueil a épinglé, gardé aussi en mémoire (S12).
+     * Le dernier tirage que cet accueil a fait, gardé aussi en mémoire (S12).
      *
      * Une écriture en échec ne dit rien à l'appelant ; sans lui, la piste
      * suggérée, une fois écoutée, ne serait plus tirée, et la bande changerait.
-     * Il ne vaut que pour son jour et son nombre d'appuis, et ne sert de rien
-     * quand l'écriture a réussi : le fichier dit alors la même chose. Lu là où
-     * l'on tire, écrit là où l'on épingle, sur deux fils.
+     * Il ne vaut que pour son jour et son nombre d'appuis.
+     *
+     * Lu **et** posé dans le calcul, dont les passages se suivent sans jamais
+     * se chevaucher : posé après l'écriture, de l'autre côté du tampon de
+     * `flowOn`, un second calcul pouvait partir sans le voir et tirer autre
+     * chose. `@Volatile` parce que le dispatcher du calcul peut changer de fil
+     * d'un passage à l'autre. La course qu'il ferme ne s'éprouve pas sous
+     * `runTest`, dont l'ordonnanceur n'a qu'un fil.
      */
     @Volatile
     private var tenu: TirageDuJour? = null
+
+    /**
+     * Le jour que la bande montre, celui de [joursDe] : « Autre suggestion »
+     * s'y applique, et non au jour relu sur l'horloge, qui peut l'avoir devancé
+     * après un changement de fuseau (S2).
+     */
+    @Volatile
+    private var jourAffiche: Long? = null
 
     /**
      * La suggestion du jour, et ce qu'il faut épingler pour qu'elle revienne.
@@ -135,6 +148,9 @@ class HomeViewModel(
         val depuis = enregistre.pour(jour)
         val effectif = tenu?.takeIf { it.jour == depuis.jour && it.essais == depuis.essais } ?: depuis
         val tiree = suggestionDuJour(effectif, library, ecoutes, horloge.millis())
+        val aEpingler = tiree?.epinglee()?.takeIf { it != depuis.epinglee }
+        if (aEpingler != null) tenu = depuis.copy(epinglee = aEpingler)
+        jourAffiche = jour
         Tirage(
             band = tiree?.let { s ->
                 SuggestionBand(
@@ -145,7 +161,7 @@ class HomeViewModel(
                 )
             },
             depuis = depuis,
-            aEpingler = tiree?.epinglee()?.takeIf { it != depuis.epinglee },
+            aEpingler = aEpingler,
         )
     }
         .flowOn(calcul)
@@ -156,8 +172,7 @@ class HomeViewModel(
             // rien n'a bougé depuis le tirage (S11). Tant qu'elle échoue, elle
             // est retentée au calcul suivant.
             val nouvelle = tirage.aEpingler ?: return@onEach
-            tenu = tirage.depuis.copy(epinglee = nouvelle)
-            tirages.modifier { it.epingler(tirage.depuis, nouvelle) }
+            tirages.modifier { it.epingler(tirage.depuis, nouvelle, LocalDate.now(horloge).toEpochDay()) }
         }
         .map { it.band }
 
@@ -192,11 +207,11 @@ class HomeViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(ARRET_MS), HomeUiState())
 
     /**
-     * « Autre suggestion » : un appui de plus pour aujourd'hui, écrit d'après
-     * ce que le fichier contient et non d'après l'écran (S11).
+     * « Autre suggestion » : un appui de plus pour le jour que la bande montre,
+     * écrit d'après ce que le fichier contient et non d'après l'écran (S11).
      */
     fun anotherSuggestion() {
-        val jour = LocalDate.now(horloge).toEpochDay()
+        val jour = jourAffiche ?: LocalDate.now(horloge).toEpochDay()
         viewModelScope.launch { tirages.modifier { it.apresUnAppui(jour) } }
     }
 

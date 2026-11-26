@@ -137,11 +137,13 @@ internal fun SuggestionOfTheDay(
             }
             band.reason?.let { raison ->
                 Spacer(Modifier.height(14.dp))
+                // Trois lignes : à police doublée, deux coupaient la date
+                // d'ajout en son milieu (vu sur l'émulateur).
                 Text(
                     text = raison,
                     style = MaterialTheme.typography.bodySmall,
                     color = WaveFlowTheme.colors.ink3,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

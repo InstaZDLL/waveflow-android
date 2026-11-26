@@ -167,6 +167,35 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `autre suggestion vaut pour le jour que la bande montre, meme apres un changement de fuseau`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // 23 h 30 en UTC ; le voyageur passe à UTC+3, où il est déjà 2 h 30
+            // le lendemain. La bande reste sur le 26 jusqu'au minuit qu'elle
+            // attend : l'appui doit compter pour le 26, pas pour un 27 qu'elle
+            // ne montre pas.
+            var fuseau: ZoneId = ZoneOffset.UTC
+            val debut = Instant.parse("2026-11-26T23:30:00Z")
+            val horloge = object : Clock() {
+                override fun getZone(): ZoneId = fuseau
+                override fun withZone(zone: ZoneId?): Clock = this
+                override fun instant(): Instant = debut.plusMillis(testScheduler.currentTime)
+            }
+            val tirages = FakeTirageStore()
+            val pistes = (1L..30L).map { song(it, addedAtMs = it) }.toTypedArray()
+            val vue = accueil(bibliotheque(*pistes), FakeHistory(emptyList()), tirages, horloge)
+            backgroundScope.launch { vue.state.collect {} }
+            runCurrent()
+
+            fuseau = ZoneOffset.ofHours(3)
+            vue.anotherSuggestion()
+            runCurrent()
+
+            val garde = tirages.flux.value!!
+            assertEquals(JOUR_DU_26, garde.jour)
+            assertEquals(1, garde.essais)
+        }
+
+    @Test
     fun `l'horloge par defaut suit le fuseau du systeme`() {
         val avant = TimeZone.getDefault()
         try {

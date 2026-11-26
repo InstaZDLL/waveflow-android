@@ -148,8 +148,11 @@ appui sur un morceau de l'accueil.
 **S17. L'historique lu est borné.** Au plus les 20 000 lignes `local:` les plus
 récemment écoutées, en une requête. Au-delà, les plus anciennes sont ignorées :
 une piste écoutée seulement avant elles pourrait passer pour jamais écoutée.
-La bibliothèque est déjà en mémoire ; les candidats d'une sorte se classent en
-une passe et se coupent à 400 (S4).
+La bibliothèque est déjà en mémoire et n'a pas d'autre borne que l'appareil :
+chaque sorte filtre puis trie ses candidats en entier, hors du fil principal.
+Ceux de *Oubliée* et de *Jamais écoutée* se coupent ensuite à 400 (S4) ; *Dans
+l'esprit* n'a pas de coupe, le bureau ne coupant les siens (5 000) que pour
+borner sa requête, et la courte liste s'arrêtant de toute façon à 20.
 
 ## Les vecteurs de test
 

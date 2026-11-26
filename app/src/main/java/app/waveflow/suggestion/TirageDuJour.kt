@@ -33,10 +33,18 @@ fun TirageDuJour?.apresUnAppui(jour: Long): TirageDuJour {
  * soit encore [depuis], l'état d'après lequel elle a été tirée (S11). Sinon, rien
  * ne change : un appui arrivé entre le tirage et son écriture n'est pas écrasé,
  * pas plus qu'un tirage du lendemain par celui de la veille.
+ *
+ * @param aujourdhui le jour de l'horloge au moment d'écrire. Un tirage enregistré
+ *   pour un jour qui n'est pas encore arrivé — une horloge qui avançait, puis
+ *   remise à l'heure — est tenu pour périmé : le croire bloquerait toute
+ *   épinglée jusqu'à ce jour-là.
  */
-fun TirageDuJour?.epingler(depuis: TirageDuJour, nouvelle: SuggestionEpinglee): TirageDuJour? = when {
-    // [pour] tiendrait pour périmé un tirage du lendemain comme un tirage d'hier.
-    this != null && jour > depuis.jour -> this
-    pour(depuis.jour) == depuis -> depuis.copy(epinglee = nouvelle)
-    else -> this
+fun TirageDuJour?.epingler(depuis: TirageDuJour, nouvelle: SuggestionEpinglee, aujourdhui: Long): TirageDuJour? {
+    val courant = this?.takeIf { it.jour <= aujourdhui }
+    return when {
+        // [pour] tiendrait pour périmé un tirage du lendemain comme un tirage d'hier.
+        courant != null && courant.jour > depuis.jour -> courant
+        courant.pour(depuis.jour) == depuis -> depuis.copy(epinglee = nouvelle)
+        else -> courant
+    }
 }

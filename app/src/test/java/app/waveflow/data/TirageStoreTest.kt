@@ -150,11 +150,14 @@ class TirageStoreTest {
         val depuis = TirageDuJour(20_418, 0)
         val apresLAppui = TirageDuJour(20_418, 1)
 
-        assertEquals(apresLAppui, apresLAppui.epingler(depuis, epinglee))
-        assertEquals(TirageDuJour(20_418, 0, epinglee), depuis.epingler(depuis, epinglee))
+        assertEquals(apresLAppui, apresLAppui.epingler(depuis, epinglee, aujourdhui = 20_418))
+        assertEquals(TirageDuJour(20_418, 0, epinglee), depuis.epingler(depuis, epinglee, aujourdhui = 20_418))
         // Rien d'enregistré, ou un tirage d'hier : c'est bien le premier du jour.
-        assertEquals(TirageDuJour(20_418, 0, epinglee), null.epingler(depuis, epinglee))
-        assertEquals(TirageDuJour(20_418, 0, epinglee), TirageDuJour(20_417, 5).epingler(depuis, epinglee))
+        assertEquals(TirageDuJour(20_418, 0, epinglee), null.epingler(depuis, epinglee, aujourdhui = 20_418))
+        assertEquals(
+            TirageDuJour(20_418, 0, epinglee),
+            TirageDuJour(20_417, 5).epingler(depuis, epinglee, aujourdhui = 20_418),
+        )
     }
 
     @Test
@@ -162,7 +165,19 @@ class TirageStoreTest {
         // Tiré à 23 h 59 min 59 s, écrit après un appui fait à minuit passé.
         val lendemain = TirageDuJour(20_419, 1)
 
-        assertEquals(lendemain, lendemain.epingler(TirageDuJour(20_418), epinglee))
+        assertEquals(lendemain, lendemain.epingler(TirageDuJour(20_418), epinglee, aujourdhui = 20_419))
+    }
+
+    @Test
+    fun `un tirage date d'un jour pas encore arrive est perime`() {
+        // L'horloge avançait d'un jour, puis a été remise à l'heure : croire ce
+        // tirage bloquerait toute épinglée jusqu'à demain.
+        val enAvance = TirageDuJour(20_419, 3)
+
+        assertEquals(
+            TirageDuJour(20_418, 0, epinglee),
+            enAvance.epingler(TirageDuJour(20_418), epinglee, aujourdhui = 20_418),
+        )
     }
 
     @Test
@@ -170,7 +185,7 @@ class TirageStoreTest {
         val relu = avecUnMagasin { magasin, _ ->
             val depuis = TirageDuJour(20_418, 0)
             magasin.modifier { it.apresUnAppui(20_418) }
-            magasin.modifier { it.epingler(depuis, epinglee) }
+            magasin.modifier { it.epingler(depuis, epinglee, aujourdhui = 20_418) }
             magasin.tirage.first()
         }
 
