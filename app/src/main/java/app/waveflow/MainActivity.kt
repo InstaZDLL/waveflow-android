@@ -39,13 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.waveflow.model.AppPreferences
 import app.waveflow.model.Library
@@ -61,11 +58,15 @@ import app.waveflow.ui.home.HomeScreen
 import app.waveflow.ui.home.HomeViewModel
 import app.waveflow.ui.library.LibraryScreen
 import app.waveflow.ui.library.LibraryViewModel
+import app.waveflow.ui.navigation.LibraryTab
 import app.waveflow.ui.navigation.LibraryTabs
 import app.waveflow.ui.navigation.Routes
-import app.waveflow.ui.navigation.TopLevelDestination
 import app.waveflow.ui.navigation.WaveFlowBottomBar
 import app.waveflow.ui.navigation.longArgOf
+import app.waveflow.ui.navigation.openTabAsState
+import app.waveflow.ui.navigation.rememberTabNavController
+import app.waveflow.ui.navigation.selectLibraryTab
+import app.waveflow.ui.navigation.selectTab
 import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.permission.hasAudioPermission
 import app.waveflow.ui.player.MiniPlayerHost
@@ -194,9 +195,12 @@ private fun WaveFlowRoot(
     // ici : chargés à la racine, chaque page reçue recomposerait le Scaffold,
     // le NavHost et tous les écrans.
 
-    val navController = rememberNavController()
+    val navController = rememberTabNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    // L'onglet allumé suit la pile, pas la route : un album ouvert depuis
+    // l'accueil vit dans la pile de l'accueil.
+    val openTab by navController.openTabAsState()
 
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
     var songToAdd by remember { mutableStateOf<Song?>(null) }
@@ -321,16 +325,17 @@ private fun WaveFlowRoot(
                     // ces onglets disent comment on la regarde, pas où l'on est.
                     if (!searchActive) {
                         LibraryTabs(
+                            openTab = openTab,
                             currentRoute = currentRoute,
-                            onSelect = { navController.switchTab(it.route) },
+                            onSelect = navController::selectLibraryTab,
                         )
                     }
                 }
             },
             bottomBar = {
                 WaveFlowBottomBar(
-                    currentRoute = currentRoute,
-                    onSelect = { navController.switchTab(it.route) },
+                    selected = openTab?.destination,
+                    onSelect = navController::selectTab,
                 )
             },
         ) { innerPadding ->
@@ -420,7 +425,7 @@ private fun WaveFlowRoot(
                                 onSearchOnServer = serverState.connected?.let {
                                     {
                                         catalogViewModel.onSearchQueryChange(searchQuery)
-                                        navController.switchTab(Routes.SERVER)
+                                        navController.selectLibraryTab(LibraryTab.Server)
                                     }
                                 },
                             )
@@ -733,18 +738,6 @@ private fun WaveFlowRoot(
             onCreateAndAdd = { name -> playlistsViewModel.createWith(name, song) },
             onDismiss = { songToAdd = null },
         )
-    }
-}
-
-/**
- * Bascule d'onglet : une seule entrée par section dans la pile, et l'état de
- * défilement de chaque onglet est conservé.
- */
-private fun NavHostController.switchTab(route: String) {
-    navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
     }
 }
 

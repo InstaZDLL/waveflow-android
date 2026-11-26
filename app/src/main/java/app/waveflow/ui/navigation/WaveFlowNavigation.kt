@@ -148,14 +148,18 @@ enum class TopLevelDestination(
     Search(Routes.SEARCH, "Recherche", Icons.Filled.Search),
     ;
 
-    /**
-     * Vrai aussi pour les écrans de détail de la section : ouvrir un album
-     * garde la bibliothèque sélectionnée.
-     */
-    fun owns(route: String?): Boolean = when (this) {
-        Home -> route == Routes.HOME
-        Search -> route == Routes.SEARCH
-        Library -> LibraryTab.entries.any { it.owns(route) }
+    companion object {
+        /**
+         * La destination dont [route] est une racine de pile : l'accueil, la
+         * recherche, ou l'une des vues de la bibliothèque. `null` pour toute
+         * autre route — un détail, les réglages — qui ne commence aucune pile.
+         */
+        fun ofRoot(route: String?): TopLevelDestination? = when {
+            route == Routes.HOME -> Home
+            route == Routes.SEARCH -> Search
+            LibraryTab.entries.any { it.route == route } -> Library
+            else -> null
+        }
     }
 }
 
@@ -197,12 +201,12 @@ enum class LibraryTab(val route: String, val label: String) {
  */
 @Composable
 fun WaveFlowBottomBar(
-    currentRoute: String?,
+    selected: TopLevelDestination?,
     onSelect: (TopLevelDestination) -> Unit,
 ) {
     when (WaveFlowTheme.material) {
         WaveFlowMaterial.Fluid -> NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-            BottomBarItems(currentRoute, onSelect)
+            BottomBarItems(selected, onSelect)
         }
 
         WaveFlowMaterial.Liquid -> {
@@ -221,7 +225,7 @@ fun WaveFlowBottomBar(
                         .clip(shape)
                         .border(1.dp, LiquidGlassRim, shape),
                 ) {
-                    BottomBarItems(currentRoute, onSelect)
+                    BottomBarItems(selected, onSelect)
                 }
             }
         }
@@ -230,7 +234,7 @@ fun WaveFlowBottomBar(
 
 @Composable
 private fun RowScope.BottomBarItems(
-    currentRoute: String?,
+    selected: TopLevelDestination?,
     onSelect: (TopLevelDestination) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -247,14 +251,14 @@ private fun RowScope.BottomBarItems(
     )
     val halo = if (liquid) LIQUID_HALO else FLUID_HALO
     TopLevelDestination.entries.forEach { destination ->
-        val selected = destination.owns(currentRoute)
+        val ouvert = destination == selected
         val presence by animateFloatAsState(
-            targetValue = if (selected) 1f else 0f,
+            targetValue = if (ouvert) 1f else 0f,
             animationSpec = WaveFlowTheme.motion.tone(),
             label = "liseré",
         )
         NavigationBarItem(
-            selected = selected,
+            selected = ouvert,
             onClick = { onSelect(destination) },
             icon = { Icon(destination.icon, contentDescription = null) },
             label = {
@@ -342,14 +346,17 @@ private val PLATE_LIFT = 16.dp
  *
  * Des onglets en texte, l'onde sous celui qui est ouvert : c'est le deuxième
  * rôle que le document donne au motif (« the marker of the open tab »).
+ *
+ * Rien n'est composé hors de la bibliothèque ([libraryTabShown]).
  */
 @Composable
 fun LibraryTabs(
+    openTab: OpenTab?,
     currentRoute: String?,
     onSelect: (LibraryTab) -> Unit,
 ) {
-    val selectionne = LibraryTab.entries.indexOfFirst { it.owns(currentRoute) }
-    if (selectionne < 0) return
+    val ouverte = libraryTabShown(openTab, currentRoute) ?: return
+    val selectionne = LibraryTab.entries.indexOf(ouverte)
 
     SecondaryScrollableTabRow(
         selectedTabIndex = selectionne,
@@ -360,13 +367,28 @@ fun LibraryTabs(
     ) {
         LibraryTab.entries.forEach { onglet ->
             MarkedTab(
-                selected = onglet.owns(currentRoute),
+                selected = onglet == ouverte,
                 onClick = { onSelect(onglet) },
                 label = onglet.label,
             )
         }
     }
 }
+
+/**
+ * La vue de la bibliothèque à marquer dans ses sous-onglets, ou `null` quand
+ * ils n'ont pas lieu d'être.
+ *
+ * Il faut deux conditions. La pile ouverte est celle de la bibliothèque : un
+ * album ouvert depuis l'accueil ou la recherche n'y est pas, et ne les montre
+ * pas. Et la route ouverte en est une page : les réglages, ouverts depuis la
+ * bibliothèque, vivent dans sa pile sans en être une vue.
+ *
+ * La vue marquée est celle de la pile, pas celle de la route : un album ouvert
+ * depuis les artistes laisse « Artistes » marqué.
+ */
+fun libraryTabShown(openTab: OpenTab?, currentRoute: String?): LibraryTab? =
+    openTab?.libraryTab?.takeIf { LibraryTab.entries.any { it.owns(currentRoute) } }
 
 /**
  * Un onglet en texte : l'ouvert dans la première encre, les autres dans la
