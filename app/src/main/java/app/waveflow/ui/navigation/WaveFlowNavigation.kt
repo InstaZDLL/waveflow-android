@@ -1,7 +1,6 @@
 package app.waveflow.ui.navigation
 
 import android.net.Uri
-import android.os.Bundle
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -102,27 +101,6 @@ object Routes {
 
     fun serverArtistDetail(artistId: String): String = "$SERVER_ARTISTS/${Uri.encode(artistId)}"
 }
-
-/**
- * L'identifiant entier porté par [key], à condition que la destination courante
- * soit bien [route].
- *
- * Deux routes partagent la même clé d'argument sans partager son type :
- * [Routes.ALBUM_DETAIL] porte un identifiant MediaStore, déclaré `LongType`, et
- * [Routes.SERVER_ALBUM_DETAIL] un UUID, déclaré `StringType`. Lire le second
- * comme le premier ne lève rien : `Bundle.getLong` attrape la
- * `ClassCastException` et rend `0`, que rien ne distingue ensuite d'un
- * identifiant véritable.
- *
- * Le filtre par route est donc ce qui sépare les deux, et il doit précéder la
- * lecture plutôt que la suivre : c'est l'accès lui-même qui coûte.
- *
- * L'absence de la clé rend `null` elle aussi. `getLong` y répondrait encore
- * `0`, et rien ne distingue ce zéro-là d'un autre : autant ne pas rouvrir la
- * porte que le filtre vient de fermer.
- */
-fun Bundle?.longArgOf(currentRoute: String?, route: String, key: String): Long? =
-    this?.takeIf { currentRoute == route && it.containsKey(key) }?.getLong(key)
 
 /**
  * Les trois destinations de la barre du bas.
@@ -403,4 +381,38 @@ fun MarkedTab(selected: Boolean, onClick: () -> Unit, label: String) {
         selectedContentColor = MaterialTheme.colorScheme.onSurface,
         unselectedContentColor = WaveFlowTheme.colors.ink3,
     )
+}
+
+/**
+ * Les pages qui portent leur propre titre : leur en-tête de page
+ * (`DetailHeader`) le dit en affichage, et la barre du haut ne le répète pas.
+ */
+val PAGE_HEADER_ROUTES = setOf(
+    Routes.ALBUM_DETAIL,
+    Routes.ARTIST_DETAIL,
+    Routes.PLAYLIST_DETAIL,
+    Routes.SERVER_ALBUM_DETAIL,
+    Routes.SERVER_ARTIST_DETAIL,
+)
+
+/**
+ * Titre de la barre du haut, ou `null` sur une page qui porte le sien.
+ *
+ * Une page de détail — album, artiste, playlist, locaux ou du serveur — a son
+ * en-tête de page, dont le titre en affichage dit déjà ce qu'on regarde : la
+ * barre n'y garde que le retour et les actions. C'est ce que fait le bureau,
+ * dont la barre du haut ne porte jamais le titre de la page, pas même une fois
+ * l'en-tête sorti de l'écran. Une entité introuvable le dit dans la page.
+ */
+fun topBarTitle(currentRoute: String?): String? = when (currentRoute) {
+    in PAGE_HEADER_ROUTES -> null
+    Routes.HOME -> "Accueil"
+    Routes.SEARCH -> "Recherche"
+    Routes.ALBUMS -> "Albums"
+    Routes.ARTISTS -> "Artistes"
+    Routes.PLAYLISTS -> "Playlists"
+    Routes.SERVER -> "Serveur"
+    Routes.SETTINGS -> "Réglages"
+    Routes.SERVER_ACCOUNT -> "Compte"
+    else -> "WaveFlow"
 }
