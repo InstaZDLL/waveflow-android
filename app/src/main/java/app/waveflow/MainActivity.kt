@@ -715,6 +715,7 @@ private fun WaveFlowRoot(
                 lyrics = lyricsState,
                 onToggleLyrics = playerViewModel::toggleLyrics,
                 onRetryLyrics = playerViewModel::retryLyrics,
+                onLyricsOnScreen = playerViewModel::lyricsOnScreen,
             )
         }
     }

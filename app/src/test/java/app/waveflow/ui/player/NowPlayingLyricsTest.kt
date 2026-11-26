@@ -49,6 +49,9 @@ class NowPlayingLyricsTest {
     /** L'état des paroles comme le ViewModel le tient : la bascule le change. */
     private var paroles by mutableStateOf(LyricsUiState(mediaId = "remote:a"))
 
+    /** Ce que l'écran a dit de la présence de la zone des paroles, dans l'ordre. */
+    private val enVue = mutableListOf<Boolean>()
+
     private fun afficher() {
         compose.setContent {
             WaveFlowTheme {
@@ -77,6 +80,7 @@ class NowPlayingLyricsTest {
                         )
                     },
                     onRetryLyrics = {},
+                    onLyricsOnScreen = { enVue += it },
                 )
             }
         }
@@ -121,6 +125,20 @@ class NowPlayingLyricsTest {
         compose.onNodeWithContentDescription("Vitesse de lecture : ×1").assertIsDisplayed()
         compose.onNodeWithContentDescription("Minuterie de veille").assertIsDisplayed()
         compose.onNodeWithContentDescription("Voir la file — 0 morceau ensuite").assertIsDisplayed()
+        assertEquals(true, paroles.shown)
+    }
+
+    @Test
+    fun `la file qui prend la place des paroles les retire de l'ecran, sans changer le choix`() {
+        afficher()
+        compose.onNodeWithContentDescription("Pochette").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(true), enVue)
+
+        compose.onNodeWithContentDescription("Voir la file — 0 morceau ensuite").performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf(true, false), enVue)
         assertEquals(true, paroles.shown)
     }
 

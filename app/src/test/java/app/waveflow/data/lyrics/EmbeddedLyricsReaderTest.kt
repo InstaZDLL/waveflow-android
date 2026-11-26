@@ -6,9 +6,12 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import app.waveflow.model.Lyrics
 import app.waveflow.model.SyncedLine
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -20,7 +23,9 @@ import java.io.File
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
+import kotlin.coroutines.CoroutineContext
 
 /**
  * La lecture des paroles embarquées de bout en bout : un vrai fichier, le vrai
@@ -45,10 +50,10 @@ class EmbeddedLyricsReaderTest {
      * différé sur son propre fil ; sous Robolectric, l'horloge ne bouge que si
      * on la pousse, et un fichier illisible ne remonterait jamais.
      */
-    private fun lire(fichier: File): Lyrics? {
+    private fun lire(fichier: File, lecteur: EmbeddedLyricsReader = EmbeddedLyricsReader(app)): Lyrics? {
         val lecture = CompletableFuture<Lyrics?>()
         thread {
-            runCatching { runBlocking { EmbeddedLyricsReader(app).read(Uri.fromFile(fichier)) } }
+            runCatching { runBlocking { lecteur.read(Uri.fromFile(fichier)) } }
                 .onSuccess { lecture.complete(it) }
                 .onFailure { lecture.completeExceptionally(it) }
         }
@@ -71,6 +76,31 @@ class EmbeddedLyricsReaderTest {
         }
 
         assertEquals(Lyrics.Synced(listOf(SyncedLine(2_000, "Bonjour"))), lire(mp3))
+    }
+
+    @Test
+    fun `les tags se decodent hors du fil de l'appelant`() {
+        val mp3 = dossier.newFile("ailleurs.mp3").apply {
+            writeBytes(
+                id3v23(
+                    cadre("USLT", byteArrayOf(3) + "fra".toByteArray() + 0 + "Ailleurs".toByteArray()),
+                ) + tramesMp3(),
+            )
+        }
+        val analyse = DispatcherCompte()
+
+        assertEquals(Lyrics.Plain(listOf("Ailleurs")), lire(mp3, EmbeddedLyricsReader(app, analyse)))
+        assertTrue("le décodage n'est pas passé par le fil d'analyse", analyse.envois.get() > 0)
+    }
+
+    /** Le fil de calcul, qui compte ce qu'on lui confie. */
+    private class DispatcherCompte : CoroutineDispatcher() {
+        val envois = AtomicInteger()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            envois.incrementAndGet()
+            Dispatchers.Default.dispatch(context, block)
+        }
     }
 
     @Test

@@ -50,7 +50,15 @@ class LyricsFeed(
     started: SharingStarted,
 ) {
 
+    /** Le choix de l'utilisateur : les paroles à la place de la pochette (P11). */
     private val shown = MutableStateFlow(false)
+
+    /**
+     * La zone des paroles est réellement à l'écran. Le choix [shown] tient quand
+     * la file d'attente prend sa place ou qu'on replie le lecteur ; la zone,
+     * elle, n'y est plus, et rien ne se cherche pour elle (P6).
+     */
+    private val enVue = MutableStateFlow(false)
 
     /** Chaque nouvel essai relance la recherche, même pour le même morceau. */
     private val essais = MutableStateFlow(0)
@@ -63,11 +71,12 @@ class LyricsFeed(
      */
     val state: StateFlow<LyricsUiState> = combine(
         shown,
+        enVue,
         mediaIds.distinctUntilChanged(),
         essais,
-    ) { visibles, mediaId, _ -> visibles to mediaId }
-        .flatMapLatest { (visibles, mediaId) ->
-            if (!visibles || mediaId == null) {
+    ) { visibles, vues, mediaId, _ -> Triple(visibles, vues, mediaId) }
+        .flatMapLatest { (visibles, vues, mediaId) ->
+            if (!visibles || !vues || mediaId == null) {
                 flowOf(LyricsUiState(shown = visibles, mediaId = mediaId))
             } else {
                 flow {
@@ -80,6 +89,11 @@ class LyricsFeed(
 
     /** Remplace la pochette par les paroles, ou l'inverse. */
     fun toggle() = shown.update { !it }
+
+    /** La zone des paroles entre à l'écran, ou en sort. */
+    fun onScreen(visible: Boolean) {
+        enVue.value = visible
+    }
 
     /** Cherche de nouveau, après un serveur qui n'a pas répondu (P17). */
     fun retry() = essais.update { it + 1 }

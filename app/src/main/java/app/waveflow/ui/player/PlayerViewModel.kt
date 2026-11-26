@@ -138,6 +138,9 @@ class PlayerViewModel(
     /** Remplace la pochette par les paroles, ou l'inverse (P11). */
     fun toggleLyrics() = lyricsFeed.toggle()
 
+    /** La zone des paroles entre à l'écran, ou en sort : hors de l'écran, rien ne se cherche (P6). */
+    fun lyricsOnScreen(visible: Boolean) = lyricsFeed.onScreen(visible)
+
     /** Cherche de nouveau les paroles après un serveur muet (P17). */
     fun retryLyrics() = lyricsFeed.retry()
 

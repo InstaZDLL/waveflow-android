@@ -82,7 +82,11 @@ enregistrement : chaque piste n'a qu'une source de paroles, la sienne.
 et le ViewModel demande au `LyricsRepository`. **Rien n'est cherché tant que les
 paroles ne sont pas affichées** : un morceau dont on ne regarde pas les paroles
 ne coûte ni requête ni lecture de fichier. Une fois affichées, les paroles du
-morceau suivant se cherchent à son arrivée.
+morceau suivant se cherchent à son arrivée. Le choix d'afficher les paroles
+(P11) n'y suffit pas : la zone doit être à l'écran. La file ouverte à sa place,
+ou le lecteur replié, suspendent la recherche sans changer le choix.
+
+Le décodage des paroles embarquées ne se fait jamais sur le fil de l'écran.
 
 **P7. Le dépôt garde ce qu'il a trouvé, et ce qu'il n'a pas trouvé.** Par
 `mediaId`, pour les 32 derniers morceaux. Une panne — serveur injoignable,
@@ -112,6 +116,11 @@ dit que la ligne précédente est finie.
 **P10. Un texte sans aucune ligne horodatée est un texte simple.** Les balises
 de P9 en sont retirées, les lignes vides de tête et de queue aussi ; les lignes
 vides du milieu, qui séparent les strophes, restent.
+
+Un texte de plus d'1 Mi caractères ne se lit pas, d'où qu'il vienne : un tag
+embarqué n'a pas de taille plafonnée, et le `.lrc` voisin s'arrête déjà à
+1 Mio (P3). En deçà, la lecture se fait en un seul passage, quel que soit le
+nombre d'horodatages d'une ligne ou de syllabes d'un `SYLT`.
 
 ### L'affichage
 

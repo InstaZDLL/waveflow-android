@@ -47,12 +47,31 @@ class LyricsFeedTest {
         },
     )
 
-    private fun TestScope.flux() = LyricsFeed(
+    /** Le flux, sa zone à l'écran dès que les paroles sont choisies, sauf [enVue] faux. */
+    private fun TestScope.flux(enVue: Boolean = true) = LyricsFeed(
         scope = backgroundScope,
         mediaIds = courant,
         repository = depot,
         started = SharingStarted.Eagerly,
-    )
+    ).also { it.onScreen(enVue) }
+
+    @Test
+    fun `des paroles choisies mais cachees par la file ne se cherchent pas`() = runTest {
+        val flux = flux(enVue = false)
+        flux.toggle()
+        runCurrent()
+        courant.value = "remote:b"
+        runCurrent()
+
+        assertTrue(demandes.isEmpty())
+        // Le choix tient : refermer la file rend les paroles.
+        assertEquals(LyricsUiState(shown = true, mediaId = "remote:b"), flux.state.value)
+
+        flux.onScreen(true)
+        runCurrent()
+        assertEquals(listOf("b"), demandes)
+        assertEquals(LyricsResult.Found(paroles("paroles de b")), flux.state.value.result)
+    }
 
     @Test
     fun `tant que les paroles ne sont pas affichees, rien n'est cherche`() = runTest {
@@ -134,6 +153,7 @@ class LyricsFeedTest {
             repository = depot,
             started = SharingStarted.Eagerly,
         )
+        flux.onScreen(true)
         flux.toggle()
         runCurrent()
 

@@ -35,10 +35,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -94,6 +96,7 @@ fun NowPlayingScreen(
     lyrics: LyricsUiState,
     onToggleLyrics: () -> Unit,
     onRetryLyrics: () -> Unit,
+    onLyricsOnScreen: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Local et non remonté : voir la file est une façon de regarder le lecteur,
@@ -159,6 +162,13 @@ fun NowPlayingScreen(
                 } else if (lyrics.shown) {
                     // Les paroles prennent toute la place de la pochette et de
                     // ses marges : plus de lignes se lisent d'un regard.
+                    // Elles ne se cherchent que tant que cette zone est là :
+                    // la file ouverte ou le lecteur replié l'ôtent (P6).
+                    val signaler by rememberUpdatedState(onLyricsOnScreen)
+                    DisposableEffect(Unit) {
+                        signaler(true)
+                        onDispose { signaler(false) }
+                    }
                     LyricsPane(
                         state = lyrics,
                         trackKey = track.mediaId,

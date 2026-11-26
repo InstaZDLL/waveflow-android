@@ -8,10 +8,12 @@ import app.waveflow.model.SyncedLine
 import com.google.common.collect.ImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.ByteArrayOutputStream
+import kotlin.system.measureTimeMillis
 
 /**
  * Les paroles embarquées, telles que Media3 1.11.1 les rend (`docs/paroles.md`,
@@ -66,6 +68,23 @@ class EmbeddedLyricsTest {
         )
 
         assertEquals(listOf(SyncedLine(1_000, "Bonjour"), SyncedLine(2_000, "le monde")), lignes)
+    }
+
+    /**
+     * 400 000 syllabes sur une seule ligne : recoller la ligne entière à chaque
+     * syllabe prend une demi-minute ; l'assembler dans un tampon, une fraction
+     * de seconde. La durée se mesure ici : Robolectric n'applique pas le
+     * `timeout` de `@Test`.
+     */
+    @Test
+    fun `une ligne SYLT de tres nombreuses syllabes s'assemble en un passage`() {
+        val cadre = sylt(UTF8, MILLISECONDES, List(400_000) { "a" to it } + ("\nfin" to 400_000))
+
+        var lignes: List<SyncedLine>? = null
+        val dureeMs = measureTimeMillis { lignes = decodeSylt(cadre) }
+
+        assertEquals(listOf(400_000, 3), lignes?.map { it.text.length })
+        assertTrue("décodage en $dureeMs ms", dureeMs < 5_000)
     }
 
     @Test

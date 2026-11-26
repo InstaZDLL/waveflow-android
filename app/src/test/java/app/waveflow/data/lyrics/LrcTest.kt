@@ -123,6 +123,23 @@ class LrcTest {
         assertEquals(Lyrics.Plain(listOf("[Chorus: Kanye West]", "Une ligne", "[Intro:Drake]")), paroles)
     }
 
+    /**
+     * Une ligne de 200 000 horodatages, près d'1 Mio, telle qu'un fichier déposé
+     * pour nuire en porterait. Recopier la fin de la ligne à chaque horodatage
+     * prendrait des minutes ; un seul passage, une fraction de seconde.
+     */
+    @Test(timeout = 5_000)
+    fun `une ligne d'horodatages repetes se lit en un passage`() {
+        val paroles = Lrc.parse("[0:0]".repeat(200_000) + "x")
+
+        assertEquals(200_000, (paroles as Lyrics.Synced).lines.size)
+    }
+
+    @Test
+    fun `un texte de plus d'1 Mi caracteres n'est pas lu`() {
+        assertNull(Lrc.parse("[00:01.00]Une ligne\n" + "x".repeat(TEXTE_MAX_CARACTERES)))
+    }
+
     @Test
     fun `rien a lire ne fait pas de paroles`() {
         assertNull(Lrc.parse(""))

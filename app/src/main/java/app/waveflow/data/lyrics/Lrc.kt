@@ -16,8 +16,13 @@ object Lrc {
     /**
      * Les paroles que porte [text], ou `null` s'il n'en porte aucune — vide,
      * blanc, ou fait de balises seulement.
+     *
+     * Un texte de plus de [TEXTE_MAX_CARACTERES] n'en porte pas non plus : un
+     * tag embarqué n'a pas de taille plafonnée, et le `.lrc` voisin s'arrête
+     * déjà à 1 Mio (P3).
      */
     fun parse(text: String): Lyrics? {
+        if (text.length > TEXTE_MAX_CARACTERES) return null
         var decalageMs = 0L
         val synchronisees = mutableListOf<SyncedLine>()
         val simples = mutableListOf<String>()
@@ -54,17 +59,23 @@ object Lrc {
         class Texte(val texte: String) : Ligne
     }
 
+    /**
+     * Les horodatages de tête se lisent en avançant un index dans la ligne,
+     * sans jamais recopier ce qui reste : une ligne de milliers d'horodatages
+     * se lit en un passage.
+     */
     private fun lire(ligne: String): Ligne {
         val instants = mutableListOf<Long>()
-        var reste = ligne
-        var horodatage = HORODATAGE.find(reste)
+        var debut = 0
+        var horodatage = HORODATAGE.matchAt(ligne, debut)
         while (horodatage != null) {
             instants += horodatage.enMillisecondes()
-            reste = reste.substring(horodatage.range.last + 1).trimStart()
-            horodatage = HORODATAGE.find(reste)
+            debut = horodatage.range.last + 1
+            while (debut < ligne.length && ligne[debut].isWhitespace()) debut++
+            horodatage = HORODATAGE.matchAt(ligne, debut)
         }
         if (instants.isNotEmpty()) {
-            return Ligne.Horodatee(instants, reste.replace(HORODATAGE_DE_MOT, "").trim())
+            return Ligne.Horodatee(instants, ligne.substring(debut).replace(HORODATAGE_DE_MOT, "").trim())
         }
 
         val balise = BALISE.matchEntire(ligne)
@@ -83,8 +94,11 @@ object Lrc {
 
     private val BOM = Char(BOM_CODE).toString()
 
-    /** `[mm:ss]`, `[mm:ss.x]` à `[mm:ss.xxx]`, `:` au lieu du point, en tête de ligne. */
-    private val HORODATAGE = Regex("""^\[(\d{1,4}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
+    /**
+     * `[mm:ss]`, `[mm:ss.x]` à `[mm:ss.xxx]`, `:` au lieu du point. Sans ancre :
+     * `matchAt` le cherche exactement là où la lecture en est.
+     */
+    private val HORODATAGE = Regex("""\[(\d{1,4}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
 
     /** Le mot chanté du LRC enrichi : retiré, la ligne seule est suivie. */
     private val HORODATAGE_DE_MOT = Regex("""<\d{1,4}:\d{1,2}(?:[.:]\d{1,3})?>""")
@@ -103,6 +117,9 @@ object Lrc {
 
 /** La marque d'ordre d'octets, que certains éditeurs laissent en tête de texte. */
 internal const val BOM_CODE = 0xFEFF
+
+/** La taille au-delà de laquelle un texte n'est pas lu : 1 Mi caractères, comme le `.lrc` voisin. */
+internal const val TEXTE_MAX_CARACTERES = 1 shl 20
 
 private const val MILLIS_DIGITS = 3
 private const val SECONDS_PER_MINUTE = 60L

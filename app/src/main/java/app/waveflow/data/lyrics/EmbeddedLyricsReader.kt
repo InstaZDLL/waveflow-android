@@ -14,7 +14,10 @@ import app.waveflow.model.SyncedLine
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.concurrent.ExecutionException
@@ -27,8 +30,14 @@ import kotlin.coroutines.resumeWithException
  * Lues par l'extracteur de Media3, celui-là même qui joue le fichier : aucune
  * bibliothèque de tags. [MetadataRetriever] prépare le fichier sans le décoder
  * et rend les métadonnées de chaque piste ; [lyricsOf] y cherche les paroles.
+ *
+ * @param analyse où se décodent les métadonnées rendues : jamais le fil de
+ *   l'appelant, qui est celui de l'écran quand le ViewModel demande.
  */
-class EmbeddedLyricsReader(private val context: Context) {
+class EmbeddedLyricsReader(
+    private val context: Context,
+    private val analyse: CoroutineDispatcher = Dispatchers.Default,
+) {
 
     /**
      * Les paroles du fichier [uri], ou `null` s'il n'en porte pas.
@@ -37,6 +46,10 @@ class EmbeddedLyricsReader(private val context: Context) {
      * n'est pas une panne à montrer, le lecteur dira lui-même s'il ne le joue
      * pas. L'annulation, elle, remonte : la recherche a été abandonnée, pas
      * manquée.
+     *
+     * `MetadataRetriever` garde ses contraintes : il se construit et se ferme
+     * ici, sur le fil de l'appelant, et prépare le fichier sur le sien. Seul le
+     * parcours des métadonnées et leur décodage passent sur [analyse].
      */
     suspend fun read(uri: Uri): Lyrics? {
         val groupes = try {
@@ -48,7 +61,7 @@ class EmbeddedLyricsReader(private val context: Context) {
         } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") illisible: Exception) {
             return null
         }
-        return lyricsOf(groupes.entrees())
+        return withContext(analyse) { lyricsOf(groupes.entrees()) }
     }
 }
 
@@ -179,24 +192,29 @@ internal fun decodeSylt(data: ByteArray): List<SyncedLine>? {
  * ligne à lui seul, comme une ligne horodatée vide d'un LRC : il dit, à son
  * instant, que la ligne précédente est finie. Le fragment qui le suit ouvre une
  * nouvelle ligne, saut de ligne ou non.
+ *
+ * Chaque ligne s'assemble dans un tampon : une ligne de milliers de fragments
+ * ne recopie pas son début à chaque fragment.
  */
 private fun enLignes(fragments: List<SyncedLine>): List<SyncedLine> {
     val syllabique = fragments.drop(1).any { it.text.startsWith('\n') || it.text.startsWith('\r') }
     if (!syllabique) return fragments.map { it.copy(text = it.text.trim()) }
 
-    val lignes = mutableListOf<SyncedLine>()
+    val debuts = mutableListOf<Long>()
+    val textes = mutableListOf<StringBuilder>()
     var fermee = true
     for (fragment in fragments) {
         val marqueur = fragment.text.all { it == '\n' || it == '\r' }
         val ouvre = fermee || marqueur || fragment.text.startsWith('\n') || fragment.text.startsWith('\r')
         if (ouvre) {
-            lignes += fragment
+            debuts += fragment.startMs
+            textes += StringBuilder(fragment.text)
         } else {
-            lignes[lignes.lastIndex] = lignes.last().let { it.copy(text = it.text + fragment.text) }
+            textes.last().append(fragment.text)
         }
         fermee = marqueur
     }
-    return lignes.map { it.copy(text = it.text.trim()) }
+    return debuts.zip(textes) { debut, texte -> SyncedLine(debut, texte.toString().trim()) }
 }
 
 /** Où s'arrête une chaîne terminée, et où commence ce qui la suit. */
