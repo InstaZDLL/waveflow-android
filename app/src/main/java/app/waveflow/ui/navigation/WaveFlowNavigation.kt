@@ -2,20 +2,46 @@ package app.waveflow.ui.navigation
 
 import android.net.Uri
 import android.os.Bundle
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.waveflow.ui.components.WaveMark
+import app.waveflow.ui.theme.LiquidGlassRim
+import app.waveflow.ui.theme.WaveFlowMaterial
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /** Routes de navigation. Les détails portent leur identifiant dans le chemin. */
 object Routes {
@@ -154,22 +180,156 @@ enum class LibraryTab(val route: String, val label: String) {
         route == this.route || route?.startsWith("${this.route}/") == true
 }
 
+/**
+ * La barre du bas : le rail du bureau couché au pied de l'écran.
+ *
+ * L'élément ouvert porte le **liseré d'accent** du rail — un trait de 2 dp au
+ * bord de la barre, au-dessus de son icône, et sous lui la lumière de
+ * l'accent : un halo discret en Fluid, plus franc en Liquid, où le bord est
+ * « la lumière de l'accent, pas une barre ». L'accent n'y est que là : les
+ * libellés restent dans les encres, l'icône ouverte prend l'accent en Liquid
+ * seulement (« the icon in the accent »).
+ *
+ * En Fluid la barre est posée à plat, sur la surface des panneaux. En Liquid
+ * elle flotte, détachée des bords comme le rail du bureau : une plaque de
+ * verre, cernée de sa lumière et portée par une ombre teintée. Les deux
+ * gardent les mêmes trois destinations, dans le même ordre.
+ */
 @Composable
 fun WaveFlowBottomBar(
     currentRoute: String?,
     onSelect: (TopLevelDestination) -> Unit,
 ) {
-    NavigationBar {
-        TopLevelDestination.entries.forEach { destination ->
-            NavigationBarItem(
-                selected = destination.owns(currentRoute),
-                onClick = { onSelect(destination) },
-                icon = { Icon(destination.icon, contentDescription = null) },
-                label = { Text(destination.label) },
-            )
+    when (WaveFlowTheme.material) {
+        WaveFlowMaterial.Fluid -> NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+            BottomBarItems(currentRoute, onSelect)
+        }
+
+        WaveFlowMaterial.Liquid -> {
+            val colors = WaveFlowTheme.colors
+            val shape = WaveFlowTheme.shapes.plate
+            Box(
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = FLOAT_INSET, vertical = FLOAT_GAP),
+            ) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    windowInsets = WindowInsets(0),
+                    modifier = Modifier
+                        .shadow(PLATE_LIFT, shape, ambientColor = colors.glow, spotColor = colors.glow)
+                        .clip(shape)
+                        .border(1.dp, LiquidGlassRim, shape),
+                ) {
+                    BottomBarItems(currentRoute, onSelect)
+                }
+            }
         }
     }
 }
+
+@Composable
+private fun RowScope.BottomBarItems(
+    currentRoute: String?,
+    onSelect: (TopLevelDestination) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val liquid = WaveFlowTheme.material == WaveFlowMaterial.Liquid
+    val ink3 = WaveFlowTheme.colors.ink3
+    val colors = NavigationBarItemDefaults.colors(
+        selectedIconColor = if (liquid) scheme.primary else scheme.onSurface,
+        selectedTextColor = scheme.onSurface,
+        // Le ton derrière l'icône ouverte : un ton blanc en Fluid, un voile
+        // de l'accent en Liquid (12 %, celui du rail du bureau).
+        indicatorColor = if (liquid) scheme.primary.copy(alpha = LIQUID_INDICATOR) else scheme.secondaryContainer,
+        unselectedIconColor = ink3,
+        unselectedTextColor = ink3,
+    )
+    val halo = if (liquid) LIQUID_HALO else FLUID_HALO
+    TopLevelDestination.entries.forEach { destination ->
+        val selected = destination.owns(currentRoute)
+        val presence by animateFloatAsState(
+            targetValue = if (selected) 1f else 0f,
+            animationSpec = WaveFlowTheme.motion.tone(),
+            label = "liseré",
+        )
+        NavigationBarItem(
+            selected = selected,
+            onClick = { onSelect(destination) },
+            icon = { Icon(destination.icon, contentDescription = null) },
+            label = {
+                // Sur une ligne : à police doublée, « Bibliothèque » passait à
+                // la ligne au milieu du mot. Le libellé rapetisse plutôt, sans
+                // jamais dépasser la taille que l'utilisateur a demandée.
+                Text(
+                    text = destination.label,
+                    maxLines = 1,
+                    autoSize = TextAutoSize.StepBased(
+                        minFontSize = LABEL_MIN_SIZE,
+                        maxFontSize = LocalTextStyle.current.fontSize,
+                    ),
+                )
+            },
+            colors = colors,
+            modifier = Modifier.accentEdge(scheme.primary, presence, halo),
+        )
+    }
+}
+
+/**
+ * Le liseré de l'élément ouvert : un trait de l'accent au bord haut, et sous
+ * lui une demi-ellipse de sa lumière qui s'éteint vers l'icône. [presence]
+ * va de 0 à 1 : le liseré se fond d'un élément à l'autre plutôt que de sauter.
+ */
+internal fun Modifier.accentEdge(accent: Color, presence: Float, halo: Float): Modifier = drawWithContent {
+    drawContent()
+    if (presence <= 0f) return@drawWithContent
+    val centre = Offset(size.width / 2f, 0f)
+    val rayon = EDGE_GLOW_RADIUS.toPx()
+    scale(scaleX = 1f, scaleY = EDGE_GLOW_FLATTEN, pivot = centre) {
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to accent.copy(alpha = halo * presence),
+                1f to Color.Transparent,
+                center = centre,
+                radius = rayon,
+            ),
+            radius = rayon,
+            center = centre,
+        )
+    }
+    val demi = EDGE_LENGTH.toPx() / 2f
+    val trait = EDGE_WIDTH.toPx()
+    drawLine(
+        color = accent.copy(alpha = presence),
+        start = Offset(centre.x - demi, trait / 2f),
+        end = Offset(centre.x + demi, trait / 2f),
+        strokeWidth = trait,
+        cap = StrokeCap.Round,
+    )
+}
+
+/** Le liseré : 2 dp, la largeur de l'indicateur sous l'icône. */
+private val EDGE_WIDTH = 2.dp
+private val EDGE_LENGTH = 32.dp
+private val EDGE_GLOW_RADIUS = 36.dp
+private const val EDGE_GLOW_FLATTEN = 0.6f
+
+/** La lumière sous le liseré : discrète en Fluid, la lumière même en Liquid. */
+private const val FLUID_HALO = 0.22f
+private const val LIQUID_HALO = 0.4f
+private const val LIQUID_INDICATOR = 0.12f
+
+/** Le plus petit que puisse devenir un libellé de la barre pour tenir sur une ligne. */
+private val LABEL_MIN_SIZE = 10.sp
+
+/**
+ * La plaque flottante de Liquid : son retrait des bords — celui de la plaque
+ * du mini-lecteur, pour que les deux tombent l'une sur l'autre —, son ombre.
+ */
+private val FLOAT_INSET = 8.dp
+private val FLOAT_GAP = 8.dp
+private val PLATE_LIFT = 16.dp
 
 /**
  * Les sous-onglets de la bibliothèque.
@@ -179,6 +339,9 @@ fun WaveFlowBottomBar(
  *
  * `Secondary` parce qu'ils le sont : la barre du bas dit où l'on est, ceux-ci
  * seulement comment on regarde ce qu'on y trouve.
+ *
+ * Des onglets en texte, l'onde sous celui qui est ouvert : c'est le deuxième
+ * rôle que le document donne au motif (« the marker of the open tab »).
  */
 @Composable
 fun LibraryTabs(
@@ -192,14 +355,30 @@ fun LibraryTabs(
         selectedTabIndex = selectionne,
         edgePadding = 8.dp,
         containerColor = MaterialTheme.colorScheme.surface,
+        indicator = { WaveMark(Modifier.tabIndicatorOffset(selectionne, matchContentSize = true)) },
         divider = {},
     ) {
         LibraryTab.entries.forEach { onglet ->
-            Tab(
+            MarkedTab(
                 selected = onglet.owns(currentRoute),
                 onClick = { onSelect(onglet) },
-                text = { Text(onglet.label) },
+                label = onglet.label,
             )
         }
     }
+}
+
+/**
+ * Un onglet en texte : l'ouvert dans la première encre, les autres dans la
+ * troisième. L'accent n'y est pas — l'onde dessous le porte.
+ */
+@Composable
+fun MarkedTab(selected: Boolean, onClick: () -> Unit, label: String) {
+    Tab(
+        selected = selected,
+        onClick = onClick,
+        text = { Text(label) },
+        selectedContentColor = MaterialTheme.colorScheme.onSurface,
+        unselectedContentColor = WaveFlowTheme.colors.ink3,
+    )
 }

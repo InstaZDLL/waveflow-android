@@ -21,10 +21,18 @@ import kotlinx.coroutines.flow.stateIn
  *
  * @property resume la dernière piste écoutée, s'il en reste une trace et
  *   qu'elle est toujours sur l'appareil.
+ * @property resumeAlbum l'album de [resume], pour « Voir l'album » ; nul s'il
+ *   n'est plus dans la bibliothèque.
+ * @property songCount le nombre de morceaux sur l'appareil, pour la ligne de
+ *   compteurs de l'accueil.
+ * @property albumCount le nombre d'albums, même usage.
  */
 data class HomeUiState(
     val isLoading: Boolean = true,
     val resume: Song? = null,
+    val resumeAlbum: Album? = null,
+    val songCount: Int = 0,
+    val albumCount: Int = 0,
     val recentlyPlayed: List<Song> = emptyList(),
     val recentlyAdded: List<Album> = emptyList(),
 ) {
@@ -57,9 +65,13 @@ class HomeViewModel(
             localSongIdOf(entree.mediaId)?.let { library.songsById[it] }
         }
 
+        val reprise = ecoutees.firstOrNull()
         HomeUiState(
             isLoading = library.isLoading,
-            resume = ecoutees.firstOrNull(),
+            resume = reprise,
+            resumeAlbum = reprise?.let { library.album(it.albumId) },
+            songCount = library.songs.size,
+            albumCount = library.albums.size,
             // La reprise occupe déjà la première : la répéter juste en dessous
             // ferait doublon.
             recentlyPlayed = ecoutees.drop(1).take(RECENTES),
@@ -72,7 +84,9 @@ class HomeViewModel(
     companion object {
         private const val HISTORIQUE = 21
         private const val RECENTES = 20
-        private const val AJOUTS = 12
+
+        /** Ce que tient la mosaïque de l'accueil : une tuile de tête et cinq autres. */
+        private const val AJOUTS = 6
         private const val ARRET_MS = 5_000L
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {

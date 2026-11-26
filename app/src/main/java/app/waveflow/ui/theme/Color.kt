@@ -70,6 +70,12 @@ val FluidHairline = Color(0x12FFFFFF)
 /** `hairline-strong` — blanc 12 %, translucide : l'anneau d'une puce, d'un champ. */
 val FluidHairlineStrong = Color(0x1FFFFFFF)
 
+/**
+ * `tone-2` — blanc 6 %, translucide : le fond d'une pilule secondaire (« ghost
+ * pill »). Translucide, il éclaircit d'autant ce sur quoi il est posé.
+ */
+val FluidGhost = Color(0x0FFFFFFF)
+
 /** `accent-ink` — l'encre posée sur l'accent. */
 val FluidAccentInk = Color(0xFF0B0B0E)
 
@@ -158,3 +164,17 @@ val LiquidLavenderDeep = Color(0xFF7C6AD6)
 
 /** Le liseré du verre : la lumière que prend le bord d'une plaque, blanc 80 %. */
 val LiquidGlassRim = Color(0xCCFFFFFF)
+
+/**
+ * Le filet de lumière sur le bord haut de l'action principale en Liquid
+ * (« inset 0 1px 0 rgb(255 255 255 / 0.35) »), blanc 35 %.
+ */
+val GlassTopLight = Color(0x59FFFFFF)
+
+// ── Communs aux deux matières ───────────────────────────────────────────────
+
+/**
+ * La pastille sous l'icône d'une pilule d'accent (`.fe-cta__icon`), noir
+ * 14 % : elle assombrit l'accent, quel qu'il soit, sans nouvelle couleur.
+ */
+val AccentIconShade = Color(0x24000000)

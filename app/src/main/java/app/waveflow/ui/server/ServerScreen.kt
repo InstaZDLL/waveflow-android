@@ -8,22 +8,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.TextObfuscationMode
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,16 +30,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
@@ -49,8 +45,12 @@ import app.waveflow.model.StreamNetwork
 import app.waveflow.model.StreamQuality
 import app.waveflow.ui.cache.CacheSection
 import app.waveflow.ui.cache.CacheUiState
+import app.waveflow.ui.components.AccentPill
+import app.waveflow.ui.components.GhostPill
+import app.waveflow.ui.components.Kicker
 import app.waveflow.ui.quality.StreamQualitySection
 import app.waveflow.ui.quality.StreamQualityUiState
+import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
  * Ouverture d'une session serveur.
@@ -117,6 +117,10 @@ fun ServerAccountScreen(
     }
 }
 
+/**
+ * La page, alignée à gauche comme les autres : sa marge, et sous elle la
+ * réserve du mini-lecteur.
+ */
 @Composable
 private fun ScrollableColumn(
     modifier: Modifier,
@@ -124,13 +128,35 @@ private fun ScrollableColumn(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
-            .padding(top = 32.dp, bottom = bottomPadding + 32.dp),
+            .padding(top = 16.dp, bottom = bottomPadding + 32.dp),
         content = content,
+    )
+}
+
+/**
+ * L'en-tête d'une page du compte : le surtitre, le titre en affichage, une
+ * ligne de méta. L'icône de nuage dans sa pastille est partie : la direction
+ * retire les boîtes d'icônes colorées, le surtitre et le titre portent la page.
+ */
+@Composable
+private fun AccountHeader(kicker: String, title: String, meta: String) {
+    Kicker(kicker)
+    Spacer(Modifier.height(10.dp))
+    Text(
+        text = title,
+        style = MaterialTheme.typography.displaySmall,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.semantics { heading() },
+    )
+    Spacer(Modifier.height(14.dp))
+    Text(
+        text = meta,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -141,29 +167,21 @@ private fun ConnectionForm(
 ) {
     // `rememberSaveable` : une rotation ne doit pas vider un formulaire à
     // moitié rempli. Le mot de passe en est exclu — il ne part pas dans l'état
-    // sauvegardé, qui survit au processus.
+    // sauvegardé, qui survit au processus : son état est un simple `remember`,
+    // et non `rememberTextFieldState`, qui le sauvegarderait.
     var serverUrl by rememberSaveable { mutableStateOf("") }
     var username by rememberSaveable { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    val password = remember { TextFieldState() }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
 
     fun submit() {
-        if (!state.isConnecting) onConnect(serverUrl, username, password)
+        if (!state.isConnecting) onConnect(serverUrl, username, password.text.toString())
     }
 
-    Icon(
-        imageVector = Icons.Filled.Cloud,
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.size(56.dp),
-    )
-    Spacer(Modifier.height(16.dp))
-    Text("Se connecter à un serveur", style = MaterialTheme.typography.headlineSmall)
-    Spacer(Modifier.height(8.dp))
-    Text(
-        text = "Votre bibliothèque locale reste inchangée.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    AccountHeader(
+        kicker = "Serveur",
+        title = "Se connecter à un serveur",
+        meta = "Votre bibliothèque locale reste inchangée.",
     )
     Spacer(Modifier.height(32.dp))
 
@@ -198,16 +216,17 @@ private fun ConnectionForm(
     )
     Spacer(Modifier.height(12.dp))
 
-    OutlinedTextField(
-        value = password,
-        onValueChange = { password = it },
+    // Le champ sécurisé de Compose remplace `PasswordVisualTransformation`,
+    // déprécié par Compose 1.13. Masqué, il ne montre aucun caractère, pas même
+    // le dernier tapé : rien ne change pour l'utilisateur.
+    OutlinedSecureTextField(
+        state = password,
         label = { Text("Mot de passe") },
-        singleLine = true,
         enabled = !state.isConnecting,
-        visualTransformation = if (passwordVisible) {
-            VisualTransformation.None
+        textObfuscationMode = if (passwordVisible) {
+            TextObfuscationMode.Visible
         } else {
-            PasswordVisualTransformation()
+            TextObfuscationMode.Hidden
         },
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Password,
@@ -215,7 +234,7 @@ private fun ConnectionForm(
         ),
         // « Terminé » doit valider : proposer l'action puis ne rien en faire
         // oblige à revenir chercher le bouton.
-        keyboardActions = KeyboardActions(onDone = { submit() }),
+        onKeyboardAction = { submit() },
         trailingIcon = {
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                 Icon(
@@ -249,30 +268,30 @@ private fun ConnectionForm(
         )
     }
 
-    Spacer(Modifier.height(24.dp))
-    Button(
+    Spacer(Modifier.height(28.dp))
+    AccentPill(
+        text = if (state.isConnecting) "Connexion…" else "Se connecter",
         onClick = { submit() },
         enabled = !state.isConnecting,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        if (state.isConnecting) {
-            CircularProgressIndicator(
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(12.dp))
-            Text("Connexion…")
+        trailing = if (state.isConnecting) {
+            {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    color = LocalContentColor.current,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         } else {
-            Text("Se connecter")
-        }
-    }
+            null
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
 
     Spacer(Modifier.height(16.dp))
     Text(
         text = "Sans schéma, l'adresse est jointe en HTTPS.",
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = WaveFlowTheme.colors.ink3,
     )
 }
 
@@ -281,31 +300,16 @@ private fun ConnectedAccount(
     session: ServerSession.Connected,
     onDisconnect: () -> Unit,
 ) {
-    Icon(
-        imageVector = Icons.Filled.CloudDone,
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.size(56.dp),
-    )
-    Spacer(Modifier.height(16.dp))
-    Text(session.username, style = MaterialTheme.typography.headlineSmall)
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = session.serverUrl,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    AccountHeader(kicker = "Compte", title = session.username, meta = session.serverUrl)
 
-    Spacer(Modifier.height(32.dp))
+    Spacer(Modifier.height(20.dp))
     Text(
         text = "Le catalogue de ce serveur est consultable depuis l'onglet Serveur, " +
             "et ses pistes se lisent comme celles de l'appareil.",
         style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = WaveFlowTheme.colors.ink3,
     )
 
-    Spacer(Modifier.height(32.dp))
-    OutlinedButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth()) {
-        Text("Se déconnecter")
-    }
+    Spacer(Modifier.height(24.dp))
+    GhostPill(text = "Se déconnecter", onClick = onDisconnect)
 }

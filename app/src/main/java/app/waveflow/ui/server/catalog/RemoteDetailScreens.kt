@@ -1,10 +1,14 @@
 package app.waveflow.ui.server.catalog
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,7 +26,12 @@ import app.waveflow.playback.mediaId
 import app.waveflow.ui.albumCountLabel
 import app.waveflow.ui.browse.DetailHeader
 import app.waveflow.ui.components.CenteredMessage
+import app.waveflow.ui.components.CoverTile
+import app.waveflow.ui.components.CoverTileMinWidth
 import app.waveflow.ui.components.MediaRow
+import app.waveflow.ui.components.TileGutter
+import app.waveflow.ui.components.TileRowSpacing
+import app.waveflow.ui.components.TileSpacing
 import app.waveflow.ui.formatDuration
 import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
@@ -50,6 +59,7 @@ fun RemoteAlbumDetailScreen(
                 // maintenir un second une fois la lecture distante branchée.
                 DetailHeader(
                     artworkUri = detail.album.artworkUri,
+                    kicker = "Album",
                     title = detail.album.title,
                     subtitle = detail.album.artist.orUnknownArtist(),
                     trackCount = detail.songs.size,
@@ -81,26 +91,37 @@ fun RemoteArtistDetailScreen(
     bottomPadding: Dp = 0.dp,
 ) {
     DetailContainer(state = state, onRetry = onRetry, modifier = modifier) { detail ->
-        LazyColumn(
-            contentPadding = PaddingValues(bottom = bottomPadding),
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = CoverTileMinWidth),
+            contentPadding = PaddingValues(start = TileGutter, end = TileGutter, bottom = bottomPadding + TileGutter),
+            horizontalArrangement = Arrangement.spacedBy(TileSpacing),
+            verticalArrangement = Arrangement.spacedBy(TileRowSpacing),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item {
-                // Sans boutons, contrairement à l'album : le détail d'un artiste
-                // rend ses albums, pas ses pistes. Proposer « Lecture » ici
-                // demanderait de charger chaque album d'abord.
-                RemoteArtistHeader(
+            item(key = "entete", span = { GridItemSpan(maxLineSpan) }) {
+                // Sans pilules, contrairement à l'album : le détail d'un
+                // artiste rend ses albums, pas ses pistes. Proposer « Lecture »
+                // ici demanderait de charger chaque album d'abord. La grille a
+                // déjà sa marge : l'en-tête ne la redouble pas.
+                DetailHeader(
                     artworkUri = detail.artist.artworkUri,
-                    name = detail.artist.name,
-                    summary = albumCountLabel(detail.artist.albumCount ?: detail.albums.size),
+                    kicker = "Artiste",
+                    title = detail.artist.name,
+                    subtitle = albumCountLabel(detail.artist.albumCount ?: detail.albums.size),
+                    trackCount = null,
+                    durationMs = 0L,
+                    onPlay = null,
+                    onShuffle = {},
+                    artworkShape = WaveFlowTheme.shapes.portrait,
+                    margins = PaddingValues(top = 16.dp, bottom = 28.dp),
                 )
             }
 
             items(detail.albums, key = { it.id }) { album ->
-                MediaRow(
+                CoverTile(
                     artworkUri = album.artworkUri,
                     title = album.title,
-                    subtitle = album.year?.toString().orEmpty(),
+                    subtitle = album.year?.toString(),
                     onClick = { onAlbumClick(album) },
                 )
             }
@@ -139,27 +160,6 @@ private fun <T> DetailContainer(
             )
         }
     }
-}
-
-/**
- * En-tête d'un artiste distant.
- *
- * Volontairement dépourvu de commandes : le détail d'un artiste rend ses
- * albums et non ses pistes, il n'y a donc pas de file à lancer.
- */
-@Composable
-private fun RemoteArtistHeader(
-    artworkUri: android.net.Uri?,
-    name: String,
-    summary: String,
-) {
-    MediaRow(
-        artworkUri = artworkUri,
-        title = name,
-        subtitle = listOf("Artiste", summary).filter { it.isNotBlank() }.joinToString(" · "),
-        artworkShape = WaveFlowTheme.shapes.portrait,
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 @Composable

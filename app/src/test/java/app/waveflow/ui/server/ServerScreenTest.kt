@@ -1,10 +1,12 @@
 package app.waveflow.ui.server
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -13,7 +15,9 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.ServerSession
 import app.waveflow.model.StreamNetwork
@@ -160,9 +164,9 @@ class ServerScreenTest {
 
     @Test
     fun `l'affichage du mot de passe se demande et se reprend`() {
-        // Le masquage lui-même est une transformation visuelle : l'arbre de
-        // sémantique porte le texte brut dans les deux cas, et ne peut donc pas
-        // en témoigner. Ce qui s'y voit, c'est l'état de la bascule.
+        // L'arbre de sémantique porte le texte brut dans les deux cas : il ne
+        // témoigne que de l'état de la bascule. Le masquage lui-même se lit
+        // dans la mise en page du champ, voir le test qui suit.
         afficher(ServerUiState())
         compose.onNodeWithText("Mot de passe").performTextInput("secret")
 
@@ -171,6 +175,39 @@ class ServerScreenTest {
 
         compose.onNodeWithContentDescription("Masquer le mot de passe").performClick()
         compose.onNodeWithContentDescription("Afficher le mot de passe").assertIsDisplayed()
+    }
+
+    @Test
+    fun `le mot de passe reste masque tant qu'on ne demande pas a le voir`() {
+        // La sémantique porte le texte brut, masqué ou non : ce qui
+        // témoigne, c'est le texte que le champ met en page à l'écran.
+        afficher(ServerUiState())
+        compose.onNodeWithText("Mot de passe").performTextInput("secret")
+
+        assertEquals("••••••", texteAffiche(champ = 2))
+
+        compose.onNodeWithContentDescription("Afficher le mot de passe").performClick()
+        assertEquals("secret", texteAffiche(champ = 2))
+    }
+
+    /** Le texte que le [champ]-ième champ de saisie de l'écran a mis en page. */
+    private fun texteAffiche(champ: Int): String {
+        val noeud = compose.onAllNodes(hasSetTextAction(), useUnmergedTree = true)[champ].fetchSemanticsNode()
+        val mises = mutableListOf<TextLayoutResult>()
+        noeud.config[SemanticsActions.GetTextLayoutResult].action?.invoke(mises)
+        return mises.single().layoutInput.text.text
+    }
+
+    @Test
+    fun `terminer depuis le clavier valide le formulaire`() {
+        afficher(ServerUiState())
+
+        compose.onNodeWithText("Adresse du serveur").performTextInput("musique.test")
+        compose.onNodeWithText("Identifiant").performTextInput("admin")
+        compose.onNodeWithText("Mot de passe").performTextInput("secret")
+        compose.onNodeWithText("Mot de passe").performImeAction()
+
+        assertEquals(listOf(Triple("musique.test", "admin", "secret")), connexions)
     }
 
     @Test

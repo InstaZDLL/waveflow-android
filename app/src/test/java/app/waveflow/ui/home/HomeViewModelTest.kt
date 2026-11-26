@@ -179,4 +179,48 @@ class HomeViewModelTest {
             val etat = vue.state.first { !it.isLoading }
             assertEquals(listOf(20L, 30L, 10L), etat.recentlyAdded.map { it.id })
         }
+
+    @Test
+    fun `la reprise mene a son propre album et l'accueil compte la bibliotheque`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Deux albums : « Voir l'album » doit ouvrir celui de la reprise,
+            // pas le premier venu.
+            val magasin = LibraryStore(
+                FakeMusicRepository(
+                    flowOf(listOf(song(1, albumId = 10), song(2, albumId = 10), song(3, albumId = 20))),
+                ),
+                backgroundScope,
+            )
+            magasin.load()
+
+            val vue = HomeViewModel(libraryStore = magasin, history = FakeHistory(listOf(ecoute("local:3", 300))))
+            advanceUntilIdle()
+
+            val etat = vue.state.first { !it.isLoading }
+            assertEquals(20L, etat.resumeAlbum?.id)
+            assertEquals(3, etat.songCount)
+            assertEquals(2, etat.albumCount)
+        }
+
+    @Test
+    fun `la mosaique des ajouts ne retient que six albums`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val magasin = LibraryStore(
+                FakeMusicRepository(
+                    flowOf((1L..8L).map { song(it, albumId = it * 10, addedAtMs = it) }),
+                ),
+                backgroundScope,
+            )
+            magasin.load()
+
+            val vue = HomeViewModel(libraryStore = magasin, history = FakeHistory(emptyList()))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(80L, 70L, 60L, 50L, 40L, 30L),
+                vue.state.first {
+                    !it.isLoading
+                }.recentlyAdded.map { it.id },
+            )
+        }
 }

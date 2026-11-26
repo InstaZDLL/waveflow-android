@@ -90,8 +90,9 @@ fun PlaylistDetailScreen(
         item(key = HEADER_KEY) {
             DetailHeader(
                 artworkUri = working.firstOrNull()?.artworkUri,
+                kicker = "Playlist",
                 title = playlist.name,
-                subtitle = "Playlist",
+                subtitle = null,
                 trackCount = working.size,
                 durationMs = working.sumOf { it.durationMs },
                 onPlay = onPlay,
