@@ -97,6 +97,10 @@ pic écrit en pourcentage — compte pour absent, le tag du flux prenant le rela
 - Un nombre s'écrit comme le bureau le lit (`f64::from_str`) : signe, chiffres,
   point décimal, exposant. L'hexadécimal (`0x1p3`) et un suffixe de type
   (`2.5d`), que Kotlin accepterait, sont écartés.
+- Une valeur de plus de 64 caractères, espaces et unité compris, est écartée
+  sans être lue : aucun outil n'écrit un nombre aussi long, et un tag arrive
+  sans borne sur le fil de lecture. La lecture d'un nombre reste linéaire en sa
+  longueur. Écart assumé : le bureau n'a pas cette borne.
 - Quand un fichier porte les deux, `REPLAYGAIN_*` l'emporte sur `R128_*`.
 - Un pic est linéaire, strictement positif et au plus 4 : `0`, un négatif,
   `120` ou du texte sont écartés.

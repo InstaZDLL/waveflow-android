@@ -6,10 +6,12 @@ import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.extractor.metadata.vorbis.VorbisComment
 import com.google.common.collect.ImmutableList
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.system.measureTimeMillis
 
 /**
  * La lecture des tags, avec les vecteurs des tests du scanner du bureau
@@ -90,6 +92,40 @@ class TagsReplayGainTest {
     // ---------------------------------------------------------------------
     // Ce que l'extracteur de Media3 range dans le Format (G1)
     // ---------------------------------------------------------------------
+
+    /** G3 : la borne de longueur, et ce qu'elle laisse passer. */
+    @Test
+    fun `une valeur plus longue qu'un nombre ecrit par un outil est ecartee`() {
+        val longue = "0." + "1".repeat(TagsReplayGain.LONGUEUR_MAX)
+        assertNull(avec("REPLAYGAIN_TRACK_GAIN" to longue).gainDb)
+        assertNull(avec("REPLAYGAIN_TRACK_PEAK" to longue).pic)
+        assertNull(avec("R128_TRACK_GAIN" to "0".repeat(TagsReplayGain.LONGUEUR_MAX) + "256").gainDb)
+        // Un double écrit en entier passe toujours.
+        assertEquals(-6.123456789012345, avec("REPLAYGAIN_TRACK_GAIN" to "-6.123456789012345 dB").gainDb)
+    }
+
+    /**
+     * La lecture d'un décimal ne revient pas sur ses pas : avec `\d+\.?\d*`,
+     * cinquante mille chiffres suivis d'un `x` prenaient une quinzaine de
+     * secondes, chaque découpage essayé avant le refus. Linéaire, c'est une
+     * milliseconde.
+     */
+    @Test
+    fun `un long faux nombre se refuse en temps lineaire`() {
+        val faux = "1".repeat(50_000) + "x"
+        val duree = measureTimeMillis { assertFalse(TagsReplayGain.estUnDecimal(faux)) }
+        assertTrue("$duree ms", duree < 1_000)
+    }
+
+    /** Ce que la remarque de revue décrivait : un tag fabriqué ne retient pas le fil de lecture. */
+    @Test
+    fun `une valeur de plusieurs centaines de milliers de chiffres est refusee vite`() {
+        val faux = "1".repeat(300_000) + "x"
+        val duree = measureTimeMillis {
+            assertEquals(GainDePiste(), avec("REPLAYGAIN_TRACK_GAIN" to faux, "REPLAYGAIN_TRACK_PEAK" to faux))
+        }
+        assertTrue("$duree ms", duree < 1_000)
+    }
 
     @Test
     fun `un cadre TXXX d'un MP3 porte le gain`() {

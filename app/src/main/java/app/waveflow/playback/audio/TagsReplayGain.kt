@@ -53,10 +53,10 @@ internal object TagsReplayGain {
     /**
      * Un gain textuel : un décimal signé, suivi ou non de `dB` dans n'importe
      * quelle casse, entouré ou non d'espaces. Écarté au-delà de
-     * ±[GAIN_PLAUSIBLE_MAX_DB].
+     * ±[GAIN_PLAUSIBLE_MAX_DB], ou plus long que [LONGUEUR_MAX].
      */
     fun lireGainDb(brut: String): Double? {
-        val nettoye = brut.trim()
+        val nettoye = brut.courte()?.trim() ?: return null
         val nombre = if (nettoye.endsWith("db", ignoreCase = true)) {
             nettoye.dropLast(2).trimEnd()
         } else {
@@ -70,7 +70,7 @@ internal object TagsReplayGain {
      * rapport à −18 LUFS pour s'aligner sur le reste.
      */
     fun lireGainR128Db(brut: String): Double? {
-        val q78 = brut.trim().toIntOrNull() ?: return null
+        val q78 = brut.courte()?.trim()?.toIntOrNull() ?: return null
         val valeur = q78 / Q78 + R128_VERS_REPLAYGAIN_LU
         return valeur.takeIf { abs(it) <= GAIN_PLAUSIBLE_MAX_DB }
     }
@@ -79,7 +79,7 @@ internal object TagsReplayGain {
      * Un pic linéaire. Zéro est écarté avec les négatifs : il donnerait une marge
      * infinie, et un fichier silencieux n'a de toute façon rien à limiter.
      */
-    fun lirePic(brut: String): Double? = brut.trim().toDoubleDecimal()?.let(::picPlausible)
+    fun lirePic(brut: String): Double? = brut.courte()?.trim()?.toDoubleDecimal()?.let(::picPlausible)
 
     /**
      * Un gain, s'il est vraisemblable : fini et d'au plus ±[GAIN_PLAUSIBLE_MAX_DB].
@@ -112,10 +112,30 @@ internal object TagsReplayGain {
      * refuse. `NaN` et `inf`, que les deux acceptent, ne passent pas ici ; le
      * bureau les écarte plus loin comme non finis, l'issue est la même.
      */
-    private fun String.toDoubleDecimal(): Double? =
-        takeIf { DECIMAL.matches(it) }?.toDoubleOrNull()
+    private fun String.toDoubleDecimal(): Double? = takeIf(::estUnDecimal)?.toDoubleOrNull()
 
-    private val DECIMAL = Regex("""[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?""")
+    /**
+     * Ce texte s'écrit-il comme un décimal du bureau ? La partie entière et la
+     * partie fractionnaire ne se disputent aucun chiffre : `\d+(\.\d*)?`, pas
+     * `\d+\.?\d*`, où chaque découpage d'une suite de chiffres serait essayé
+     * avant le refus — un temps quadratique en sa longueur.
+     */
+    internal fun estUnDecimal(texte: String): Boolean = DECIMAL.matches(texte)
+
+    private val DECIMAL = Regex("""[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?""")
+
+    /**
+     * Ce texte, s'il est assez court pour être une valeur de ReplayGain. Un tag
+     * n'a pas de longueur bornée et se lit sur le fil de lecture : un texte plus
+     * long n'est pas un nombre qu'un outil aurait écrit, on ne le lit pas.
+     */
+    private fun String.courte(): String? = takeIf { it.length <= LONGUEUR_MAX }
+
+    /**
+     * La plus longue valeur lue, espaces et unité compris. Un double écrit en
+     * entier, `-6.123456789012345 dB`, en compte 21.
+     */
+    internal const val LONGUEUR_MAX = 64
 
     /** Au-delà, c'est un tag cassé ou mal lu : on l'écarte plutôt que de le confier au mixeur. */
     private const val GAIN_PLAUSIBLE_MAX_DB = 60.0
