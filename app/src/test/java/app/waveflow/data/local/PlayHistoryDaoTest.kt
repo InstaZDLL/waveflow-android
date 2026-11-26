@@ -98,4 +98,19 @@ class PlayHistoryDaoTest {
 
         assertEquals(2, dao.observeRecent(limit = 2).first().size)
     }
+
+    @Test
+    fun `la suggestion du jour ne lit que l'appareil, la plus recente d'abord, bornee`() = runTest {
+        // S8 et S17 de `docs/suggestion-du-jour.md`.
+        dao.record("local:1", playedAtMs = 100L)
+        dao.record("remote:uuid-a", playedAtMs = 900L)
+        dao.record("local:2", playedAtMs = 300L)
+        dao.record("local:3", playedAtMs = 200L)
+
+        assertEquals(
+            listOf("local:2", "local:3", "local:1"),
+            dao.observeLocal(limit = 10).first().map { it.mediaId },
+        )
+        assertEquals(listOf("local:2", "local:3"), dao.observeLocal(limit = 2).first().map { it.mediaId })
+    }
 }

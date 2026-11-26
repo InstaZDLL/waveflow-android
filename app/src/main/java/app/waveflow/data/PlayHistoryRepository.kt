@@ -27,6 +27,9 @@ interface PlayHistoryRepository {
     fun observeRecent(limit: Int): Flow<List<PlayHistoryEntry>>
 
     fun observeMostPlayed(limit: Int): Flow<List<PlayHistoryEntry>>
+
+    /** Les pistes de l'appareil seulement, la plus récemment écoutée d'abord. */
+    fun observeLocal(limit: Int): Flow<List<PlayHistoryEntry>>
 }
 
 class RoomPlayHistoryRepository(
@@ -41,6 +44,9 @@ class RoomPlayHistoryRepository(
 
     override fun observeMostPlayed(limit: Int): Flow<List<PlayHistoryEntry>> =
         dao.observeMostPlayed(limit).enEntrees()
+
+    override fun observeLocal(limit: Int): Flow<List<PlayHistoryEntry>> =
+        dao.observeLocal(limit).enEntrees()
 
     /**
      * Traduit les lignes, et ne laisse pas une lecture en échec traverser.

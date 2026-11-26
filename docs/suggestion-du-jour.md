@@ -90,8 +90,9 @@ MediaStore ne date pas n'a pas de raison.
 *disponible* quand elle est dans la bibliothèque chargée. Les lignes
 `remote:` de l'historique sont ignorées, comme partout sur l'accueil : il
 faudrait redemander chaque piste au catalogue du serveur, et l'accueil ne parle
-qu'à l'appareil — il s'affiche hors ligne comme connecté. Tant que la
-bibliothèque se charge, il n'y a pas de bande.
+qu'à l'appareil — il s'affiche hors ligne comme connecté. Pendant un
+rechargement du MediaStore, la bibliothèque garde ses morceaux, et la bande
+reste.
 
 ### L'épinglage
 
@@ -124,7 +125,8 @@ bibliothèque vide n'a rien à proposer, et un cadre vide se lit comme une panne
 **S14. La bande se pose sous le canevas**, avant les ajouts récents, comme sur le
 bureau : le surtitre « Suggestion du jour », la sorte dans la voix éditoriale,
 le titre, l'artiste et l'album (tu quand il porte le nom du morceau), la raison
-en troisième encre, puis « Écouter » et « Une autre suggestion ».
+en troisième encre, puis « Écouter » et, comme le bureau en français, « Autre
+suggestion ».
 
 **S15. Les mots d'une suggestion ne changent pas dans la journée.** Chaque sorte
 a trois tournures, chaque raison deux ou trois, celles du bureau en français. La

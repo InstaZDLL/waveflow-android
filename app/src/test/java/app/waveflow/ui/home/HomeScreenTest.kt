@@ -12,6 +12,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.waveflow.model.Album
 import app.waveflow.model.Song
+import app.waveflow.suggestion.SorteDeSuggestion
 import app.waveflow.testing.song
 import app.waveflow.ui.theme.WaveFlowTheme
 import org.junit.Assert.assertEquals
@@ -62,6 +63,7 @@ class HomeScreenTest {
                     state = HomeUiState(isLoading = false, resume = song(1)),
                     onSongClick = {},
                     onAlbumClick = {},
+                    onAnotherSuggestion = {},
                     now = { maintenant },
                 )
             }
@@ -104,6 +106,7 @@ class HomeScreenTest {
                     state = HomeUiState(isLoading = false, resume = reprise, resumeAlbum = album, songCount = 1),
                     onSongClick = { joues += it },
                     onAlbumClick = { ouverts += it },
+                    onAnotherSuggestion = {},
                     now = { LocalDateTime.of(2026, 11, 25, 21, 0) },
                 )
             }
@@ -116,6 +119,61 @@ class HomeScreenTest {
 
         assertEquals(listOf(reprise), joues)
         assertEquals(listOf(album), ouverts)
+    }
+
+    @Test
+    fun `la bande dit la suggestion et ses deux actions repondent`() {
+        val piste = song(7, title = "Strange Fruit", artist = "Billie Holiday", album = "Lady Day")
+        val joues = mutableListOf<Song>()
+        var autres = 0
+        compose.setContent {
+            WaveFlowTheme {
+                HomeScreen(
+                    state = HomeUiState(
+                        isLoading = false,
+                        suggestion = SuggestionBand(
+                            song = piste,
+                            kind = SorteDeSuggestion.Oubliee,
+                            kindLabel = "Vous l'adoriez",
+                            reason = "4 écoutes · dernière écoute en août 2026",
+                        ),
+                    ),
+                    onSongClick = { joues += it },
+                    onAlbumClick = {},
+                    onAnotherSuggestion = { autres++ },
+                )
+            }
+        }
+
+        compose.onNodeWithText("SUGGESTION DU JOUR").assertExists()
+        compose.onNodeWithText("Vous l'adoriez").assertExists()
+        compose.onNodeWithText("Strange Fruit").assertExists()
+        compose.onNodeWithText("4 écoutes · dernière écoute en août 2026").assertExists()
+        compose.onNodeWithText("Écouter").performClick()
+        compose.onNodeWithText("Autre suggestion").performClick()
+
+        // S16 : « Écouter » joue comme un appui sur un morceau de l'accueil.
+        assertEquals(listOf(piste), joues)
+        assertEquals(1, autres)
+    }
+
+    @Test
+    fun `sans suggestion il n'y a pas de bande`() {
+        compose.setContent {
+            WaveFlowTheme {
+                HomeScreen(
+                    state = HomeUiState(isLoading = false, resume = song(1)),
+                    onSongClick = {},
+                    onAlbumClick = {},
+                    onAnotherSuggestion = {},
+                    now = { LocalDateTime.of(2026, 11, 25, 10, 0) },
+                )
+            }
+        }
+
+        // La page est bien là ; la bande seule manque.
+        compose.onNodeWithText("Bonjour").assertExists()
+        compose.onNodeWithText("SUGGESTION DU JOUR").assertDoesNotExist()
     }
 
     /** Un cycle de vie qu'un test mène à la main, comme une activité qui passe au fond. */
@@ -135,6 +193,7 @@ class HomeScreenTest {
                         state = HomeUiState(isLoading = false, resume = song(1)),
                         onSongClick = {},
                         onAlbumClick = {},
+                        onAnotherSuggestion = {},
                         now = { LocalDateTime.of(2026, 11, 25, heure, 0) },
                     )
                 }
@@ -162,6 +221,7 @@ class HomeScreenTest {
                     state = HomeUiState(isLoading = false, recentlyAdded = albums),
                     onSongClick = {},
                     onAlbumClick = {},
+                    onAnotherSuggestion = {},
                 )
             }
         }
