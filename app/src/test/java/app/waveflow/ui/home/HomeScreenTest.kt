@@ -41,6 +41,42 @@ class HomeScreenTest {
     }
 
     @Test
+    fun `la prochaine frontiere du salut est 5 h, 18 h, 23 h ou minuit`() {
+        fun le(jour: Int, h: Int, m: Int = 0) = LocalDateTime.of(2026, 11, jour, h, m)
+
+        assertEquals(le(25, 5), nextGreetingChange(le(25, 1, 30)))
+        assertEquals(le(25, 18), nextGreetingChange(le(25, 5)))
+        assertEquals(le(25, 18), nextGreetingChange(le(25, 17, 59)))
+        assertEquals(le(25, 23), nextGreetingChange(le(25, 18)))
+        // Après 23 h, c'est la date qui change ensuite.
+        assertEquals(le(26, 0), nextGreetingChange(le(25, 23, 30)))
+    }
+
+    @Test
+    fun `une page restee ouverte change de salut au passage de 18 h`() {
+        var maintenant = LocalDateTime.of(2026, 11, 25, 17, 59, 30)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            WaveFlowTheme {
+                HomeScreen(
+                    state = HomeUiState(isLoading = false, resume = song(1)),
+                    onSongClick = {},
+                    onAlbumClick = {},
+                    now = { maintenant },
+                )
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("Bonjour").assertExists()
+
+        // Trente secondes plus tard, sans quitter la page ni la mettre au fond.
+        maintenant = LocalDateTime.of(2026, 11, 25, 18, 0)
+        compose.mainClock.advanceTimeBy(HALF_MINUTE_MS)
+
+        compose.onNodeWithText("Bonsoir").assertExists()
+    }
+
+    @Test
     fun `la ligne de compteurs donne la date puis la bibliotheque`() {
         assertEquals(
             "mercredi 25 novembre · 1 titre · 12 albums",
@@ -134,3 +170,6 @@ class HomeScreenTest {
         compose.onNodeWithText("Album 2").assertWidthIsEqualTo(160.dp)
     }
 }
+
+/** De 17 h 59 min 30 s à 18 h, plus une image pour recomposer. */
+private const val HALF_MINUTE_MS = 30_100L

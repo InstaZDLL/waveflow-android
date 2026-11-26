@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,8 @@ import app.waveflow.ui.player.rememberPlayerLight
 import app.waveflow.ui.theme.WaveFlowMaterial
 import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
+import kotlinx.coroutines.delay
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -106,6 +109,15 @@ fun HomeScreen(
         maintenant = horloge()
         onPauseOrDispose {}
     }
+    // Relue aussi quand le salut ou la date doivent changer alors que la page
+    // reste ouverte : l'attente court jusqu'à la prochaine frontière, puis
+    // repart de la nouvelle heure. Une heure relue égale à l'ancienne ne
+    // relance rien.
+    LaunchedEffect(maintenant) {
+        delay(Duration.between(maintenant, nextGreetingChange(maintenant)).toMillis())
+        val apres = horloge()
+        maintenant = apres
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -151,6 +163,18 @@ internal fun greetingFor(hour: Int): String = when (hour) {
     in MORNING until EVENING -> "Bonjour"
     in EVENING until NIGHT -> "Bonsoir"
     else -> "Bonne nuit"
+}
+
+/**
+ * Le prochain instant, strictement après [now], où le salut ou la date
+ * changent : 5 h, 18 h, 23 h, ou minuit.
+ */
+internal fun nextGreetingChange(now: LocalDateTime): LocalDateTime {
+    val jour = now.toLocalDate()
+    return listOf(MORNING, EVENING, NIGHT)
+        .map { heure -> jour.atTime(heure, 0) }
+        .plus(jour.plusDays(1).atStartOfDay())
+        .first { it.isAfter(now) }
 }
 
 /** La ligne de compteurs sous le salut : la date, les morceaux, les albums. */
