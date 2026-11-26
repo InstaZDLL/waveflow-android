@@ -4,18 +4,17 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-11-25**, fin de la vague 2, sur `main` = `75f2d94`.
+Dernière mise à jour : **2026-11-26**, fin de la vague 3, sur `main` = `32ab9a0`.
 
 ## État du dépôt
 
-- `main` = `75f2d94`. **Les vagues 1 et 2 sont fusionnées en entier** (vague 2 :
-  #91, #92, #93) ; aucune PR ouverte.
-- **640 tests verts** sur `main`, CI verte (workflow `Build & test`, ~4 min).
-- **Deux avertissements de compilation**, alors que la propriété du dépôt est qu'il n'y en a aucun :
-  `PasswordVisualTransformation`, déprécié par Compose 1.13, dans
-  `ServerScreen`, qui part avec la recomposition des écrans (**#79**). L'ancien
-  `Slider` et l'ancien `ListItem` sont partis avec #78, `Timeline.Period.set`
-  avec la #85. **Ils ne se voient pas sur un build tiède** :
+- `main` = `32ab9a0`. **Les vagues 1 à 3 sont fusionnées en entier** (vague 3 :
+  #94, #100, #101) ; aucune PR ouverte. **Les six lots de la refonte v2 sont
+  livrés.**
+- **848 tests verts** sur `main`, CI verte (workflow `Build & test`, ~4 min).
+- **Zéro avertissement de compilation**, la propriété du dépôt : les deux
+  derniers (`PasswordVisualTransformation` dans `ServerScreen`) sont tombés avec
+  #94. **Un avertissement ne se voit pas sur un build tiède** :
   `checks.sh avertissements` de la skill `wa-worker` recompile Kotlin, avec un
   `--rerun` **après chaque tâche** (il ne vaut que pour celle qui le précède).
   Voir aussi le piège `textReport` plus bas.
@@ -23,9 +22,9 @@ Dernière mise à jour : **2026-11-25**, fin de la vague 2, sur `main` = `75f2d9
   Robolectric 4.18.1, Compose BOM 2026.11.01. **`compileSdk` 37.1** (exigé par
   Compose 1.13, #76), `targetSdk` 36.
 - Baseline Detekt : 16 entrées. **Elle ne doit que rétrécir.**
-- **Tout le reste à faire est suivi en issues, étiquetées par vague** (`vague: 1`
-  à `vague: 3`) — voir « Le mode orchestration ». Cette note dit le pourquoi ;
-  les issues disent le quoi.
+- **Tout le reste à faire est suivi en issues** — voir « Le mode
+  orchestration ». Cette note dit le pourquoi ; les issues disent le quoi.
+  Aucune n'est encore rangée dans une vague 4.
 
 ## Le mode orchestration (depuis le 24/11)
 
@@ -76,8 +75,18 @@ vague, l'utilisateur teste l'APK d'intégration, puis viennent les MR et les PR.
    coupure réseau pendant un transcodage (#60), qui réutilise la relance du 429 ·
    l'ordre aléatoire perturbé par une relance (#86).~~ **Faite le 25/11** — voir
    « Ce que la vague 2 a livré ».
-3. Recomposition des écrans (#79) · les paroles (#81, lot 5) · ReplayGain et
-   égaliseur en Kotlin (#82, lot 6).
+3. ~~Recomposition des écrans (#79) · les paroles (#81, lot 5) · ReplayGain et
+   égaliseur en Kotlin (#82, lot 6).~~ **Faite le 26/11** — voir « Ce que la
+   vague 3 a livré ».
+
+**Ouvertes, hors vague** (relevées pendant l'essai de l'APK de la vague 3, le
+26/11) : la suggestion du jour sur l'accueil, à porter de
+`waveflow_core::home_suggestion` (**#95**) ; l'onglet « Bibliothèque » allumé
+pour un album ouvert depuis l'accueil (**#96**) ; le titre d'une page de détail
+répété dans la barre du haut (**#97**) ; la boîte d'icône colorée de « Nouvelle
+playlist » (**#98**) ; une première écoute de plus de 20 s qui n'est pas notée
+(**#99**, à trier : `DELAI_ECOUTE_MS`). Une vague 4 ne se trace qu'à la demande
+de l'utilisateur.
 
 À côté : la validation sur appareil (#61), avec l'utilisateur, et F-Droid (#32).
 
@@ -121,11 +130,97 @@ Six lots, dans cet ordre :
    inachevé (#52), retrait du grisé (#53), déplacement dans un morceau
    transcodé (#54), le 429 (#89), le profil *Automatique* (#91), la reprise
    après une coupure et l'ordre aléatoire (#93)
-5. Paroles
-6. Audio avancé (EQ, ReplayGain, gapless, sortie)
+5. Paroles — **fait** (#101)
+6. Audio avancé — **fait pour l'EQ et le ReplayGain** (#100) ; le gapless reste
+   celui de Media3 (non réimplémenté), le passthrough AC-3/DTS n'est pas traité
 
 Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait deux
 lecteurs ou une chaîne audio maison.
+
+## Ce que la vague 3 a livré (26/11)
+
+Trois PR pour trois issues, mêmes étapes que les vagues 1 et 2 : intégration
+locale sans conflit (829 tests, zéro avertissement), APK d'intégration validé par
+l'utilisateur sur l'émulateur, `wa-reviewer`, CodeRabbit sur GitLab, puis
+Greptile sur GitHub — qui a rendu **trois tours de remarques de sécurité**
+successifs sur #100 et #101, tous justes (voir plus bas).
+
+**PR #94 — l'accueil et les écrans selon la DA 2.0 (#79).** `PageParts` (surtitre,
+titre souligné de l'onde, pilules) et `Tiles` (tuiles d'album et d'artiste, liseré
+et ombre teintée en clair). L'accueil prend le canevas du bureau : salut, compteurs,
+dernière écoute en grand titre, mosaïque des ajouts récents. Le salut change de
+lui-même à l'heure du palier suivant (`nextGreetingChange`), et pas seulement au
+retour au premier plan. `DetailHeader` recomposé sert les cinq pages de détail ;
+Albums, Artistes et le catalogue passent en grilles, pagination comprise.
+`OutlinedSecureTextField` remplace `PasswordVisualTransformation`. **Laissée de
+côté** : la suggestion du jour, faute de l'algorithme (#95). **Deux pièges** : le
+`Surface(onClick)` de material3 ne pose pas `Role.Button`, une pilule doit le
+poser ; le masquage d'un champ sécurisé se lit sous Robolectric par
+`GetTextLayoutResult`, la sémantique portant le texte brut.
+`fillMaxWidth(f).widthIn(max)` ne plafonne rien.
+
+**PR #101 — les paroles synchronisées (#81, lot 5).** Un appui sur la pochette
+les montre. Piste locale : tags du fichier (USLT et SYLT décodés à la main, Media3
+les rendant en cadres bruts ; Vorbis `LYRICS` ; MP4 `©lyr`), puis le `.lrc`
+voisin, **sans réseau** (décision du 25/11). Piste du serveur : la première
+feuille de `/api/v2/tracks/{id}/lyrics` ; seul un 404 vaut absence. Règles P1 à
+P19 dans `docs/paroles.md`. **Plafonds posés après Greptile** : 1 Mio par trame,
+1 Mio de paroles décodées par fichier (décodage paresseux, arrêt au premier
+synchronisé), `Lrc.lire` sans copie dans la boucle (`Regex.matchAt` à index
+mobile), analyse hors du fil principal. Ce qui ne se devine pas :
+- **`MetadataRetriever` vit dans `media3-inspector`** en 1.11.1 (dépendance
+  ajoutée) ; sous Robolectric, un fichier illisible n'aboutit qu'en poussant
+  l'horloge.
+- **`MediaController` en pause** n'accepte une position déplacée que datée
+  *strictement après* le dernier play ou pause ; sous Robolectric l'horloge figée
+  met les deux à la même milliseconde, il faut l'avancer entre les deux.
+- **Compose 1.13** : `PageUp`/`PageDown` et l'action `ScrollBy` du lecteur d'écran
+  défilent par `NestedScrollScope.scrollBy`, sans `DragInteraction`, et trop vite
+  pour qu'un `snapshotFlow` sur `isScrollInProgress` le voie. Le parcours manuel
+  se détecte donc dans le défilement imbriqué (P15).
+- `advanceUntilIdle()` ne fait pas tourner `backgroundScope` ; `runCurrent()` oui.
+
+**Non vérifié** : le `.lrc` voisin sur Android 11 à 15 (vu sur 16 et 17 avec la
+seule permission audio ; un refus le rendrait muet), MP4 et Ogg sur un vrai
+fichier, une piste du serveur à l'écran.
+
+**PR #100 — ReplayGain et égaliseur à six bandes (#82, lot 6)**, portés de
+`replay_gain.rs` et `eq.rs` avec leurs vecteurs de test. Deux `AudioProcessor`
+dans le `DefaultAudioSink`, ReplayGain puis EQ, en flottant entre les deux ;
+ReplayGain actif par défaut en mode Automatique (gain d'album quand on écoute un
+disque, approximation consignée en G7). EQ par pas de 0,1 dB comme le bureau.
+Règles dans `docs/audio-avance.md`. Ce qui ne se devine pas :
+- un `AudioProcessor` connaît sa piste par le `periodUid` du
+  `flush(StreamMetadata)`, et les tags ne se voient qu'au `configure` de la
+  sortie : le gain se retient là, et bascule à la frontière en enchaînement ;
+- le saut des silences de Media3 refuse tout sauf le 16 bits : le dernier
+  traitement maison rend du 16 bits ;
+- un `Slider` material3 1.5 sans crans avance au clavier d'un centième de sa
+  course ; cacher les crans, c'est `drawTick = {}` sur le `Track`, pas
+  `steps = 0` ;
+- une bande au-delà de Nyquist est neutre (le bureau rééchantillonne avant l'EQ,
+  Media3 non).
+**Plafond posé après Greptile** : une valeur de tag de plus de 64 caractères est
+écartée, et la regex décimale est réécrite sans retour arrière quadratique
+(`\d+\.?\d*` faisait se disputer les mêmes chiffres par ses deux moitiés).
+**Non vérifié** : rien n'a été *entendu* (Robolectric ne décode pas l'audio), le
+gapless et la bascule du gain sur appareil, et si les transcodages du serveur
+recopient les tags.
+
+**Leçons de méthode.**
+- **Toute donnée lue d'un fichier ou du réseau veut un plafond** — longueur d'une
+  valeur, taille d'une trame, budget total — et **pas de `substring` ni de
+  concaténation dans une boucle**. Greptile l'a trouvé trois fois de suite, chaque
+  correctif découvrant le chemin voisin. À demander d'emblée dans les briefs.
+- **Une entrée de la baseline Detekt est indexée sur la signature** : ajouter un
+  paramètre à une fonction listée la fait sauter, et la règle se rallume.
+- **Ne jamais restaurer un retrait par `git checkout`** quand le correctif n'est
+  pas encore commité : on efface le correctif avec. Restaurer depuis une copie.
+- **Un fil CodeRabbit corrigé peut rester ouvert** et retenir l'approbation : y
+  répondre en citant le commit suffit à le faire fermer.
+- Sur la Fedora, `emu.sh start` lancé sous `timeout` tue l'émulateur avec lui :
+  le lancer en arrière-plan. Une boucle `until ! pgrep -f checks.sh` se trouve
+  elle-même et ne finit jamais : attendre un PID.
 
 ## Ce que la vague 2 a livré (25/11)
 
