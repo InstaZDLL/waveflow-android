@@ -169,6 +169,15 @@ class TirageStoreTest {
     }
 
     @Test
+    fun `un tirage fait pour un jour pas encore arrive ne s'ecrit pas`() {
+        // Tiré pour le 20 419, l'horloge est revenue au 20 418 avant l'écriture :
+        // l'écrire effacerait les trois appuis du jour.
+        val duJour = TirageDuJour(20_418, 3)
+
+        assertEquals(duJour, duJour.epingler(TirageDuJour(20_419), epinglee, aujourdhui = 20_418))
+    }
+
+    @Test
     fun `un tirage date d'un jour pas encore arrive est perime`() {
         // L'horloge avançait d'un jour, puis a été remise à l'heure : croire ce
         // tirage bloquerait toute épinglée jusqu'à demain.

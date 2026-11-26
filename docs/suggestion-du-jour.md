@@ -47,8 +47,9 @@ depuis le 1ᵉʳ janvier 1970 de la **date locale** (`LocalDate.toEpochDay`), pa
 de la date UTC — comme `localDayIndex` du bureau. Il se lit sur une **horloge
 injectée** ; à minuit, un accueil resté ouvert passe de lui-même à la suggestion
 du nouveau jour, sans attendre un retour au premier plan. Le fuseau est relu à
-chaque lecture de l'horloge : après un changement de fuseau, le jour suit au
-plus tard à la prochaine bascule ou au prochain retour sur l'accueil.
+chaque lecture de l'horloge, et l'attente de minuit dure une heure au plus :
+après un changement de fuseau ou d'heure, le jour suit dans l'heure.
+« Autre suggestion » vaut pour le jour que la bande montre.
 
 **S3. Le tirage est stable.** Parmi les `n` pistes de la courte liste, le rang
 tiré est `splitmix64(graine) mod n`, la graine mêlant le jour, le nombre d'appuis
@@ -69,7 +70,7 @@ premiers du classement, comme les requêtes du bureau (`POOL_LIMIT`).
 **S5. *Oubliée* : écoutée au moins 3 fois, et pas depuis 60 jours.** Classée
 par nombre d'écoutes décroissant, puis la dernière écoute la plus ancienne
 d'abord, puis l'identifiant de la piste. La raison dit le nombre d'écoutes et le
-mois de la dernière.
+mois de la dernière ; sans l'un ou l'autre (un fichier abîmé), pas de raison.
 
 **S6. *Dans l'esprit* : un morceau d'un artiste écouté ces deux dernières
 semaines, qu'on n'a pas entendu depuis 30 jours.** Les artistes récents sont les
@@ -114,14 +115,17 @@ sur l'état affiché : deux appuis rapides valent deux appuis. Un nouveau tirage
 s'écrit que si le fichier porte encore le jour, le nombre d'appuis et l'épinglée
 d'après lesquels il a été fait : un appui arrivé entre le tirage et son écriture
 n'est pas écrasé par elle, pas plus qu'un tirage du lendemain — fait juste après
-minuit — par celui de la veille.
+minuit — par celui de la veille. Un tirage daté d'un jour que l'horloge n'a pas
+encore atteint, d'un côté comme de l'autre, est tenu pour périmé : enregistré, il
+ne bloque rien ; à écrire, il ne s'écrit pas.
 
 **S12. Une écriture en échec ne fait rien tomber.** Elle est notée au journal, et
 retentée au calcul suivant. La bande garde ce qu'elle montre : l'accueil retient
 aussi en mémoire la suggestion qu'il a tirée pour ce jour et ce nombre d'appuis,
 et la préfère tant qu'il vit — sans quoi la piste suggérée, une fois écoutée, ne
-serait plus tirée. « Autre suggestion » reste sans effet tant que le fichier
-refuse d'écrire.
+serait plus tirée —, sauf quand le fichier porte une épinglée pour ce jour et ce
+nombre d'appuis : celle-là passe avant. « Autre suggestion » reste sans effet
+tant que le fichier refuse d'écrire.
 
 ### L'affichage
 

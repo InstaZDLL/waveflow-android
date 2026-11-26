@@ -38,9 +38,17 @@ fun raisonDe(suggestion: Suggestion, jour: Long, essais: Int, fuseau: ZoneId): S
     val choix = Choix(jour, essais, suggestion.song.id)
     val raison = suggestion.raison
     return when (suggestion.sorte) {
-        SorteDeSuggestion.Oubliee -> raison.ecoutes?.let { ecoutes ->
-            val quand = raison.derniereEcouteMs?.let { MOIS_ANNEE.enDate(it, fuseau) }.orEmpty()
-            choix.parmi(RAISONS_OUBLIEE, SEL_OUBLIEE)(ecoutes, quand)
+        // Les deux tournures disent le mois : sans lui, pas de raison plutôt
+        // qu'une phrase qui s'arrête sur « en ». Le cas ne vient que d'un
+        // fichier abîmé, le tirage écrivant toujours les deux.
+        SorteDeSuggestion.Oubliee -> {
+            val ecoutes = raison.ecoutes
+            val derniere = raison.derniereEcouteMs
+            if (ecoutes != null && derniere != null) {
+                choix.parmi(RAISONS_OUBLIEE, SEL_OUBLIEE)(ecoutes, MOIS_ANNEE.enDate(derniere, fuseau))
+            } else {
+                null
+            }
         }
         SorteDeSuggestion.DansLEsprit -> raison.artisteAncre?.let {
             choix.parmi(RAISONS_DANS_L_ESPRIT, SEL_DANS_L_ESPRIT)(it)

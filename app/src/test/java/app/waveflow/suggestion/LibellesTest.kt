@@ -57,6 +57,14 @@ class LibellesTest {
     }
 
     @Test
+    fun `une oubliee sans date n'a pas de raison`() {
+        // Un fichier abîmé : plutôt rien qu'une phrase qui s'arrête sur « en ».
+        val sansDate = Suggestion(Oubliee, song(1), Raison(ecoutes = 4))
+
+        assertNull(raisonDe(sansDate, jour = 20_000, essais = 0, fuseau = ZoneOffset.UTC))
+    }
+
+    @Test
     fun `dans l'esprit nomme l'artiste recent`() {
         fun raison(id: Long) = raisonDe(
             Suggestion(DansLEsprit, song(id), Raison(artisteAncre = "Nina Simone")),

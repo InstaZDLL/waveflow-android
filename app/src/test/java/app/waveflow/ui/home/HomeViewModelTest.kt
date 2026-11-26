@@ -8,7 +8,9 @@ import app.waveflow.data.TirageStore
 import app.waveflow.data.local.PlayHistoryDao
 import app.waveflow.data.local.PlayHistoryEntity
 import app.waveflow.model.Song
+import app.waveflow.suggestion.Raison
 import app.waveflow.suggestion.SorteDeSuggestion
+import app.waveflow.suggestion.SuggestionEpinglee
 import app.waveflow.suggestion.TirageDuJour
 import app.waveflow.testing.FakeMusicRepository
 import app.waveflow.testing.MainDispatcherRule
@@ -193,6 +195,56 @@ class HomeViewModelTest {
             val garde = tirages.flux.value!!
             assertEquals(JOUR_DU_26, garde.jour)
             assertEquals(1, garde.essais)
+        }
+
+    @Test
+    fun `un fuseau change pendant l'attente de minuit est rattrape dans l'heure`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Midi en UTC : minuit est à douze heures. Passé à UTC+14, il est
+            // déjà 2 h le lendemain ; la bande ne doit pas attendre midi.
+            var fuseau: ZoneId = ZoneOffset.UTC
+            val debut = Instant.parse("2026-11-26T12:00:00Z")
+            val horloge = object : Clock() {
+                override fun getZone(): ZoneId = fuseau
+                override fun withZone(zone: ZoneId?): Clock = this
+                override fun instant(): Instant = debut.plusMillis(testScheduler.currentTime)
+            }
+            val tirages = FakeTirageStore()
+            val vue = accueil(bibliotheque(song(1), song(2)), FakeHistory(emptyList()), tirages, horloge)
+            backgroundScope.launch { vue.state.collect {} }
+            runCurrent()
+            assertEquals(JOUR_DU_26, tirages.flux.value?.jour)
+
+            fuseau = ZoneOffset.ofHours(14)
+            advanceTimeBy(HEURE_MS + 1)
+            runCurrent()
+
+            assertEquals(JOUR_DU_26 + 1, tirages.flux.value?.jour)
+        }
+
+    @Test
+    fun `l'epinglee relue apres une lecture en echec passe avant celle tiree entre-temps`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Au démarrage, la lecture du fichier échoue et rend « aucun tirage » :
+            // l'accueil en tire un. Puis la lecture reprend et rend l'épinglée du
+            // matin, qui doit rester.
+            val tirages = FakeTirageStore()
+            val pistes = (1L..30L).map { song(it, addedAtMs = it) }.toTypedArray()
+            val vue = accueil(bibliotheque(*pistes), FakeHistory(emptyList()), tirages)
+            backgroundScope.launch { vue.state.collect {} }
+            runCurrent()
+            val tiree = vue.state.value.suggestion!!.song.id
+            val duMatin = if (tiree == 1L) 2L else 1L
+
+            tirages.flux.value = TirageDuJour(
+                JOUR_DU_26,
+                0,
+                SuggestionEpinglee(SorteDeSuggestion.JamaisEcoutee, duMatin, Raison(ecoutesArtiste = 0, ajouteeMs = 1)),
+            )
+            runCurrent()
+
+            assertEquals(duMatin, vue.state.value.suggestion?.song?.id)
+            assertEquals(duMatin, tirages.flux.value?.epinglee?.songId)
         }
 
     @Test
@@ -426,5 +478,6 @@ class HomeViewModelTest {
         val LE_26_NOVEMBRE_10H: Instant = Instant.parse("2026-11-26T10:00:00Z")
         val JOUR_DU_26: Long = LocalDate.of(2026, 11, 26).toEpochDay()
         const val MINUTE_MS = 60_000L
+        const val HEURE_MS = 3_600_000L
     }
 }

@@ -146,7 +146,12 @@ class HomeViewModel(
         // Pendant un rechargement, la bibliothèque garde ses morceaux : la
         // bande reste. Au premier chargement, elle est vide et rien n'est tiré.
         val depuis = enregistre.pour(jour)
-        val effectif = tenu?.takeIf { it.jour == depuis.jour && it.essais == depuis.essais } ?: depuis
+        // Une épinglée enregistrée passe avant celle tenue en mémoire : après une
+        // lecture en échec, qui rend « aucun tirage », la mémoire a pu en tirer
+        // une autre, et l'épinglée relue ensuite doit rester.
+        val effectif = tenu?.takeIf {
+            depuis.epinglee == null && it.jour == depuis.jour && it.essais == depuis.essais
+        } ?: depuis
         val tiree = suggestionDuJour(effectif, library, ecoutes, horloge.millis())
         val aEpingler = tiree?.epinglee()?.takeIf { it != depuis.epinglee }
         if (aEpingler != null) tenu = depuis.copy(epinglee = aEpingler)
@@ -269,17 +274,22 @@ internal fun horlogeDuSysteme(): Clock = object : Clock() {
 /**
  * Le jour du calendrier local (S2), émis à nouveau à chaque minuit.
  *
- * L'attente court jusqu'au prochain minuit **de l'horloge**, puis le jour est
- * relu : une attente qui finirait un peu tôt relit le même jour, que
- * `distinctUntilChanged` tait, et repart pour le reste.
+ * L'attente court jusqu'au prochain minuit **de l'horloge**, une heure au plus,
+ * puis le jour est relu : un jour relu égal au précédent, que
+ * `distinctUntilChanged` tait, fait repartir pour le reste. Le plafond rattrape
+ * un fuseau ou une heure changés pendant l'attente, que `delay` ignore : il
+ * attend une durée, pas une échéance.
  */
 internal fun joursDe(horloge: Clock): Flow<Long> = flow {
     while (true) {
         val maintenant = ZonedDateTime.now(horloge)
         emit(maintenant.toLocalDate().toEpochDay())
-        delay(Duration.between(maintenant, prochainMinuit(maintenant)).toMillis())
+        delay(minOf(Duration.between(maintenant, prochainMinuit(maintenant)).toMillis(), RELECTURE_MAX_MS))
     }
 }.distinctUntilChanged()
+
+/** Une heure : l'accueil se réveille au plus 24 fois par jour, et seulement affiché. */
+private const val RELECTURE_MAX_MS = 3_600_000L
 
 /**
  * Le prochain minuit après [maintenant], dans son fuseau. Un jour qui ne commence

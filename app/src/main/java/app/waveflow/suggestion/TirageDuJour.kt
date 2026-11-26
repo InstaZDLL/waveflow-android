@@ -42,6 +42,9 @@ fun TirageDuJour?.apresUnAppui(jour: Long): TirageDuJour {
 fun TirageDuJour?.epingler(depuis: TirageDuJour, nouvelle: SuggestionEpinglee, aujourdhui: Long): TirageDuJour? {
     val courant = this?.takeIf { it.jour <= aujourdhui }
     return when {
+        // Tiré pour un jour que l'horloge, revenue en arrière, n'a pas encore
+        // atteint : l'écrire effacerait les appuis du jour.
+        depuis.jour > aujourdhui -> this
         // [pour] tiendrait pour périmé un tirage du lendemain comme un tirage d'hier.
         courant != null && courant.jour > depuis.jour -> courant
         courant.pour(depuis.jour) == depuis -> depuis.copy(epinglee = nouvelle)
