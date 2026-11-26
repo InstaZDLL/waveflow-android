@@ -46,7 +46,9 @@ bibliothèque neuve n'a pas de favori oublié). C'est `kind_order` du bureau.
 depuis le 1ᵉʳ janvier 1970 de la **date locale** (`LocalDate.toEpochDay`), pas
 de la date UTC — comme `localDayIndex` du bureau. Il se lit sur une **horloge
 injectée** ; à minuit, un accueil resté ouvert passe de lui-même à la suggestion
-du nouveau jour, sans attendre un retour au premier plan.
+du nouveau jour, sans attendre un retour au premier plan. Le fuseau est relu à
+chaque lecture de l'horloge : après un changement de fuseau, le jour suit au
+plus tard à la prochaine bascule ou au prochain retour sur l'accueil.
 
 **S3. Le tirage est stable.** Parmi les `n` pistes de la courte liste, le rang
 tiré est `splitmix64(graine) mod n`, la graine mêlant le jour, le nombre d'appuis
@@ -111,11 +113,15 @@ seule écriture faite sur ce que le fichier contient au moment d'écrire, et non
 sur l'état affiché : deux appuis rapides valent deux appuis. Un nouveau tirage ne
 s'écrit que si le fichier porte encore le jour, le nombre d'appuis et l'épinglée
 d'après lesquels il a été fait : un appui arrivé entre le tirage et son écriture
-n'est pas écrasé par elle.
+n'est pas écrasé par elle, pas plus qu'un tirage du lendemain — fait juste après
+minuit — par celui de la veille.
 
-**S12. Une écriture en échec ne fait rien tomber.** Elle est notée au journal ;
-la bande garde ce qu'elle montre, le tirage étant stable (S3), et « Une autre
-suggestion » reste sans effet tant que le fichier refuse d'écrire.
+**S12. Une écriture en échec ne fait rien tomber.** Elle est notée au journal, et
+retentée au calcul suivant. La bande garde ce qu'elle montre : l'accueil retient
+aussi en mémoire la suggestion qu'il a tirée pour ce jour et ce nombre d'appuis,
+et la préfère tant qu'il vit — sans quoi la piste suggérée, une fois écoutée, ne
+serait plus tirée. « Autre suggestion » reste sans effet tant que le fichier
+refuse d'écrire.
 
 ### L'affichage
 
@@ -162,7 +168,8 @@ Le vecteur de `vibe_distance` n'est pas repris : voir l'écart E3.
 *dans* les 14 derniers jours ; Android ne sait que la dernière écoute de chaque
 piste. S6 compte donc les pistes de l'artiste écoutées dans la fenêtre — une
 écoute au moins chacune, ce qui minore le compte du bureau sans en changer
-l'idée.
+l'idée. Et seulement les pistes encore sur l'appareil, pour S6 comme pour les
+écoutes d'artiste de S7 : d'un fichier effacé, on ne sait plus l'artiste.
 
 **E2. Une écoute compte à 20 secondes, et un morceau sauté n'est pas noté.** Le
 bureau compte une écoute à 15 secondes ou au bout du morceau, et note aussi les

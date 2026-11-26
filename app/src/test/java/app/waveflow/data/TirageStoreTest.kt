@@ -158,6 +158,14 @@ class TirageStoreTest {
     }
 
     @Test
+    fun `le tirage de la veille n'ecrase pas un appui du lendemain`() {
+        // Tiré à 23 h 59 min 59 s, écrit après un appui fait à minuit passé.
+        val lendemain = TirageDuJour(20_419, 1)
+
+        assertEquals(lendemain, lendemain.epingler(TirageDuJour(20_418), epinglee))
+    }
+
+    @Test
     fun `l'appui suivi de l'ecriture du tirage precedent garde l'appui, sur le vrai fichier`() = runTest {
         val relu = avecUnMagasin { magasin, _ ->
             val depuis = TirageDuJour(20_418, 0)

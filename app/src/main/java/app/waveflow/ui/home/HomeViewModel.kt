@@ -38,7 +38,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 
 /**
@@ -100,9 +102,21 @@ class HomeViewModel(
     libraryStore: LibraryStore,
     history: PlayHistoryRepository,
     private val tirages: TirageStore,
-    private val horloge: Clock = Clock.systemDefaultZone(),
+    private val horloge: Clock = horlogeDuSysteme(),
     calcul: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
+
+    /**
+     * Le dernier tirage que cet accueil a épinglé, gardé aussi en mémoire (S12).
+     *
+     * Une écriture en échec ne dit rien à l'appelant ; sans lui, la piste
+     * suggérée, une fois écoutée, ne serait plus tirée, et la bande changerait.
+     * Il ne vaut que pour son jour et son nombre d'appuis, et ne sert de rien
+     * quand l'écriture a réussi : le fichier dit alors la même chose. Lu là où
+     * l'on tire, écrit là où l'on épingle, sur deux fils.
+     */
+    @Volatile
+    private var tenu: TirageDuJour? = null
 
     /**
      * La suggestion du jour, et ce qu'il faut épingler pour qu'elle revienne.
@@ -119,7 +133,8 @@ class HomeViewModel(
         // Pendant un rechargement, la bibliothèque garde ses morceaux : la
         // bande reste. Au premier chargement, elle est vide et rien n'est tiré.
         val depuis = enregistre.pour(jour)
-        val tiree = suggestionDuJour(depuis, library, ecoutes, horloge.millis())
+        val effectif = tenu?.takeIf { it.jour == depuis.jour && it.essais == depuis.essais } ?: depuis
+        val tiree = suggestionDuJour(effectif, library, ecoutes, horloge.millis())
         Tirage(
             band = tiree?.let { s ->
                 SuggestionBand(
@@ -138,8 +153,10 @@ class HomeViewModel(
             // Un nouveau tirage est gardé pour sa journée : une fois écoutée, la
             // piste ne serait plus tirée dans sa sorte, et l'accueil changerait
             // sous les yeux de l'utilisateur (S9). L'écriture ne vaut que si
-            // rien n'a bougé depuis le tirage (S11).
+            // rien n'a bougé depuis le tirage (S11). Tant qu'elle échoue, elle
+            // est retentée au calcul suivant.
             val nouvelle = tirage.aEpingler ?: return@onEach
+            tenu = tirage.depuis.copy(epinglee = nouvelle)
             tirages.modifier { it.epingler(tirage.depuis, nouvelle) }
         }
         .map { it.band }
@@ -218,6 +235,20 @@ class HomeViewModel(
             }
         }
     }
+}
+
+/**
+ * L'horloge du système, dont le fuseau est relu à chaque lecture.
+ *
+ * `Clock.systemDefaultZone()` fige le fuseau du moment où on la crée : un
+ * voyageur qui change de fuseau garderait, tant que l'accueil vit, le jour de
+ * l'ancien. Android remet le fuseau par défaut du processus à jour quand celui
+ * du système change ; le relire suffit.
+ */
+internal fun horlogeDuSysteme(): Clock = object : Clock() {
+    override fun getZone(): ZoneId = ZoneId.systemDefault()
+    override fun withZone(zone: ZoneId): Clock = system(zone)
+    override fun instant(): Instant = Instant.now()
 }
 
 /**

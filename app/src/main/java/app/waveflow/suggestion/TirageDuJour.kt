@@ -31,7 +31,12 @@ fun TirageDuJour?.apresUnAppui(jour: Long): TirageDuJour {
 /**
  * Le tirage, une fois [nouvelle] épinglée — à condition que ce qui est enregistré
  * soit encore [depuis], l'état d'après lequel elle a été tirée (S11). Sinon, rien
- * ne change : un appui arrivé entre le tirage et son écriture n'est pas écrasé.
+ * ne change : un appui arrivé entre le tirage et son écriture n'est pas écrasé,
+ * pas plus qu'un tirage du lendemain par celui de la veille.
  */
-fun TirageDuJour?.epingler(depuis: TirageDuJour, nouvelle: SuggestionEpinglee): TirageDuJour? =
-    if (pour(depuis.jour) == depuis) depuis.copy(epinglee = nouvelle) else this
+fun TirageDuJour?.epingler(depuis: TirageDuJour, nouvelle: SuggestionEpinglee): TirageDuJour? = when {
+    // [pour] tiendrait pour périmé un tirage du lendemain comme un tirage d'hier.
+    this != null && jour > depuis.jour -> this
+    pour(depuis.jour) == depuis -> depuis.copy(epinglee = nouvelle)
+    else -> this
+}

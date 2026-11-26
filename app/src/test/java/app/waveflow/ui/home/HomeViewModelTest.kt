@@ -38,6 +38,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.TimeZone
 
 /**
  * Ce que l'accueil compose à partir de ce que l'appareil sait.
@@ -79,10 +80,16 @@ class HomeViewModelTest {
      * Le tirage en mémoire, modifié d'un seul tenant comme `DataStore.edit` : la
      * transformation lit ce qui est enregistré au moment d'écrire.
      */
-    private class FakeTirageStore(initial: TirageDuJour? = null) : TirageStore {
+    private class FakeTirageStore(
+        initial: TirageDuJour? = null,
+        /** Comme un disque plein : l'écriture est perdue, sans rien lever (S12). */
+        private val refuse: Boolean = false,
+    ) : TirageStore {
         val flux = MutableStateFlow(initial)
         override val tirage: Flow<TirageDuJour?> = flux
-        override suspend fun modifier(transform: (TirageDuJour?) -> TirageDuJour?) = flux.update(transform)
+        override suspend fun modifier(transform: (TirageDuJour?) -> TirageDuJour?) {
+            if (!refuse) flux.update(transform)
+        }
     }
 
     /** Une horloge qui avance avec le temps virtuel du test, en UTC. */
@@ -138,6 +145,40 @@ class HomeViewModelTest {
             assertEquals(avant, vue.state.value.suggestion)
             assertEquals(avant.song.id, tirages.flux.value?.epinglee?.songId)
         }
+
+    @Test
+    fun `un fichier qui refuse d'ecrire ne fait pas changer la bande une fois la piste ecoutee`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // S12 : rien n'est épinglé sur disque, l'accueil s'en souvient lui-même.
+            val historique = FakeHistory(emptyList())
+            val vue = accueil(
+                bibliotheque(song(1), song(2), song(3)),
+                historique,
+                FakeTirageStore(refuse = true),
+            )
+            backgroundScope.launch { vue.state.collect {} }
+            runCurrent()
+            val avant = vue.state.value.suggestion!!
+
+            historique.ecouter("local:${avant.song.id}", LE_26_NOVEMBRE_10H.toEpochMilli())
+            runCurrent()
+
+            assertEquals(avant, vue.state.value.suggestion)
+        }
+
+    @Test
+    fun `l'horloge par defaut suit le fuseau du systeme`() {
+        val avant = TimeZone.getDefault()
+        try {
+            val horloge = horlogeDuSysteme()
+            TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"))
+            assertEquals(ZoneId.of("Pacific/Kiritimati"), horloge.zone)
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Adak"))
+            assertEquals(ZoneId.of("America/Adak"), horloge.zone)
+        } finally {
+            TimeZone.setDefault(avant)
+        }
+    }
 
     @Test
     fun `autre suggestion tire de nouveau et retient le nouveau tirage`() =
