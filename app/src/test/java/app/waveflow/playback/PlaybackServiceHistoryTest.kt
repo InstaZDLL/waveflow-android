@@ -47,7 +47,7 @@ import java.time.Duration
  * minuteur, comme sur la boucle encombrée d'un émulateur.
  *
  * Seul le retard d'un geste est éprouvé ici. Une lecture **annoncée** en
- * retard raccourcit encore l'écoute mesurée : ce n'est pas corrigé (voir
+ * retard raccourcit encore l'écoute mesurée : ce n'est pas corrigé (#102, voir
  * `ListeningCounter`), et rien ici ne prétend le couvrir.
  *
  * Des WAV de silence : Robolectric ne décode rien, mais le PCM se joue sans
@@ -111,7 +111,16 @@ class PlaybackServiceHistoryTest {
 
         traiterEnRetard { seekToNextMediaItem() }
 
-        assertEquals(emptyList<String>(), notees())
+        // La barrière : la suivante, jouée au-delà du seuil, est notée par le
+        // même chemin. Room, sans pilote, passe ses transactions une à une
+        // dans l'ordre où elles lui sont soumises (`TransactionExecutor`), et
+        // le compteur les soumet dès le geste, sur `Main.immediate` : une note
+        // fautive de la première serait donc écrite avant celle-ci.
+        val reprise = SystemClock.elapsedRealtime()
+        while (SystemClock.elapsedRealtime() - reprise < SEUIL_MS + 1_000L) ecouler(avancerHorloge = true)
+        attendre("la note de la piste suivante") { "local:2" in notees() }
+
+        assertEquals(listOf("local:2"), notees())
     }
 
     /**
@@ -158,10 +167,8 @@ class PlaybackServiceHistoryTest {
         Handler(Looper.getMainLooper()).post { lecteur.geste() }
         ShadowSystemClock.advanceBy(Duration.ofMillis(RETARD_MS))
         // Quelques tours sans avancer l'horloge, qui ferait compter la piste
-        // suivante : le geste, puis l'écriture qu'il lance. Les tests positifs
-        // attendent la note ; le négatif lit après ces tours, une borne
-        // pratique et non une barrière — une écriture fautive plus lente
-        // qu'eux le laisserait passer.
+        // suivante, pour que le geste soit traité ; les tests attendent
+        // ensuite chacun leur note.
         repeat(TOURS_APRES_GESTE) {
             ecouler(avancerHorloge = false)
             Thread.sleep(PAUSE_MS)

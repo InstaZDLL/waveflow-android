@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
  * — une écoute réelle de plus de vingt secondes peut encore être perdue — et un
  * enchaînement annoncé en retard l'allonge : une piste de moins de vingt
  * secondes peut être comptée. Seule une mesure sur la position du lecteur
- * lèverait ces deux écarts (#99).
+ * lèverait ces deux écarts (#102).
  *
  * @param nowMs horloge injectée pour que les tests mesurent le même temps que
  *   celui où leurs `delay` s'écoulent.
