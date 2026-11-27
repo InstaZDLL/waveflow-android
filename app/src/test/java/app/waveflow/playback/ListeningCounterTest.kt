@@ -3,6 +3,7 @@ package app.waveflow.playback
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -23,10 +24,16 @@ class ListeningCounterTest {
 
     private val comptees = mutableListOf<String>()
 
+    /**
+     * Ce que l'horloge mesurée a d'avance sur l'ordonnanceur : le retard avec
+     * lequel la boucle traite un geste, sur une machine chargée.
+     */
+    private var retardDeLaBoucle = 0L
+
     private fun TestScope.compteur() = ListeningCounter(
         scope = this,
         thresholdMs = SEUIL,
-        nowMs = { testScheduler.currentTime },
+        nowMs = { testScheduler.currentTime + retardDeLaBoucle },
         onListened = { comptees += it },
     )
 
@@ -125,6 +132,40 @@ class ListeningCounterTest {
         compteur.playingChanged(true)
         advanceTimeBy(SEUIL + 1)
         // Pause, reprise, et on laisse tourner : l'écoute est déjà comptée.
+        compteur.playingChanged(false)
+        compteur.playingChanged(true)
+        advanceTimeBy(SEUIL * 10)
+
+        assertEquals(listOf("local:1"), comptees)
+    }
+
+    @Test
+    fun `quitter une piste apres le seuil la compte meme avant le minuteur`() = runTest {
+        // #99 : le changement de piste, posté avant le seuil, est traité deux
+        // secondes plus tard, quand le temps joué l'a dépassé. Le minuteur, qui
+        // devait sonner entre les deux, n'est pas encore passé.
+        val compteur = compteur()
+
+        compteur.trackChanged("local:1")
+        compteur.playingChanged(true)
+        advanceTimeBy(SEUIL - 1_000)
+        retardDeLaBoucle = 2_000
+        compteur.trackChanged("local:2")
+        runCurrent()
+
+        assertEquals(listOf("local:1"), comptees)
+    }
+
+    @Test
+    fun `une pause traitee apres le seuil compte la piste une seule fois`() = runTest {
+        // Même retard, par la pause ; la reprise qui suit ne compte pas la
+        // piste une seconde fois.
+        val compteur = compteur()
+
+        compteur.trackChanged("local:1")
+        compteur.playingChanged(true)
+        advanceTimeBy(SEUIL - 1_000)
+        retardDeLaBoucle = 2_000
         compteur.playingChanged(false)
         compteur.playingChanged(true)
         advanceTimeBy(SEUIL * 10)
