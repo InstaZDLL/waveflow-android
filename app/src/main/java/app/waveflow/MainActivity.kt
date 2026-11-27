@@ -39,16 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.waveflow.model.AppPreferences
-import app.waveflow.model.Library
 import app.waveflow.model.Song
 import app.waveflow.model.ThemeChoice
 import app.waveflow.playback.voiceRequestOf
@@ -61,11 +57,16 @@ import app.waveflow.ui.home.HomeScreen
 import app.waveflow.ui.home.HomeViewModel
 import app.waveflow.ui.library.LibraryScreen
 import app.waveflow.ui.library.LibraryViewModel
+import app.waveflow.ui.navigation.LibraryTab
 import app.waveflow.ui.navigation.LibraryTabs
+import app.waveflow.ui.navigation.PAGE_HEADER_ROUTES
 import app.waveflow.ui.navigation.Routes
-import app.waveflow.ui.navigation.TopLevelDestination
 import app.waveflow.ui.navigation.WaveFlowBottomBar
-import app.waveflow.ui.navigation.longArgOf
+import app.waveflow.ui.navigation.openTabAsState
+import app.waveflow.ui.navigation.rememberTabNavController
+import app.waveflow.ui.navigation.selectLibraryTab
+import app.waveflow.ui.navigation.selectTab
+import app.waveflow.ui.navigation.topBarTitle
 import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.permission.hasAudioPermission
 import app.waveflow.ui.player.MiniPlayerHost
@@ -154,13 +155,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Routes affichant une flèche de retour plutôt que le titre de section. */
-private val DETAIL_ROUTES = setOf(
-    Routes.ALBUM_DETAIL,
-    Routes.ARTIST_DETAIL,
-    Routes.PLAYLIST_DETAIL,
-    Routes.SERVER_ALBUM_DETAIL,
-    Routes.SERVER_ARTIST_DETAIL,
+/** Routes affichant une flèche de retour. */
+private val DETAIL_ROUTES = PAGE_HEADER_ROUTES + setOf(
     Routes.SERVER_ACCOUNT,
     Routes.SETTINGS,
 )
@@ -194,9 +190,12 @@ private fun WaveFlowRoot(
     // ici : chargés à la racine, chaque page reçue recomposerait le Scaffold,
     // le NavHost et tous les écrans.
 
-    val navController = rememberNavController()
+    val navController = rememberTabNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    // L'onglet allumé suit la pile, pas la route : un album ouvert depuis
+    // l'accueil vit dans la pile de l'accueil.
+    val openTab by navController.openTabAsState()
 
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
     var songToAdd by remember { mutableStateOf<Song?>(null) }
@@ -236,14 +235,6 @@ private fun WaveFlowRoot(
         ?.getLong(Routes.ARG_PLAYLIST_ID)
         ?.let { playlistsState.playlist(it) }
 
-    // Les détails distants réemploient ces clés pour y mettre des UUID : sans le
-    // filtre par route, la barre de titre les lirait comme des entiers à chaque
-    // recomposition, et n'obtiendrait que des zéros.
-    val albumIdArg = backStackEntry?.arguments
-        ?.longArgOf(currentRoute, Routes.ALBUM_DETAIL, Routes.ARG_ALBUM_ID)
-    val artistIdArg = backStackEntry?.arguments
-        ?.longArgOf(currentRoute, Routes.ARTIST_DETAIL, Routes.ARG_ARTIST_ID)
-
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -258,15 +249,7 @@ private fun WaveFlowRoot(
                                     onQueryChange = searchViewModel::onQueryChange,
                                 )
                             } else {
-                                Text(
-                                    currentScreenTitle(
-                                        currentRoute = currentRoute,
-                                        albumId = albumIdArg,
-                                        artistId = artistIdArg,
-                                        library = library,
-                                        playlistName = openPlaylist?.name,
-                                    ),
-                                )
+                                topBarTitle(currentRoute)?.let { Text(it) }
                             }
                         },
                         navigationIcon = {
@@ -321,16 +304,17 @@ private fun WaveFlowRoot(
                     // ces onglets disent comment on la regarde, pas où l'on est.
                     if (!searchActive) {
                         LibraryTabs(
+                            openTab = openTab,
                             currentRoute = currentRoute,
-                            onSelect = { navController.switchTab(it.route) },
+                            onSelect = navController::selectLibraryTab,
                         )
                     }
                 }
             },
             bottomBar = {
                 WaveFlowBottomBar(
-                    currentRoute = currentRoute,
-                    onSelect = { navController.switchTab(it.route) },
+                    selected = openTab?.destination,
+                    onSelect = navController::selectTab,
                 )
             },
         ) { innerPadding ->
@@ -420,7 +404,7 @@ private fun WaveFlowRoot(
                                 onSearchOnServer = serverState.connected?.let {
                                     {
                                         catalogViewModel.onSearchQueryChange(searchQuery)
-                                        navController.switchTab(Routes.SERVER)
+                                        navController.selectLibraryTab(LibraryTab.Server)
                                     }
                                 },
                             )
@@ -734,44 +718,4 @@ private fun WaveFlowRoot(
             onDismiss = { songToAdd = null },
         )
     }
-}
-
-/**
- * Bascule d'onglet : une seule entrée par section dans la pile, et l'état de
- * défilement de chaque onglet est conservé.
- */
-private fun NavHostController.switchTab(route: String) {
-    navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
-}
-
-/**
- * Titre de la barre du haut. Les écrans de détail se rabattent sur un libellé
- * générique tant que l'entité n'est pas résolue : la bibliothèque peut être
- * encore en cours de scan, ou le fichier avoir disparu depuis.
- */
-private fun currentScreenTitle(
-    currentRoute: String?,
-    albumId: Long?,
-    artistId: Long?,
-    library: Library,
-    playlistName: String?,
-): String = when (currentRoute) {
-    Routes.HOME -> "Accueil"
-    Routes.SEARCH -> "Recherche"
-    Routes.ALBUMS -> "Albums"
-    Routes.ARTISTS -> "Artistes"
-    Routes.PLAYLISTS -> "Playlists"
-    Routes.SERVER -> "Serveur"
-    Routes.SETTINGS -> "Réglages"
-    Routes.SERVER_ACCOUNT -> "Compte"
-    Routes.SERVER_ALBUM_DETAIL -> "Album"
-    Routes.SERVER_ARTIST_DETAIL -> "Artiste"
-    Routes.ALBUM_DETAIL -> albumId?.let { library.album(it)?.title } ?: "Album"
-    Routes.ARTIST_DETAIL -> artistId?.let { library.artist(it)?.name } ?: "Artiste"
-    Routes.PLAYLIST_DETAIL -> playlistName ?: "Playlist"
-    else -> "WaveFlow"
 }

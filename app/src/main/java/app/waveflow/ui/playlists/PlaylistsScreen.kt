@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,7 +33,6 @@ import app.waveflow.model.Playlist
 import app.waveflow.model.Song
 import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.CenteredMessage
-import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
 
 /** Onglet Playlists : création et accès aux playlists locales. */
@@ -96,6 +94,14 @@ fun PlaylistsScreen(
     }
 }
 
+/**
+ * La rangée d'action en tête de la liste : une icône nue et son libellé, dans
+ * l'encre du texte.
+ *
+ * Plus de boîte d'icône colorée ni d'accent : la direction les retire des
+ * rangées, l'accent ne marquant qu'un état. L'icône garde la place d'une
+ * pochette, pour que son libellé s'aligne sur les noms des playlists dessous.
+ */
 @Composable
 private fun CreatePlaylistRow(onClick: () -> Unit) {
     Row(
@@ -103,26 +109,20 @@ private fun CreatePlaylistRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Surface(
-            shape = WaveFlowTheme.shapes.thumbnail,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(48.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
         }
         Spacer(Modifier.width(12.dp))
         Text(
             text = "Nouvelle playlist",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

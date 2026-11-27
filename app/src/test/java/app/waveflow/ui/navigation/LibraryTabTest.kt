@@ -1,6 +1,8 @@
 package app.waveflow.ui.navigation
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,7 +40,6 @@ class LibraryTabTest {
                 onglet.owns(Routes.SERVER_ACCOUNT),
             )
         }
-        assertFalse(TopLevelDestination.Library.owns(Routes.SERVER_ACCOUNT))
     }
 
     @Test
@@ -49,17 +50,35 @@ class LibraryTabTest {
     }
 
     @Test
-    fun `chaque destination ne reconnait que la sienne`() {
-        assertTrue(TopLevelDestination.Home.owns(Routes.HOME))
-        assertTrue(TopLevelDestination.Search.owns(Routes.SEARCH))
-        assertFalse(TopLevelDestination.Home.owns(Routes.SONGS))
-        assertFalse(TopLevelDestination.Library.owns(Routes.HOME))
-        // La recherche n'appartient pas à la bibliothèque : chercher est une
-        // intention en soi, et l'onglet du bas doit le refléter.
-        assertFalse(TopLevelDestination.Library.owns(Routes.SEARCH))
-        assertFalse(TopLevelDestination.Search.owns(Routes.SONGS))
-        // Les réglages n'appartiennent à personne : ils s'ouvrent de partout.
-        assertFalse(TopLevelDestination.Home.owns(Routes.SETTINGS))
-        assertFalse(TopLevelDestination.Library.owns(Routes.SETTINGS))
+    fun `chaque racine ne commence que la pile de sa destination`() {
+        assertEquals(TopLevelDestination.Home, TopLevelDestination.ofRoot(Routes.HOME))
+        assertEquals(TopLevelDestination.Search, TopLevelDestination.ofRoot(Routes.SEARCH))
+        LibraryTab.entries.forEach { vue ->
+            assertEquals(TopLevelDestination.Library, TopLevelDestination.ofRoot(vue.route))
+        }
+        // Un détail ou les réglages ne commencent aucune pile : ils vivent dans
+        // celle d'où on les ouvre.
+        assertNull(TopLevelDestination.ofRoot(Routes.ALBUM_DETAIL))
+        assertNull(TopLevelDestination.ofRoot(Routes.SERVER_ALBUM_DETAIL))
+        assertNull(TopLevelDestination.ofRoot(Routes.SETTINGS))
+        assertNull(TopLevelDestination.ofRoot(Routes.SERVER_ACCOUNT))
+    }
+
+    @Test
+    fun `les sous-onglets ne se montrent que sur une page de la pile de la bibliotheque`() {
+        // Un album dans la pile de la recherche : sa route a beau ressembler à
+        // celles de la vue Albums, les sous-onglets ne le coiffent pas.
+        assertNull(libraryTabShown(openTabOfRoot(Routes.SEARCH), Routes.ALBUM_DETAIL))
+        assertNull(libraryTabShown(openTabOfRoot(Routes.HOME), Routes.ALBUM_DETAIL))
+
+        // Dans la pile des artistes : la vue marquée reste « Artistes ».
+        assertEquals(LibraryTab.Artists, libraryTabShown(openTabOfRoot(Routes.ARTISTS), Routes.ALBUM_DETAIL))
+
+        // Les réglages et le compte vivent dans la pile d'où on les ouvre sans
+        // en être une page : pas de sous-onglets au-dessus d'eux.
+        assertNull(libraryTabShown(openTabOfRoot(Routes.SONGS), Routes.SETTINGS))
+        assertNull(libraryTabShown(openTabOfRoot(Routes.SONGS), Routes.SERVER_ACCOUNT))
+
+        assertNull(openTabOfRoot(Routes.ALBUM_DETAIL))
     }
 }
