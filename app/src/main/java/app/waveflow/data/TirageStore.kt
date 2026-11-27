@@ -17,9 +17,14 @@ import app.waveflow.suggestion.SuggestionEpinglee
 import app.waveflow.suggestion.TirageDuJour
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.update
 import java.io.IOException
 
 /**
@@ -52,15 +57,31 @@ class DataStoreTirageStore(
 ) : TirageStore {
 
     /**
-     * Comme les préférences : une lecture en échec rend « aucun tirage » et
-     * reprend, trois fois, au lieu de terminer le flux tout de suite — terminé,
-     * il figerait la bande, et « Autre suggestion » écrirait sans que rien ne
-     * bouge. Un fichier encore illisible après elles est tenu pour durablement
-     * cassé : le flux se termine sur « aucun tirage », sans boucler sur une cause
-     * qui ne disparaîtra pas. Il est relu quand l'accueil revient à l'écran, sa
-     * collecte reprenant alors de zéro.
+     * Les écritures réussies, comptées : c'est ce qui réveille une lecture
+     * abandonnée.
      */
-    override val tirage: Flow<TirageDuJour?> = dataStore.data
+    private val ecritures = MutableStateFlow(0L)
+
+    /**
+     * Comme les préférences : une lecture en échec rend « aucun tirage » et
+     * reprend, trois fois. Un fichier encore illisible après elles n'est plus
+     * relu de lui-même — boucler sur une corruption durable ne servirait à rien
+     * —, mais le flux ne se termine pas : terminé, il figerait la bande, et
+     * « Autre suggestion » écrirait sans que rien ne bouge. Il attend la
+     * prochaine écriture réussie, preuve que le fichier se lit de nouveau
+     * (`edit` le lit d'abord), et repart de là. Une écriture réussie pendant la
+     * lecture en échec la relance aussitôt.
+     */
+    override val tirage: Flow<TirageDuJour?> = flow {
+        while (true) {
+            val vues = ecritures.value
+            emitAll(lecture())
+            ecritures.first { it != vues }
+        }
+    }
+
+    /** Une lecture du fichier, qui se termine quand les reprises sont épuisées. */
+    private fun lecture(): Flow<TirageDuJour?> = dataStore.data
         .retryWhen { erreur, tentative ->
             Log.w(TAG, "Tirage illisible, aucun tirage", erreur)
             emit(emptyPreferences())
@@ -78,6 +99,7 @@ class DataStoreTirageStore(
                 fichier.clear()
                 if (apres != null) fichier.ecrire(apres)
             }
+            ecritures.update { it + 1 }
         } catch (erreur: IOException) {
             Log.w(TAG, "Tirage non enregistré", erreur)
         }

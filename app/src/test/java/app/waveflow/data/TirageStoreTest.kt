@@ -1,8 +1,11 @@
 package app.waveflow.data
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.waveflow.suggestion.Raison
@@ -14,9 +17,17 @@ import app.waveflow.suggestion.epingler
 import app.waveflow.suggestion.pour
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -26,6 +37,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.io.IOException
 
 /**
  * Le tirage de la suggestion du jour, tel qu'il survit au redémarrage (S9 à S11
@@ -34,6 +46,7 @@ import java.io.File
  * Le vrai DataStore sur un vrai fichier, comme pour les préférences ; Robolectric
  * pour que le journal des échecs n'y lève pas.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class TirageStoreTest {
 
@@ -199,5 +212,46 @@ class TirageStoreTest {
         }
 
         assertEquals(TirageDuJour(20_418, 1), relu)
+    }
+
+    /**
+     * Un DataStore dont les [echecs] premières lectures échouent, comme un disque
+     * momentanément indisponible, puis qui se lit et s'écrit normalement.
+     */
+    private class DataStoreCapricieux(private var echecs: Int) : DataStore<Preferences> {
+        private val contenu = MutableStateFlow(emptyPreferences())
+
+        override val data: Flow<Preferences> = flow {
+            if (echecs > 0) {
+                echecs--
+                throw IOException("disque indisponible")
+            }
+            emitAll(contenu)
+        }
+
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences =
+            transform(contenu.value).also { contenu.value = it }
+    }
+
+    @Test
+    fun `une ecriture reussie apres une lecture abandonnee parvient a l'accueil`() = runTest {
+        // Quatre lectures en échec épuisent les reprises ; « Autre suggestion »
+        // s'écrit ensuite sans peine. La bande doit le voir, sans attendre un
+        // retour sur l'accueil.
+        val magasin = DataStoreTirageStore(DataStoreCapricieux(echecs = 4))
+        val vus = mutableListOf<TirageDuJour?>()
+        backgroundScope.launch { magasin.tirage.collect { vus += it } }
+        advanceTimeBy(SECONDE_MS)
+        runCurrent()
+        assertNull(vus.last())
+
+        magasin.modifier { it.apresUnAppui(20_418) }
+        runCurrent()
+
+        assertEquals(TirageDuJour(20_418, 1), vus.last())
+    }
+
+    private companion object {
+        const val SECONDE_MS = 1_000L
     }
 }
