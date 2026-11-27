@@ -1,12 +1,12 @@
 package app.waveflow.prototype
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -58,19 +58,22 @@ fun PocketNavBar(selected: PocketTab, onSelect: (PocketTab) -> Unit, modifier: M
             .fillMaxWidth()
             .background(colors.raised)
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .heightIn(min = 64.dp)
             .selectableGroup(),
     ) {
         PocketTab.entries.forEach { tab ->
             val ouvert = tab == selected
+            // Chaque onglet a sa hauteur minimale et grandit avec la police ;
+            // la barre prend celle du plus haut. Pas de `fillMaxHeight` : sous
+            // une hauteur minimale, il réclamerait tout l'écran.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
+                    .heightIn(min = 64.dp)
                     .selectable(selected = ouvert, role = Role.Tab, onClick = { onSelect(tab) }),
             ) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(4.dp))
                 Icon(
                     imageVector = if (ouvert) tab.iconSelected else tab.icon,
                     contentDescription = null,

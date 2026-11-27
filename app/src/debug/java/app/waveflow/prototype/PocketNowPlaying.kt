@@ -243,7 +243,11 @@ private fun OnePane(
         val w = contraintes.maxWidth
         val h = contraintes.maxHeight
         val ecart = COVER_GAP.roundToPx()
-        val libre = Constraints(maxWidth = w, maxHeight = h)
+        // Sur une tablette, le titre et les commandes ne s'étirent pas sur
+        // toute la largeur : leur colonne est bornée, et centrée.
+        val largeur = minOf(w, (DETAILS_MAX + gouttiere * 2).roundToPx())
+        val x0 = (w - largeur) / 2
+        val libre = Constraints(maxWidth = largeur, maxHeight = h)
         // Une copie sans sémantique, pour mesurer seulement : la disposition
         // compacte ne doit pas laisser au lecteur d'écran une seconde rangée de
         // commandes, jamais placée.
@@ -255,17 +259,17 @@ private fun OnePane(
         if (lyricsShown) {
             val zone = (h - hauteurBloc - ecart).coerceAtLeast(0)
             val texte = subcompose("paroles") { paroles(corps.fillMaxSize()) }
-                .map { it.measure(Constraints.fixed(w, zone)) }
+                .map { it.measure(Constraints.fixed(largeur, zone)) }
             val bloc = details()
             return@SubcomposeLayout layout(w, h) {
-                texte.forEach { it.place(0, 0) }
-                bloc.forEach { it.place(0, h - hauteurBloc) }
+                texte.forEach { it.place(x0, 0) }
+                bloc.forEach { it.place(x0, h - hauteurBloc) }
             }
         }
 
         val ajustement = with(density) {
             fitCover(
-                width = w.toDp() - gouttiere * 2,
+                width = largeur.toDp() - gouttiere * 2,
                 height = h.toDp(),
                 details = hauteurBloc.toDp(),
                 gap = COVER_GAP,
@@ -282,7 +286,7 @@ private fun OnePane(
                 val haut = ((h - total) / 2).coerceAtLeast(0)
                 layout(w, h) {
                     pochette.forEach { it.place((w - cote) / 2, haut) }
-                    bloc.forEach { it.place(0, haut + cote + ecart) }
+                    bloc.forEach { it.place(x0, haut + cote + ecart) }
                 }
             }
             CoverFit.Compact -> {
@@ -292,8 +296,8 @@ private fun OnePane(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                         Box(corps.verticalScroll(rememberScrollState())) { content(true, false) }
                     }
-                }.map { it.measure(Constraints.fixed(w, h)) }
-                layout(w, h) { compacte.forEach { it.place(0, 0) } }
+                }.map { it.measure(Constraints.fixed(largeur, h)) }
+                layout(w, h) { compacte.forEach { it.place(x0, 0) } }
             }
         }
     }
@@ -507,7 +511,7 @@ private fun Details(
     header: @Composable () -> Unit,
     onOpen: (Feuille) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         header()
         Spacer(Modifier.height(8.dp))
         Sillage(
@@ -535,9 +539,11 @@ private fun Transport(state: PlayerUiState, actions: NowPlayingActions) {
     Row(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
+        // Plafonnée avant d'être étirée : dans l'autre ordre, la largeur
+        // pleine fixe le minimum et le plafond n'y peut plus rien.
         modifier = Modifier
-            .fillMaxWidth()
-            .widthIn(max = TRANSPORT_MAX),
+            .widthIn(max = TRANSPORT_MAX)
+            .fillMaxWidth(),
     ) {
         ToggleIcon(
             icon = Icons.Rounded.Shuffle,
@@ -728,5 +734,8 @@ private const val SWIPE_FOLLOW = 0.35f
 private val COVER_GAP = 24.dp
 private val PLAY_SIZE = 72.dp
 private val TRANSPORT_MAX = 420.dp
+
+/** La colonne du titre et des commandes, au plus : une tablette ne l'étire pas. */
+private val DETAILS_MAX = 560.dp
 private val NARROW = 400.dp
 private const val QUEUE_SHEET_HEIGHT = 0.8f
