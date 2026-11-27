@@ -1,0 +1,104 @@
+package app.waveflow.prototype
+
+import android.graphics.Color
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.waveflow.WaveFlowApp
+import app.waveflow.model.ThemeChoice
+import app.waveflow.ui.permission.AudioPermissionGate
+import app.waveflow.ui.permission.hasAudioPermission
+import app.waveflow.ui.player.PlayerViewModel
+import app.waveflow.ui.theme.WaveFlowTheme
+
+/**
+ * L'entrée du prototype **WaveFlow Pocket** — variante `debug` seulement, avec
+ * sa propre icône de lanceur (`app/src/debug/AndroidManifest.xml`). Une build
+ * `release` n'en contient rien.
+ *
+ * Il lit les vraies données et pilote le vrai lecteur : le `PlayerViewModel`
+ * de production (sa fabrique, donc son `MediaController`, sa minuterie, sa
+ * boucle A-B, ses paroles) et le `LibraryStore` d'`AppContainer`. Rien de
+ * Media3, du MediaStore ni du service n'est réécrit.
+ *
+ * Le thème suit le système.
+ */
+class PocketActivity : ComponentActivity() {
+
+    private val playerViewModel: PlayerViewModel by viewModels { PlayerViewModel.Factory }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Sans voile sous les boutons du système : le lecteur peint sa nappe
+        // jusqu'au bord, et la barre de navigation porte déjà son propre fond.
+        enableEdgeToEdge(
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
+        // Le système voile encore la barre à trois boutons pour son contraste :
+        // les boutons y restent lisibles sur nos fonds, qui sont pleins.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
+        val libraryStore = (application as WaveFlowApp).container.libraryStore
+        val vm = playerViewModel
+        val actions = NowPlayingActions(
+            onCollapse = {},
+            onTogglePlayPause = vm::togglePlayPause,
+            onSkipNext = vm::skipNext,
+            onSkipPrevious = vm::skipPrevious,
+            onSeek = vm::seekTo,
+            onToggleShuffle = vm::toggleShuffle,
+            onCycleRepeat = vm::cycleRepeatMode,
+            onPlayQueueItem = vm::playQueueItem,
+            onMoveQueueItem = vm::moveQueueItem,
+            onRemoveQueueItem = vm::removeQueueItem,
+            onStartSleepTimer = vm::startSleepTimer,
+            onCancelSleepTimer = vm::cancelSleepTimer,
+            onSleepTimerRemainingMs = vm::sleepTimerRemainingMs,
+            onSetPlaybackSpeed = vm::setPlaybackSpeed,
+            onMarkAbLoop = vm::markAbLoop,
+            onToggleLyrics = vm::toggleLyrics,
+            onRetryLyrics = vm::retryLyrics,
+            onLyricsOnScreen = vm::lyricsOnScreen,
+        )
+
+        setContent {
+            WaveFlowTheme(theme = ThemeChoice.System) {
+                PocketTheme {
+                    AudioPermissionGate {
+                        LaunchedEffect(Unit) {
+                            libraryStore.load()
+                            vm.connect()
+                        }
+                        val library by libraryStore.library.collectAsStateWithLifecycle()
+                        val player by vm.state.collectAsStateWithLifecycle()
+                        val lyrics by vm.lyrics.collectAsStateWithLifecycle()
+                        var expanded by rememberSaveable { mutableStateOf(false) }
+                        PocketApp(
+                            library = library,
+                            player = player,
+                            lyrics = lyrics,
+                            actions = actions.copy(onCollapse = { expanded = false }),
+                            onPlay = vm::playFrom,
+                            expanded = expanded,
+                            onExpandedChange = { expanded = it },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (hasAudioPermission()) playerViewModel.connect()
+    }
+}

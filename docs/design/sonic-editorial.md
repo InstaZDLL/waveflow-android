@@ -86,8 +86,8 @@ de l'eau profonde — et les règles d'usage. Les contrastes sont **mesurés**
 | Jeton | Valeur | Rôle | Contraste mesuré |
 | --- | --- | --- | --- |
 | `canvas` | `#0B1214` | la page, ce qui défile | — |
-| `raised` | `#142023` | le mini-lecteur, la barre de navigation | — |
-| `surface` | `#1A282B` | une surface de contenu (mise en avant, carte) | — |
+| `raised` | `#142023` | la barre de navigation | — |
+| `surface` | `#1A282B` | une surface de contenu : le mini-lecteur, une mise en avant, une pastille | — |
 | `floating` | `#22333A` | feuilles, menus, dialogues | — |
 | `ink` | `#F1F6F4` | titres | 17,3:1 sur `canvas`, 12,0:1 sur `floating` |
 | `ink2` | `#A4B3B4` | seconde ligne, corps | 8,7:1 sur `canvas`, 7,0:1 sur `surface`, 6,0:1 sur `floating` |
@@ -101,8 +101,8 @@ de l'eau profonde — et les règles d'usage. Les contrastes sont **mesurés**
 | Jeton | Valeur | Rôle | Contraste mesuré |
 | --- | --- | --- | --- |
 | `canvas` | `#F5F6F2` | la page : un blanc cassé neutre, à peine chaud | — |
-| `raised` | `#FFFFFF` | le mini-lecteur, la barre de navigation : *plus* blancs que la page | — |
-| `surface` | `#E4EEE9` | une surface de contenu : la menthe douce | — |
+| `raised` | `#FFFFFF` | la barre de navigation : *plus* blanche que la page | — |
+| `surface` | `#E4EEE9` | une surface de contenu — le mini-lecteur, une pastille : la menthe douce | — |
 | `floating` | `#FFFFFF` | feuilles, menus — séparés par une ombre teintée | — |
 | `ink` | `#142023` | titres — le `raised` du sombre : les deux modes partagent leurs neutres | 15,4:1 sur `canvas` |
 | `ink2` | `#46585B` | seconde ligne | 6,9:1 sur `canvas`, 6,3:1 sur `surface` |
@@ -250,10 +250,12 @@ se tait.
    de morceau.
 3. **Le titre** en mise en avant (26 sp, deux lignes au plus), l'artiste et
    l'album sur une ligne en `ink2`. Aligné à gauche, collé à la pochette.
-   **Des pastilles d'état** à droite du titre, *seulement* quand un réglage
-   s'écarte de l'ordinaire : « ×1,5 », la lune de la minuterie, « A-B ». Une
-   vitesse active et invisible est un défaut qu'on cherche longtemps.
-4. **Le sillage**, le temps écoulé à gauche, le temps **restant** à droite.
+4. **Le sillage**, le temps écoulé à gauche, le temps **restant** à droite, et
+   entre les deux **des pastilles d'état**, *seulement* quand un réglage
+   s'écarte de l'ordinaire : « ×1,5 », la lune de la minuterie, « A–B ». Une
+   vitesse active et invisible est un défaut qu'on cherche longtemps. Leur
+   rangée a une hauteur constante : une pastille qui paraît ne déplace rien
+   (posée d'abord sous le titre, elle faisait remonter la pochette).
 5. **Les commandes** : aléatoire · précédent · **lecture (72 dp, l'accent)** ·
    suivant · répétition.
 6. **Le dock** au pouce : « Paroles » et « File · 12 », deux actions à
@@ -262,9 +264,12 @@ se tait.
 
 **Adaptation à la hauteur.** La pochette n'a pas de taille : elle reçoit ce que
 le reste lui laisse, plafonné à la largeur (et à 520 dp sur une tablette). Sous
-200 dp — petit téléphone, police doublée —, l'écran passe en **disposition
-compacte** : une pochette de 96 dp à gauche du titre, et les commandes gardent
-leur taille. En paysage large, deux volets : la pochette à gauche, le reste à
+120 dp — une fenêtre basse, une police doublée —, l'écran passe en
+**disposition compacte** : une pochette de 96 dp à gauche du titre, et les
+commandes gardent leur taille. Le seuil est bas à dessein : essayé à 200 dp, il
+faisait passer en vignette un petit téléphone (360 × 640 dp) à police normale,
+sous un grand vide, là où une pochette de 160 dp au-dessus des commandes se
+lisait mieux. En paysage large, deux volets : la pochette à gauche, le reste à
 droite.
 
 **Ce qui change par rapport à l'actuel.**
@@ -289,7 +294,7 @@ de qualité de flux par piste. Le prototype ne les montre pas.
 **Intention.** Le lecteur ne disparaît pas quand on le réduit : il se range, au
 même endroit, avec les mêmes signes — la pochette, le vert, le sillage.
 
-**Composition.** Une surface `raised` de 64 dp, rayon 14 dp, à 8 dp des bords,
+**Composition.** Une surface de contenu (`surface`) de 64 dp, rayon 14 dp, à 8 dp des bords,
 posée **sur** la barre de navigation (pas flottante au-dessus du contenu) :
 vignette 44 dp, titre et artiste, le disque de lecture (40 dp, l'accent), le
 morceau suivant. Le sillage court au pied de la surface. Un appui l'ouvre ; un
@@ -298,7 +303,8 @@ balayage vers le haut aussi ; un balayage horizontal change de morceau.
 La barre de navigation garde ses trois destinations — Accueil, Bibliothèque,
 Recherche —, à 64 dp plus l'encart du système. L'onglet ouvert : son icône
 pleine en `ink`, son étiquette, et l'onde de 20 dp dessous, dans l'accent. Les
-autres : icône au trait en `ink3`. Pas de pastille.
+autres : icône au trait en `ink3`. Pas de pastille. À police agrandie,
+l'étiquette rétrécit d'un cran plutôt que d'être coupée.
 
 **Ce qui change.** La plaque à liseré de verre et sa lueur en dégradé
 disparaissent ; la progression quitte le bord haut pour le pied (là où l'œil
