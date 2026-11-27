@@ -54,4 +54,17 @@ interface PlayHistoryDao {
     /** Les plus écoutées ; à égalité de compte, la plus récente d'abord. */
     @Query("SELECT * FROM play_history ORDER BY play_count DESC, last_played_at DESC LIMIT :limit")
     fun observeMostPlayed(limit: Int): Flow<List<PlayHistoryEntity>>
+
+    /**
+     * Les pistes de l'appareil seulement, la plus récemment écoutée d'abord : ce
+     * que la suggestion du jour peut proposer (S8 et S17 de
+     * `docs/suggestion-du-jour.md`).
+     */
+    @Query(
+        """
+        SELECT * FROM play_history WHERE media_id LIKE 'local:%'
+        ORDER BY last_played_at DESC LIMIT :limit
+        """,
+    )
+    fun observeLocal(limit: Int): Flow<List<PlayHistoryEntity>>
 }

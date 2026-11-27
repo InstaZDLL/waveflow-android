@@ -75,15 +75,15 @@ import java.util.Locale
  *
  * Composée comme l'accueil du bureau (`ListeningCanvas`) : un **canevas** en
  * tête — le salut, une ligne de compteurs, puis la dernière écoute en grand
- * titre, sa pilule « Reprendre » et sa pochette —, sans carte autour ; puis
- * les ajouts récents en mosaïque de tuiles et les écoutes récentes en lignes.
- * La **bande** du bureau (la suggestion du jour) n'a pas d'équivalent : le
- * client ne tire encore aucune suggestion, et l'accueil n'en invente pas.
+ * titre, sa pilule « Reprendre » et sa pochette —, sans carte autour ; puis la
+ * **bande** de la suggestion du jour (`docs/suggestion-du-jour.md`), les ajouts
+ * récents en mosaïque de tuiles et les écoutes récentes en lignes.
  *
  * Les sections vides disparaissent au lieu de s'afficher creuses : une
  * bibliothèque neuve n'a pas d'écoutes à montrer, et un cadre vide se lit comme
  * une panne.
  *
+ * @param onAnotherSuggestion « Autre suggestion » : un nouveau tirage (S11).
  * @param now l'heure du salut et de la date ; relue à chaque retour de
  *   l'application au premier plan.
  */
@@ -92,6 +92,7 @@ fun HomeScreen(
     state: HomeUiState,
     onSongClick: (Song) -> Unit,
     onAlbumClick: (Album) -> Unit,
+    onAnotherSuggestion: () -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
     now: () -> LocalDateTime = LocalDateTime::now,
@@ -130,6 +131,19 @@ fun HomeScreen(
                 onResume = onSongClick,
                 onOpenAlbum = onAlbumClick,
             )
+        }
+
+        state.suggestion?.let { bande ->
+            item(key = "suggestion") {
+                // « Écouter » joue comme un appui sur un morceau de l'accueil :
+                // la piste, puis la bibliothèque à sa suite (S16).
+                SuggestionOfTheDay(
+                    band = bande,
+                    onPlay = { onSongClick(bande.song) },
+                    onAnother = onAnotherSuggestion,
+                    modifier = Modifier.padding(start = GUTTER, end = GUTTER, top = SUGGESTION_GAP),
+                )
+            }
         }
 
         if (state.recentlyAdded.isNotEmpty()) {
@@ -471,6 +485,9 @@ private val GUTTER = 24.dp
 
 /** L'espace entre deux sections d'une page. */
 private val SECTION_GAP = 40.dp
+
+/** Sous le canevas, la bande : le canevas porte déjà son propre bas de marge. */
+private val SUGGESTION_GAP = 8.dp
 
 private val MOSAIC_GAP = 12.dp
 

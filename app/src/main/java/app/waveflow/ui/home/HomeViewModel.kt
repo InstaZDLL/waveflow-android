@@ -8,13 +8,40 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.LibraryStore
 import app.waveflow.data.PlayHistoryRepository
+import app.waveflow.data.TirageStore
 import app.waveflow.model.Album
 import app.waveflow.model.Song
 import app.waveflow.playback.localSongIdOf
+import app.waveflow.suggestion.SorteDeSuggestion
+import app.waveflow.suggestion.SuggestionEpinglee
+import app.waveflow.suggestion.TirageDuJour
+import app.waveflow.suggestion.apresUnAppui
+import app.waveflow.suggestion.epinglee
+import app.waveflow.suggestion.epingler
+import app.waveflow.suggestion.libelleDeSorte
+import app.waveflow.suggestion.pour
+import app.waveflow.suggestion.raisonDe
+import app.waveflow.suggestion.suggestionDuJour
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
  * Ce que l'accueil a à montrer.
@@ -26,6 +53,8 @@ import kotlinx.coroutines.flow.stateIn
  * @property songCount le nombre de morceaux sur l'appareil, pour la ligne de
  *   compteurs de l'accueil.
  * @property albumCount le nombre d'albums, même usage.
+ * @property suggestion la bande « suggestion du jour », nulle quand il n'y a
+ *   rien à suggérer (S13 de `docs/suggestion-du-jour.md`).
  */
 data class HomeUiState(
     val isLoading: Boolean = true,
@@ -35,11 +64,27 @@ data class HomeUiState(
     val albumCount: Int = 0,
     val recentlyPlayed: List<Song> = emptyList(),
     val recentlyAdded: List<Album> = emptyList(),
+    val suggestion: SuggestionBand? = null,
 ) {
     /** Rien à proposer : ni écoute passée, ni musique sur l'appareil. */
     val isEmpty: Boolean
-        get() = !isLoading && resume == null && recentlyPlayed.isEmpty() && recentlyAdded.isEmpty()
+        get() = !isLoading && resume == null && recentlyPlayed.isEmpty() && recentlyAdded.isEmpty() &&
+            suggestion == null
 }
+
+/**
+ * La suggestion du jour, prête à dessiner.
+ *
+ * @property kindLabel la sorte dans l'une de ses tournures (« Vous l'adoriez »).
+ * @property reason la ligne qui dit pourquoi, nulle quand la sorte n'a pas de
+ *   quoi la dire.
+ */
+data class SuggestionBand(
+    val song: Song,
+    val kind: SorteDeSuggestion,
+    val kindLabel: String,
+    val reason: String?,
+)
 
 /**
  * L'accueil, composé de ce que l'appareil sait déjà.
@@ -47,16 +92,102 @@ data class HomeUiState(
  * Rien n'est demandé au réseau : l'écoute passée vient de la base locale, les
  * ajouts récents du MediaStore. L'écran s'affiche donc hors ligne comme
  * connecté.
+ *
+ * @param horloge l'heure du tirage et la date du jour (S2) ; le fuseau des
+ *   dates que les raisons affichent.
+ * @param calcul où se tire la suggestion : elle parcourt la bibliothèque et
+ *   l'historique, ce qui n'a rien à faire sur le fil principal.
  */
 class HomeViewModel(
     libraryStore: LibraryStore,
     history: PlayHistoryRepository,
+    private val tirages: TirageStore,
+    private val horloge: Clock = horlogeDuSysteme(),
+    calcul: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
+
+    /**
+     * Le dernier tirage que cet accueil a fait, gardé aussi en mémoire (S12).
+     *
+     * Une écriture en échec ne dit rien à l'appelant ; sans lui, la piste
+     * suggérée, une fois écoutée, ne serait plus tirée, et la bande changerait.
+     * Il ne vaut que pour son jour et son nombre d'appuis.
+     *
+     * Lu **et** posé dans le calcul, dont les passages se suivent sans jamais
+     * se chevaucher : posé après l'écriture, de l'autre côté du tampon de
+     * `flowOn`, un second calcul pouvait partir sans le voir et tirer autre
+     * chose. `@Volatile` parce que le dispatcher du calcul peut changer de fil
+     * d'un passage à l'autre. La course qu'il ferme ne s'éprouve pas sous
+     * `runTest`, dont l'ordonnanceur n'a qu'un fil.
+     */
+    @Volatile
+    private var tenu: TirageDuJour? = null
+
+    /**
+     * Le jour que la bande montre, celui de [joursDe] : « Autre suggestion »
+     * s'y applique, et non au jour relu sur l'horloge, qui peut l'avoir devancé
+     * après un changement de fuseau (S2).
+     */
+    @Volatile
+    private var jourAffiche: Long? = null
+
+    /**
+     * La suggestion du jour, et ce qu'il faut épingler pour qu'elle revienne.
+     *
+     * Le jour vient de [joursDe] : un accueil laissé ouvert passe de lui-même à
+     * la suggestion du lendemain à minuit (S2).
+     */
+    private val suggestion: Flow<SuggestionBand?> = combine(
+        libraryStore.library,
+        history.observeLocal(HISTORIQUE_SUGGESTION),
+        tirages.tirage,
+        joursDe(horloge),
+    ) { library, ecoutes, enregistre, jour ->
+        // Pendant un rechargement, la bibliothèque garde ses morceaux : la
+        // bande reste. Au premier chargement, elle est vide et rien n'est tiré.
+        val depuis = enregistre.pour(jour)
+        // Une épinglée enregistrée, et toujours dans la bibliothèque, passe avant
+        // celle tenue en mémoire : après une lecture en échec, qui rend « aucun
+        // tirage », la mémoire a pu en tirer une autre, et l'épinglée relue
+        // ensuite doit rester. Disparue, elle ne compte plus (S9).
+        val enregistreeValable = depuis.epinglee?.songId?.let(library.songsById::containsKey) == true
+        val effectif = tenu?.takeIf {
+            !enregistreeValable && it.jour == depuis.jour && it.essais == depuis.essais
+        } ?: depuis
+        val tiree = suggestionDuJour(effectif, library, ecoutes, horloge.millis())
+        val aEpingler = tiree?.epinglee()?.takeIf { it != depuis.epinglee }
+        if (aEpingler != null) tenu = depuis.copy(epinglee = aEpingler)
+        jourAffiche = jour
+        Tirage(
+            band = tiree?.let { s ->
+                SuggestionBand(
+                    song = s.song,
+                    kind = s.sorte,
+                    kindLabel = libelleDeSorte(s, jour, depuis.essais),
+                    reason = raisonDe(s, jour, depuis.essais, horloge.zone),
+                )
+            },
+            depuis = depuis,
+            aEpingler = aEpingler,
+        )
+    }
+        .flowOn(calcul)
+        .onEach { tirage ->
+            // Un nouveau tirage est gardé pour sa journée : une fois écoutée, la
+            // piste ne serait plus tirée dans sa sorte, et l'accueil changerait
+            // sous les yeux de l'utilisateur (S9). L'écriture ne vaut que si
+            // rien n'a bougé depuis le tirage (S11). Tant qu'elle échoue, elle
+            // est retentée au calcul suivant.
+            val nouvelle = tirage.aEpingler ?: return@onEach
+            tirages.modifier { it.epingler(tirage.depuis, nouvelle, LocalDate.now(horloge).toEpochDay()) }
+        }
+        .map { it.band }
 
     val state: StateFlow<HomeUiState> = combine(
         libraryStore.library,
         history.observeRecent(HISTORIQUE),
-    ) { library, ecoutes ->
+        suggestion,
+    ) { library, ecoutes, bande ->
         // Les pistes du serveur sont bien notées dans l'historique, mais
         // l'accueil ne sait pas encore les rendre : il faudrait les redemander
         // au catalogue, et l'écran ne parle qu'à l'appareil. Elles sont donc
@@ -78,12 +209,37 @@ class HomeViewModel(
             recentlyAdded = library.albums
                 .sortedByDescending { it.addedAtMs }
                 .take(AJOUTS),
+            suggestion = bande,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(ARRET_MS), HomeUiState())
+
+    /**
+     * « Autre suggestion » : un appui de plus pour le jour que la bande montre,
+     * écrit d'après ce que le fichier contient et non d'après l'écran (S11).
+     */
+    fun anotherSuggestion() {
+        val jour = jourAffiche ?: LocalDate.now(horloge).toEpochDay()
+        viewModelScope.launch { tirages.modifier { it.apresUnAppui(jour) } }
+    }
+
+    /**
+     * Un tirage et l'état d'après lequel il a été fait.
+     *
+     * @property aEpingler la suggestion à garder pour la journée, nulle quand
+     *   c'est déjà celle qui est gardée.
+     */
+    private class Tirage(
+        val band: SuggestionBand?,
+        val depuis: TirageDuJour,
+        val aEpingler: SuggestionEpinglee?,
+    )
 
     companion object {
         private const val HISTORIQUE = 21
         private const val RECENTES = 20
+
+        /** S17 : les lignes de l'historique que la suggestion parcourt, au plus. */
+        internal const val HISTORIQUE_SUGGESTION = 20_000
 
         /** Ce que tient la mosaïque de l'accueil : une tuile de tête et cinq autres. */
         private const val AJOUTS = 6
@@ -96,8 +252,51 @@ class HomeViewModel(
                 HomeViewModel(
                     libraryStore = app.container.libraryStore,
                     history = app.container.playHistoryRepository,
+                    tirages = app.container.tirageStore,
                 )
             }
         }
     }
 }
+
+/**
+ * L'horloge du système, dont le fuseau est relu à chaque lecture.
+ *
+ * `Clock.systemDefaultZone()` fige le fuseau du moment où on la crée : un
+ * voyageur qui change de fuseau garderait, tant que l'accueil vit, le jour de
+ * l'ancien. Android remet le fuseau par défaut du processus à jour quand celui
+ * du système change ; le relire suffit.
+ */
+internal fun horlogeDuSysteme(): Clock = object : Clock() {
+    override fun getZone(): ZoneId = ZoneId.systemDefault()
+    override fun withZone(zone: ZoneId): Clock = system(zone)
+    override fun instant(): Instant = Instant.now()
+}
+
+/**
+ * Le jour du calendrier local (S2), émis à nouveau à chaque minuit.
+ *
+ * L'attente court jusqu'au prochain minuit **de l'horloge**, une heure au plus,
+ * puis le jour est relu : un jour relu égal au précédent, que
+ * `distinctUntilChanged` tait, fait repartir pour le reste. Le plafond rattrape
+ * un fuseau ou une heure changés pendant l'attente, que `delay` ignore : il
+ * attend une durée, pas une échéance.
+ */
+internal fun joursDe(horloge: Clock): Flow<Long> = flow {
+    while (true) {
+        val maintenant = ZonedDateTime.now(horloge)
+        emit(maintenant.toLocalDate().toEpochDay())
+        delay(minOf(Duration.between(maintenant, prochainMinuit(maintenant)).toMillis(), RELECTURE_MAX_MS))
+    }
+}.distinctUntilChanged()
+
+/** Une heure : l'accueil se réveille au plus 24 fois par jour, et seulement affiché. */
+private const val RELECTURE_MAX_MS = 3_600_000L
+
+/**
+ * Le prochain minuit après [maintenant], dans son fuseau. Un jour qui ne commence
+ * pas à minuit — un passage à l'heure d'été posé à 0 h — commence à la première
+ * heure qui existe.
+ */
+internal fun prochainMinuit(maintenant: ZonedDateTime): ZonedDateTime =
+    maintenant.toLocalDate().plusDays(1).atStartOfDay(maintenant.zone)

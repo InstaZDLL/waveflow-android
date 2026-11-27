@@ -373,6 +373,7 @@ private fun WaveFlowRoot(
                                 onAlbumClick = {
                                     navController.navigate(Routes.albumDetail(it.id))
                                 },
+                                onAnotherSuggestion = homeViewModel::anotherSuggestion,
                                 bottomPadding = listBottomPadding,
                             )
                         }

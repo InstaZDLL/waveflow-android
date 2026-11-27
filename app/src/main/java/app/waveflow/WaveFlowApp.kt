@@ -12,6 +12,7 @@ import app.waveflow.data.PlaylistRepository
 import app.waveflow.data.PreferencesStore
 import app.waveflow.data.RoomPlayHistoryRepository
 import app.waveflow.data.RoomPlaylistRepository
+import app.waveflow.data.TirageStore
 import app.waveflow.data.local.WaveFlowDatabase
 import app.waveflow.data.lyrics.EmbeddedLyricsReader
 import app.waveflow.data.lyrics.LyricsRepository
@@ -24,6 +25,7 @@ import app.waveflow.data.remote.HttpServerApi
 import app.waveflow.data.remote.ServerHttp
 import app.waveflow.data.remote.ServerImageAuthInterceptor
 import app.waveflow.data.remote.ServerSessionRepository
+import app.waveflow.data.tirageStoreOf
 import app.waveflow.playback.AbLoop
 import app.waveflow.playback.Media3PlaybackController
 import app.waveflow.playback.PlaybackController
@@ -108,6 +110,9 @@ class AppContainer(app: Application) {
 
     val playHistoryRepository: PlayHistoryRepository =
         RoomPlayHistoryRepository(database.playHistoryDao())
+
+    /** Le tirage de la suggestion du jour, qui doit survivre au redémarrage (S9). */
+    val tirageStore: TirageStore = tirageStoreOf(app)
 
     private val appContext = app.applicationContext
 
