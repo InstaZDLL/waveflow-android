@@ -4,16 +4,15 @@ Document vivant : chaque agent qui prend la suite le relit d'abord, et le met à
 jour avant de partir. Il dit **où en est le chantier et ce qui vient ensuite** —
 pas l'historique, que `git log` raconte mieux.
 
-Dernière mise à jour : **2026-11-26**, fin de la vague 3, sur `main` = `32ab9a0`.
+Dernière mise à jour : **2026-11-27**, fin de la vague 4, sur `main` = `0eab965`.
 
 ## État du dépôt
 
-- `main` = `32ab9a0`. **Les vagues 1 à 3 sont fusionnées en entier** (vague 3 :
-  #94, #100, #101) ; aucune PR ouverte. **Les six lots de la refonte v2 sont
+- `main` = `0eab965`. **Les vagues 1 à 4 sont fusionnées en entier** (vague 4 :
+  #104, #105, #106) ; aucune PR ouverte. **Les six lots de la refonte v2 sont
   livrés.**
-- **848 tests verts** sur `main`, CI verte (workflow `Build & test`, ~4 min).
-- **Zéro avertissement de compilation**, la propriété du dépôt : les deux
-  derniers (`PasswordVisualTransformation` dans `ServerScreen`) sont tombés avec
+- **917 tests verts** sur `main`, CI verte (workflow `Build & test`, ~4 min).
+- **Zéro avertissement de compilation**, la propriété du dépôt, tenue depuis
   #94. **Un avertissement ne se voit pas sur un build tiède** :
   `checks.sh avertissements` de la skill `wa-worker` recompile Kotlin, avec un
   `--rerun` **après chaque tâche** (il ne vaut que pour celle qui le précède).
@@ -21,10 +20,11 @@ Dernière mise à jour : **2026-11-26**, fin de la vague 3, sur `main` = `32ab9a
 - Gradle 9.9.2, AGP 9.5.2, Kotlin 2.4.21, OkHttp 5.5.1, media3 1.11.1,
   Robolectric 4.18.1, Compose BOM 2026.11.01. **`compileSdk` 37.1** (exigé par
   Compose 1.13, #76), `targetSdk` 36.
-- Baseline Detekt : 16 entrées. **Elle ne doit que rétrécir.**
+- Baseline Detekt : 15 entrées (`longArgOf` parti avec #105). **Elle ne doit
+  que rétrécir.**
 - **Tout le reste à faire est suivi en issues** — voir « Le mode
   orchestration ». Cette note dit le pourquoi ; les issues disent le quoi.
-  Aucune n'est encore rangée dans une vague 4.
+  Aucune n'est encore rangée dans une vague 5.
 
 ## Le mode orchestration (depuis le 24/11)
 
@@ -79,14 +79,14 @@ vague, l'utilisateur teste l'APK d'intégration, puis viennent les MR et les PR.
    égaliseur en Kotlin (#82, lot 6).~~ **Faite le 26/11** — voir « Ce que la
    vague 3 a livré ».
 
-**Ouvertes, hors vague** (relevées pendant l'essai de l'APK de la vague 3, le
-26/11) : la suggestion du jour sur l'accueil, à porter de
-`waveflow_core::home_suggestion` (**#95**) ; l'onglet « Bibliothèque » allumé
-pour un album ouvert depuis l'accueil (**#96**) ; le titre d'une page de détail
-répété dans la barre du haut (**#97**) ; la boîte d'icône colorée de « Nouvelle
-playlist » (**#98**) ; une première écoute de plus de 20 s qui n'est pas notée
-(**#99**, à trier : `DELAI_ECOUTE_MS`). Une vague 4 ne se trace qu'à la demande
-de l'utilisateur.
+4. ~~La suggestion du jour (#95) · l'onglet allumé, le titre répété et
+   « Nouvelle playlist » (#96, #97, #98) · la première écoute non notée (#99).~~
+   **Faite le 27/11** — voir « Ce que la vague 4 a livré ».
+
+**Ouvertes, hors vague** (suites de la vague 4, le 27/11) : mesurer l'écoute sur
+la position du lecteur, la cause restante de #99 (**#102**) ; la suggestion du
+jour pour une bibliothèque du serveur (**#103**). Une vague 5 ne se trace qu'à la
+demande de l'utilisateur.
 
 À côté : la validation sur appareil (#61), avec l'utilisateur, et F-Droid (#32).
 
@@ -136,6 +136,67 @@ Six lots, dans cet ordre :
 
 Le fondu enchaîné **est hors plan** : Media3 ne le fournit pas, il faudrait deux
 lecteurs ou une chaîne audio maison.
+
+## Ce que la vague 4 a livré (27/11)
+
+Trois PR pour cinq issues, mêmes étapes que les vagues précédentes : intégration
+locale (916 tests, zéro avertissement), APK validé par l'utilisateur sur
+l'émulateur, `wa-reviewer`, CodeRabbit sur GitLab. Seul `MainActivity.kt` était
+partagé (une ligne de #95), fusion propre dans les deux ordres. Greptile n'a
+rien relevé.
+
+**PR #104 — la suggestion du jour (#95)**, portée de
+`waveflow_core::home_suggestion`. Règles S1 à S17 et écarts E1 à E6 dans
+`docs/suggestion-du-jour.md`. Paquet `suggestion/` : Oubliée, Dans l'esprit,
+Jamais écoutée, tirage `splitmix64` au bit près, deux pistes au plus par artiste.
+Les vecteurs exacts ont été tirés du **Rust du bureau compilé à part** sur une
+copie — à refaire pour tout portage. Le tirage est épinglé pour la journée dans
+un DataStore à part (`TirageStore`), le jour se lit sur une horloge injectable,
+avec une attente de minuit bornée à une heure (un changement de fuseau).
+**Écarts** : ni journal d'écoutes, ni énergie et tempo, ni artistes similaires
+côté Android, donc pas de `vibe_distance` ; **l'appareil seul** (S8), le serveur
+suit en #103. Corrigé après CodeRabbit : un flux de lecture qui abandonne après
+ses reprises ne se termine plus, il attend la prochaine écriture réussie — sinon
+la bande restait figée. Deux leçons : une mémoire de ViewModel se lit et se pose
+dans le `combine`, jamais après `flowOn` ; `delay` attend une durée, pas une
+échéance.
+
+**PR #105 — navigation et détails (#96, #97, #98).** L'onglet allumé suit la
+**pile**, plus la route : chaque page note à son ouverture la racine de sa pile
+dans son `SavedStateHandle` (`ui/navigation/OpenTab.kt`), parce que
+`NavController.currentBackStack` est réservé au groupe androidx — **seul le lint
+le voit, pas le compilateur**. Un `popUpTo(start) { saveState }` non inclusif
+range la pile retirée sous le nom de la destination de départ : c'est ce qui
+rouvrait l'album en touchant « Accueil ». `popBackStack(route)` s'arrête à
+l'entrée la plus haute de cette route. Toucher l'onglet ouvert ramène à sa
+racine ; « Bibliothèque » rouvre la dernière vue. Le titre quitte la barre du
+haut des pages de détail, comme sur le bureau (`TopBar.tsx`). « Nouvelle
+playlist » perd sa boîte ; `SheetOption` gagne icône et seconde ligne.
+**Non vérifié** : la mort du processus.
+
+**PR #106 — une écoute traitée après le seuil (#99).** Sur une boucle encombrée,
+une pause postée avant les 20 s mais traitée après passait devant le minuteur :
+rien n'était noté. Le temps mesuré décide désormais, le minuteur ne fait que
+réveiller. **Reste (#102)** : une lecture annoncée en retard au démarrage à froid
+perd encore l'écoute, et un enchaînement annoncé en retard peut compter une piste
+de moins de 20 s — le compteur mesure entre les livraisons d'événements, pas le
+temps joué. Défaut reproduit sur la vraie chaîne (`PlaybackServiceHistoryTest`).
+Ce qui ne se devine pas :
+- Robolectric en mode PAUSED : l'ExoPlayer n'avance que par messages différés,
+  une attente de démarrage doit avancer l'horloge ;
+  `ShadowSystemClock.advanceBy` sans écouler les boucles fabrique une boucle
+  encombrée ;
+- **la position d'un WAV sous Robolectric ne vaut rien** (109 s après 3 s de
+  lecture) : #102 se testera sur la JVM avec une fausse position ;
+- un test négatif (« rien n'est noté ») attend une **barrière d'écriture** — la
+  note d'une piste suivante, rangée dans la même portée — et non un délai.
+
+**Défaut antérieur relevé, non ouvert** : `artworkScope` est annulé par
+`onDestroy` et n'a pas de `CoroutineExceptionHandler` ; une écriture d'historique
+en cours peut se perdre, une `SQLiteException` ferait planter le service.
+
+**Leçon de machine** : deux émulateurs à la fois saturent le PC (0,9 Go libre,
+ANR de l'app) ; garder un émulateur à la fois quand deux builds tournent.
 
 ## Ce que la vague 3 a livré (26/11)
 
