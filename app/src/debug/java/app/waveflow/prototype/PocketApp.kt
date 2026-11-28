@@ -72,7 +72,9 @@ fun PocketApp(
     val etats = rememberSaveableStateHolder()
 
     fun ouvrir(page: Page) {
-        pile = pile + page.route
+        // Déjà ouverte (« Voir l'album » depuis cet album) : rien à empiler,
+        // sinon Retour dépilerait une entrée invisible.
+        if (pile.lastOrNull() != page.route) pile = pile + page.route
     }
     val menu: (Song) -> List<RowAction> = { song ->
         listOf(
@@ -82,8 +84,11 @@ fun PocketApp(
         )
     }
 
-    BackHandler(enabled = expanded) { onExpandedChange(false) }
-    BackHandler(enabled = !expanded && pile.isNotEmpty()) { pile = pile.dropLast(1) }
+    // Le lecteur déployé n'est visible qu'avec un morceau : Retour, la Snackbar
+    // et l'animation suivent ce qui est à l'écran, pas l'intention.
+    val lecteurVisible = expanded && player.track != null
+    BackHandler(enabled = lecteurVisible) { onExpandedChange(false) }
+    BackHandler(enabled = !lecteurVisible && pile.isNotEmpty()) { pile = pile.dropLast(1) }
 
     Box(
         modifier = Modifier
@@ -155,7 +160,7 @@ fun PocketApp(
         }
 
         AnimatedVisibility(
-            visible = expanded && player.track != null,
+            visible = lecteurVisible,
             enter = slideInVertically { it },
             exit = slideOutVertically { it },
         ) {
@@ -168,7 +173,7 @@ fun PocketApp(
             messages,
             Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = if (expanded) 24.dp else SNACKBAR_LIFT),
+                .padding(bottom = if (lecteurVisible) 24.dp else SNACKBAR_LIFT),
         )
 
         aAjouter?.let { library.songsById[it] }?.let { song ->
@@ -240,7 +245,8 @@ private fun PageDeCollection(
             val album = library.album(page.id)
             PocketCollection(
                 kind = CollectionKind.Album,
-                title = album?.title ?: "Album introuvable",
+                loading = library.isLoading,
+                title = album?.title ?: if (library.isLoading) "" else "Album introuvable",
                 subtitle = album?.displayArtist,
                 artworkUri = album?.artworkUri,
                 songs = if (album != null) library.songsOfAlbum(album.id) else emptyList(),
@@ -252,7 +258,8 @@ private fun PageDeCollection(
             val artiste = library.artist(page.id)
             PocketCollection(
                 kind = CollectionKind.Artiste,
-                title = artiste?.name ?: "Artiste introuvable",
+                loading = library.isLoading,
+                title = artiste?.name ?: if (library.isLoading) "" else "Artiste introuvable",
                 subtitle = null,
                 artworkUri = artiste?.artworkUri,
                 songs = if (artiste != null) library.songsOfArtist(artiste.id) else emptyList(),
@@ -265,7 +272,8 @@ private fun PageDeCollection(
             val titres = playlists.songs(page.id)
             PocketCollection(
                 kind = CollectionKind.Playlist,
-                title = playlist?.name ?: "Playlist introuvable",
+                loading = playlists.isLoading || library.isLoading,
+                title = playlist?.name ?: if (playlists.isLoading) "" else "Playlist introuvable",
                 subtitle = null,
                 artworkUri = titres.firstOrNull()?.artworkUri,
                 songs = titres,

@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -182,7 +183,9 @@ fun Sillage(
                 style = MaterialTheme.typography.labelMedium,
                 color = colors.ink3,
             )
-            center?.invoke()
+            // Les deux durées se mesurent d'abord ; les pastilles prennent ce qui
+            // reste, et cèdent si la police agrandie manque de place.
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { center?.invoke() }
             Text(
                 // Le temps restant, en négatif : ce qu'on se demande en
                 // écoutant, plus que la durée qu'on lit une fois.

@@ -9,11 +9,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Library
 import app.waveflow.model.Playlist
+import app.waveflow.model.Song
 import app.waveflow.playback.PlayingTrack
 import app.waveflow.playback.TrackSource
 import app.waveflow.ui.home.HomeUiState
@@ -21,6 +24,7 @@ import app.waveflow.ui.player.LyricsUiState
 import app.waveflow.ui.player.PlayerUiState
 import app.waveflow.ui.playlists.PlaylistsUiState
 import app.waveflow.ui.theme.WaveFlowTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -164,5 +168,62 @@ class PocketRevueTest {
         compose.waitForIdle()
 
         assertTrue("$signaux", signaux.last())
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-xhdpi")
+    fun `une page restauree avant la bibliotheque attend au lieu de se dire introuvable`() {
+        compose.setContent {
+            WaveFlowTheme {
+                PocketTheme(dark = true) {
+                    PocketCollection(
+                        kind = CollectionKind.Album,
+                        title = "",
+                        subtitle = null,
+                        artworkUri = null,
+                        songs = emptyList(),
+                        player = PlayerUiState(),
+                        actions = CollectionActions({}, { _, _ -> }, {}, { emptyList() }),
+                        loading = true,
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("Lecture de la bibliothèque…").assertExists()
+        compose.onNodeWithText("Rien à écouter ici.").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-xhdpi")
+    fun `la reprise rejoue le morceau sur l'album ou la bibliotheque le range maintenant`() {
+        val ancien = Song(1L, Uri.parse("content://media/1"), "Titre", "Artiste", 2L, "Album", 7L, 180_000L, null)
+        // Après un rechargement, le morceau est rangé dans l'album 8, avec un voisin.
+        val deplace = ancien.copy(albumId = 8L)
+        val voisin = Song(2L, Uri.parse("content://media/2"), "Voisin", "Artiste", 2L, "Album", 8L, 180_000L, null)
+        val bibliotheque = Library(isLoading = false, songs = listOf(deplace, voisin))
+        var file: List<Song>? = null
+        compose.setContent {
+            WaveFlowTheme {
+                PocketTheme(dark = true) {
+                    PocketHome(
+                        state = HomeUiState(
+                            isLoading = false,
+                            resume = ancien,
+                            resumeAlbum = null,
+                            songCount = 2,
+                            albumCount = 1,
+                        ),
+                        library = bibliotheque,
+                        player = PlayerUiState(),
+                        actions = HomeActions({ queue, _ -> file = queue }, {}, {}, {}, {}, {}),
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithContentDescription("Lecture").performClick()
+
+        assertEquals(listOf(1L, 2L), file?.map { it.id })
     }
 }

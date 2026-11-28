@@ -201,7 +201,7 @@ private fun LazyGridScope.tracks(library: Library, player: PlayerUiState, goutti
             title = song.title,
             subtitle = song.displayArtist,
             durationMs = song.durationMs,
-            playing = player.track?.localSongId == song.id,
+            current = player.track?.localSongId == song.id,
             artworkUri = song.artworkUri,
             onClick = { actions.onPlay(library.songs, song) },
             menu = actions.rowMenu(song),

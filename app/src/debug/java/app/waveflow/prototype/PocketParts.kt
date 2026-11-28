@@ -162,8 +162,10 @@ val TILE_SPACING = 12.dp
 
 /**
  * Une ligne de titre compacte : vignette au besoin, titre, seconde ligne,
- * durée, menu. Celle qui joue prend l'accent et l'onde à la place de sa
- * durée — le même signe que l'onglet ouvert.
+ * durée, menu. Le morceau courant — qu'il joue ou soit en pause — prend
+ * l'accent et l'onde à la place de sa durée, le même signe que l'onglet
+ * ouvert ; le lecteur d'écran l'annonce « Morceau courant », pas « En
+ * lecture ».
  *
  * @param subtitle la seconde ligne ; nulle quand elle ne dirait que ce que la
  *   page dit déjà — l'artiste de l'album, sur la page de l'album.
@@ -175,7 +177,7 @@ fun TrackRow(
     title: String,
     subtitle: String?,
     durationMs: Long,
-    playing: Boolean,
+    current: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     artworkUri: Uri? = null,
@@ -190,7 +192,7 @@ fun TrackRow(
             .fillMaxWidth()
             .heightIn(min = 64.dp)
             .clickable(onClick = onClick)
-            .semantics { if (playing) stateDescription = "En lecture" }
+            .semantics { if (current) stateDescription = "Morceau courant" }
             .padding(start = horizontalPadding, end = if (menu.isEmpty()) horizontalPadding else 4.dp),
     ) {
         if (showArtwork) {
@@ -201,7 +203,7 @@ fun TrackRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (playing) colors.accent else colors.ink,
+                color = if (current) colors.accent else colors.ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -216,7 +218,7 @@ fun TrackRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        if (playing) {
+        if (current) {
             WaveMark(modifier = Modifier.size(24.dp, 6.dp), color = colors.accent)
         } else {
             Text(formatDuration(durationMs), style = MaterialTheme.typography.labelMedium, color = colors.ink3)

@@ -133,7 +133,10 @@ private suspend fun sampleDominant(context: Context, artworkUri: Uri): Int? {
         .allowHardware(false)
         .size(SAMPLE_SIZE)
         .build()
-    val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
+    // `execute` rend une erreur plutôt que de lever ; seule l'annulation lève, et
+    // elle doit remonter : la convertir en « pas de couleur » laissait un
+    // chargement abandonné écraser la couleur de la pochette suivante.
+    val result = context.imageLoader.execute(request)
     val bitmap = (result as? SuccessResult)?.let { (it.drawable as? BitmapDrawable)?.bitmap } ?: return null
     val palette = withContext(Dispatchers.Default) { Palette.from(bitmap).generate() }
     return palette.dominantSwatch?.rgb

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Le prototype WaveFlow Pocket (docs/design/sonic-editorial.md) : variante
-     debug seulement. Sa propre activité et sa propre icône de lanceur, dans une
-     tâche à part pour ne pas se mêler à l'application de production. Une build
-     release n'en contient rien. -->
+     debug seulement. Sa propre activité et sa propre icône de lanceur ; lancée
+     depuis son icône, elle s'ouvre dans une tâche à part (l'affinité ne vaut
+     que pour un lancement en nouvelle tâche). Une build release n'en contient
+     rien. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>

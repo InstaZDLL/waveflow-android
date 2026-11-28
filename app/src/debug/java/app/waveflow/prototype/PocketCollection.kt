@@ -89,6 +89,8 @@ data class CollectionActions(
  * de la bibliothèque.
  *
  * @param songs les pistes ; vide quand la collection a disparu de l'appareil.
+ * @param loading la source n'est pas encore lue (une page restaurée après la
+ *   mort du processus) : la page attend au lieu de se dire introuvable.
  */
 @Composable
 fun PocketCollection(
@@ -100,6 +102,7 @@ fun PocketCollection(
     player: PlayerUiState,
     actions: CollectionActions,
     modifier: Modifier = Modifier,
+    loading: Boolean = false,
 ) {
     val colors = Pocket.colors
     val liste = rememberLazyListState()
@@ -184,7 +187,11 @@ fun PocketCollection(
                     Spacer(Modifier.height(16.dp))
                 }
             }
-            if (songs.isEmpty()) {
+            if (loading && songs.isEmpty()) {
+                item(key = "attente") {
+                    EmptyState("Lecture de la bibliothèque…", "Un instant : l'appareil compte ses morceaux.")
+                }
+            } else if (songs.isEmpty()) {
                 item(key = "vide") {
                     EmptyState(
                         title = "Rien à écouter ici.",
@@ -205,7 +212,7 @@ fun PocketCollection(
                         "${song.displayArtist} · ${song.displayAlbum}"
                     },
                     durationMs = song.durationMs,
-                    playing = player.track?.localSongId == song.id,
+                    current = player.track?.localSongId == song.id,
                     artworkUri = song.artworkUri,
                     showArtwork = kind != CollectionKind.Album,
                     onClick = { actions.onPlay(songs, song) },

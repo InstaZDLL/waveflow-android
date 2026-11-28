@@ -141,9 +141,11 @@ fun PocketHome(
                                     if (player.track?.localSongId == reprise.id) {
                                         actions.onTogglePlayPause()
                                     } else {
-                                        val file =
-                                            state.resumeAlbum?.let { library.songsOfAlbum(it.id) } ?: library.songs
-                                        actions.onPlay(file, reprise)
+                                        // L'album se relit sur le morceau tel que la
+                                        // bibliothèque le connaît maintenant : un
+                                        // rechargement peut l'avoir déplacé.
+                                        val actuel = library.songsById[reprise.id]
+                                        if (actuel != null) actions.onPlay(library.songsOfAlbum(actuel.albumId), actuel)
                                     }
                                 },
                                 onOpenAlbum = { state.resumeAlbum?.let { actions.onOpenAlbum(it.id) } },
@@ -187,7 +189,7 @@ fun PocketHome(
                                 title = bande.song.title,
                                 subtitle = bande.song.displayArtist,
                                 durationMs = bande.song.durationMs,
-                                playing = player.track?.localSongId == bande.song.id,
+                                current = player.track?.localSongId == bande.song.id,
                                 artworkUri = bande.song.artworkUri,
                                 onClick = { actions.onPlay(library.songs, bande.song) },
                                 horizontalPadding = gouttiere,

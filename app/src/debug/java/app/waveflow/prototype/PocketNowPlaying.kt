@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -211,7 +212,10 @@ fun PocketNowPlaying(
                     Paroles(state, lyrics, track, nappe, actions, m)
                 }
 
-                if (usesTwoPanes(maxWidth, maxHeight)) {
+                // La fenêtre entière dit si l'on est en paysage ; le corps, lui,
+                // a déjà perdu la barre du haut et celles du système.
+                val fenetre = LocalConfiguration.current
+                if (usesTwoPanes(fenetre.screenWidthDp.dp, fenetre.screenHeightDp.dp)) {
                     TwoPanes(maxHeight, lyrics.shown, corps, cover, paroles) {
                         details(false) { TitleBlock(track) }
                     }

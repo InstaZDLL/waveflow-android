@@ -15,9 +15,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.flowWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import app.waveflow.WaveFlowApp
 import app.waveflow.model.ThemeChoice
 import app.waveflow.ui.home.HomeViewModel
@@ -103,9 +104,12 @@ class PocketActivity : ComponentActivity() {
                         val messages = remember { SnackbarHostState() }
                         val cycle = LocalLifecycleOwner.current.lifecycle
                         LaunchedEffect(cycle) {
-                            merge(vm.errors, playlistsViewModel.errors)
-                                .flowWithLifecycle(cycle)
-                                .collect { messages.showSnackbar(it) }
+                            // L'affichage lui-même s'arrête avec l'écran : un
+                            // second message en attente ne s'affiche pas en
+                            // arrière-plan pour y expirer.
+                            cycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                merge(vm.errors, playlistsViewModel.errors).collect { messages.showSnackbar(it) }
+                            }
                         }
                         PocketApp(
                             library = library,
