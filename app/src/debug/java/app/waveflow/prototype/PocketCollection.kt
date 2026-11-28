@@ -113,7 +113,9 @@ fun PocketCollection(
         val cote = coverSideFor(maxWidth, maxHeight, gouttiere, large)
         val repli = with(density) { cote.toPx() }
         // Le nom passe dans la barre une fois l'en-tête presque sorti.
-        val barre by remember {
+        // Relu à chaque nouvelle mesure : après un redimensionnement, le titre et
+        // la pochette se replient au même seuil.
+        val barre by remember(liste, repli) {
             derivedStateOf { collapseProgress(liste.firstVisibleItemIndex, liste.firstVisibleItemScrollOffset, repli) }
         }
         val titreVisible by animateFloatAsState(

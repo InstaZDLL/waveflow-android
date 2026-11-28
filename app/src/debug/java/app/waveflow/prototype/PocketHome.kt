@@ -120,6 +120,9 @@ fun PocketHome(
                 state.isLoading -> item(key = "attente") {
                     EmptyState("Lecture de la bibliothèque…", "Un instant : l'appareil compte ses morceaux.")
                 }
+                library.errorMessage != null -> item(key = "erreur") {
+                    EmptyState(title = "La bibliothèque n'a pas pu être lue.", detail = library.errorMessage.orEmpty())
+                }
                 library.isEmpty -> item(key = "vide") {
                     EmptyState(
                         title = "Aucun morceau sur l'appareil.",

@@ -123,10 +123,14 @@ fun PocketLibrary(
                 )
             }
             when {
+                // Les playlists vivent dans la base de l'application, pas dans
+                // le MediaStore : elles se montrent même sans morceau local.
+                category == LibraryCategory.Playlists -> playlists(playlists, gouttiere, actions)
                 library.isLoading -> message(
                     "Lecture de la bibliothèque…",
                     "Un instant : l'appareil compte ses morceaux.",
                 )
+                library.errorMessage != null -> message("La bibliothèque n'a pas pu être lue.", library.errorMessage)
                 library.isEmpty -> message(
                     "Aucun morceau sur l'appareil.",
                     "Copiez de la musique dans le dossier Musique du téléphone : WaveFlow la trouvera.",
@@ -135,7 +139,7 @@ fun PocketLibrary(
                     LibraryCategory.Albums -> albums(library, actions)
                     LibraryCategory.Artistes -> artists(library, gouttiere, actions)
                     LibraryCategory.Titres -> tracks(library, player, gouttiere, actions)
-                    LibraryCategory.Playlists -> playlists(playlists, gouttiere, actions)
+                    LibraryCategory.Playlists -> Unit
                 }
             }
         }
@@ -207,6 +211,10 @@ private fun LazyGridScope.tracks(library: Library, player: PlayerUiState, goutti
 }
 
 private fun LazyGridScope.playlists(state: PlaylistsUiState, gouttiere: Dp, actions: LibraryActions) {
+    state.errorMessage?.let { erreur ->
+        message("Les playlists n'ont pas pu être lues.", erreur)
+        return
+    }
     if (!state.isLoading && state.playlists.isEmpty()) {
         message(
             "Aucune playlist.",

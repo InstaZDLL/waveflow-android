@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -256,8 +257,23 @@ private fun OnePane(
             .maxOfOrNull { it.height } ?: 0
         val details = { subcompose("details") { Box(corps) { content(false, false) } }.map { it.measure(libre) } }
 
+        val zoneParoles = h - hauteurBloc - ecart
+        if (lyricsShown && zoneParoles < LYRICS_MIN.roundToPx()) {
+            // Les détails prennent presque tout l'écran (police agrandie sur une
+            // fenêtre basse) : les paroles gardent leur hauteur lisible au-dessus
+            // d'eux, et l'ensemble défile.
+            val serre = subcompose("parolesSerrees") {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        paroles(corps.fillMaxWidth().height(LYRICS_MIN))
+                        Box(corps) { content(false, false) }
+                    }
+                }
+            }.map { it.measure(Constraints.fixed(largeur, h)) }
+            return@SubcomposeLayout layout(w, h) { serre.forEach { it.place(x0, 0) } }
+        }
         if (lyricsShown) {
-            val zone = (h - hauteurBloc - ecart).coerceAtLeast(0)
+            val zone = zoneParoles
             val texte = subcompose("paroles") { paroles(corps.fillMaxSize()) }
                 .map { it.measure(Constraints.fixed(largeur, zone)) }
             val bloc = details()
@@ -323,7 +339,14 @@ private fun TwoPanes(
             if (lyricsShown) paroles(Modifier.fillMaxSize()) else cover(Modifier.widthIn(max = cote).aspectRatio(1f))
         }
         Spacer(Modifier.width(32.dp))
-        Box(Modifier.weight(1f).widthIn(max = 480.dp)) { details() }
+        // Il défile : à police agrandie sur une fenêtre basse, le dock sortirait
+        // sinon de l'écran.
+        Box(
+            Modifier
+                .weight(1f)
+                .widthIn(max = 480.dp)
+                .verticalScroll(rememberScrollState()),
+        ) { details() }
     }
 }
 
@@ -636,7 +659,7 @@ private fun Paroles(
         onSeek = actions.onSeek,
         onHide = actions.onToggleLyrics,
         onRetry = actions.onRetryLyrics,
-        modifier = modifier,
+        modifier = modifier.testTag(LYRICS_TAG),
     )
 }
 
@@ -732,6 +755,12 @@ private val SWIPE_THRESHOLD = 96.dp
 private const val SWIPE_FOLLOW = 0.35f
 
 private val COVER_GAP = 24.dp
+
+/** L'étiquette de test de la zone des paroles. */
+internal const val LYRICS_TAG = "paroles"
+
+/** La hauteur sous laquelle les paroles ne se lisent plus : quatre lignes environ. */
+val LYRICS_MIN = 160.dp
 private val PLAY_SIZE = 72.dp
 private val TRANSPORT_MAX = 420.dp
 

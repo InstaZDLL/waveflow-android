@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,6 +59,7 @@ fun PocketApp(
     lyrics: LyricsUiState,
     actions: NowPlayingActions,
     verbs: PocketVerbs,
+    messages: SnackbarHostState,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
 ) {
@@ -125,6 +128,9 @@ fun PocketApp(
                     )
                     else -> AVenir(onglet)
                 }
+                // Les pannes de lecture et les écritures de playlist manquées,
+                // au-dessus du mini-lecteur.
+                SnackbarHost(messages, Modifier.align(Alignment.BottomCenter))
             }
             PocketMiniPlayer(
                 state = player,

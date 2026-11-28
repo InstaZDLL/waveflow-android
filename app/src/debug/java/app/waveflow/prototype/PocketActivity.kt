@@ -8,12 +8,16 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.flowWithLifecycle
 import app.waveflow.WaveFlowApp
 import app.waveflow.model.ThemeChoice
 import app.waveflow.ui.home.HomeViewModel
@@ -22,6 +26,7 @@ import app.waveflow.ui.permission.hasAudioPermission
 import app.waveflow.ui.player.PlayerViewModel
 import app.waveflow.ui.playlists.PlaylistsViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
+import kotlinx.coroutines.flow.merge
 
 /**
  * L'entrée du prototype **WaveFlow Pocket** — variante `debug` seulement, avec
@@ -92,6 +97,16 @@ class PocketActivity : ComponentActivity() {
                         val home by homeViewModel.state.collectAsStateWithLifecycle()
                         val playlists by playlistsViewModel.state.collectAsStateWithLifecycle()
                         var expanded by rememberSaveable { mutableStateOf(false) }
+                        // Une panne de lecture, un repli de qualité, une playlist
+                        // qui n'a pas pu s'écrire : dits une fois, tant que
+                        // l'écran est visible.
+                        val messages = remember { SnackbarHostState() }
+                        val cycle = LocalLifecycleOwner.current.lifecycle
+                        LaunchedEffect(cycle) {
+                            merge(vm.errors, playlistsViewModel.errors)
+                                .flowWithLifecycle(cycle)
+                                .collect { messages.showSnackbar(it) }
+                        }
                         PocketApp(
                             library = library,
                             home = home,
@@ -106,6 +121,7 @@ class PocketActivity : ComponentActivity() {
                                 onAddToPlaylist = playlistsViewModel::addSong,
                                 onCreatePlaylistWith = playlistsViewModel::createWith,
                             ),
+                            messages = messages,
                             expanded = expanded,
                             onExpandedChange = { expanded = it },
                         )

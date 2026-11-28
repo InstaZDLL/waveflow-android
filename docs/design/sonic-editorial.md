@@ -410,10 +410,13 @@ dépôt MediaStore, hors de son périmètre.
 **Isolé dans la variante `debug`.** Tout vit dans
 `app/src/debug/java/app/waveflow/prototype/` avec son propre manifeste
 (`app/src/debug/AndroidManifest.xml`) : une activité `PocketActivity`, une
-seconde icône de lanceur **« WaveFlow Pocket »**. Rien n'est importé depuis la
-production vers le prototype dans l'autre sens ; une build `release` ne contient
-ni le code ni l'entrée de lanceur. Le retirer, c'est supprimer ces deux
-chemins.
+seconde icône de lanceur **« WaveFlow Pocket »**, nommée par
+`app/src/debug/res/values/strings.xml`. Le prototype emprunte à la production ;
+la production n'importe rien du prototype, et une build `release` ne contient
+ni son code ni son entrée de lanceur. Le retirer, c'est supprimer ces quatre
+chemins : le dossier du prototype, son manifeste, sa ressource de nom et ses
+tests (`app/src/testDebug/java/app/waveflow/prototype/`), qui ne compileraient
+plus sans lui.
 
 **Il lit les vraies données et pilote le vrai lecteur.** Le prototype prend les
 ViewModels de la production — `PlayerViewModel` (sa fabrique, donc son
