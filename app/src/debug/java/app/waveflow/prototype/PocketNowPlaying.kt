@@ -168,7 +168,7 @@ fun PocketNowPlaying(
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
-                val gouttiere = if (maxWidth < NARROW) 20.dp else 24.dp
+                val gouttiere = if (maxWidth < NARROW_WIDTH) 20.dp else 24.dp
                 val corps = Modifier.padding(horizontal = gouttiere)
                 val details: @Composable (Boolean, @Composable () -> Unit) -> Unit = { mesure, header ->
                     Details(
@@ -737,5 +737,4 @@ private val TRANSPORT_MAX = 420.dp
 
 /** La colonne du titre et des commandes, au plus : une tablette ne l'étire pas. */
 private val DETAILS_MAX = 560.dp
-private val NARROW = 400.dp
 private const val QUEUE_SHEET_HEIGHT = 0.8f

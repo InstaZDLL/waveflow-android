@@ -10,9 +10,9 @@ téléphone. Ce document dit ce que doit être sa version mobile, écran par éc
 puis comment le prototype la montre **sans toucher à l'application de
 production**.
 
-État : **Now Playing et le mini-lecteur** sont prototypés (point d'étape). Les
-trois autres écrans — accueil, bibliothèque, album — sont décrits ici et
-attendent que l'utilisateur valide la direction.
+État : **Now Playing et le mini-lecteur** sont prototypés et validés (28/11) ;
+**l'accueil, la bibliothèque et la page d'un album** le sont à leur tour, et
+attendent la revue de l'utilisateur avant toute intégration.
 
 ## Le diagnostic
 
@@ -134,7 +134,7 @@ La pochette donne **une seule nappe** de lumière, là où elle est montrée :
   clarté fixe — sombre en sombre, pâle en clair — pour que deux pochettes ne
   changent pas l'équilibre de l'écran.
 - **Album** et **mise en avant de l'accueil** : la même nappe, derrière la
-  pochette de l'en-tête (proposé, voir les décisions).
+  pochette de l'en-tête (décision du 28/11).
 - **Nulle part ailleurs.** Ni la bibliothèque, ni la recherche, ni les listes.
 
 La nappe est **bornée** : son opacité est la plus forte qui garde `ink2` à
@@ -147,7 +147,7 @@ réel, pas de dérive : un dégradé radial peint une fois par pochette, fondu e
 **DM Sans seule**, la police variable déjà embarquée (licence OFL dans
 `licences/polices/`), avec sa taille optique réglée sur la taille affichée.
 Playfair Display italique reste réservée à **une** ligne de l'application : le
-salut de l'accueil (proposé, voir les décisions). Une seule famille rend la
+salut de l'accueil (décision du 28/11). Une seule famille rend la
 hiérarchie par la graisse et la taille, pas par le contraste de deux voix.
 
 | Rôle | Taille | Graisse | Interlettrage | Usage |
@@ -224,12 +224,17 @@ Un petit système, nommé par intention.
 | `ToggleIcon` | une bascule : l'accent et le point quand elle est allumée |
 | `CoverStage` | la grande pochette : ombre teintée, recul en pause, balayage, appui |
 | `Atmosphere` | la nappe de la pochette, bornée |
-| `MiniPlayer` | la surface `raised` au-dessus de la barre de navigation |
+| `PocketMiniPlayer` | la surface de contenu posée sur la barre de navigation |
 | `PocketNavBar` | trois destinations, l'onde sous l'onglet ouvert |
-| `ActionDock` | la rangée d'actions secondaires au pouce (paroles, file) |
-
-Viendront avec les trois autres écrans : `TrackRow`, `AlbumTile`, `ArtistRow`,
-`SectionHeader`, `CategorySelector`, `EmptyState`.
+| `Dock` | la rangée d'actions secondaires au pouce (paroles, file) |
+| `PocketPill`, `PrimaryPill` | l'action secondaire sur un ton ; l'action principale d'une page, pleine d'accent |
+| `SectionTitle` | le titre d'une section (20 sp) et, au besoin, son action à droite |
+| `AlbumTile`, `TileCarousel` | la pochette sans conteneur, titre et artiste dessous ; la rangée qui laisse dépasser une troisième tuile |
+| `TrackRow` | la ligne compacte : vignette au besoin, titre, seconde ligne, durée — ou l'onde pour celle qui joue —, menu |
+| `ArtistPortrait` | le disque d'un artiste, ses initiales sur une teinte tirée de son nom quand la pochette manque |
+| `CategorySelector` | les pastilles défilantes de la bibliothèque, l'ouverte pleine d'encre |
+| `EmptyState` | ce qui manque, et ce qu'on peut faire |
+| `PocketCollection` | la page d'un album — et, dans la même grammaire, d'un artiste ou d'une playlist |
 
 ## Les écrans
 
@@ -275,7 +280,7 @@ droite.
 **Ce qui change par rapport à l'actuel.**
 
 - Le bouton de lecture est **toujours vert** : l'accent ne vient plus de la
-  pochette (décision à trancher). C'était la cause des « contrôles violets ».
+  pochette (décision du 28/11). C'était la cause des « contrôles violets ».
 - Le vide n'est plus partagé à parts égales au-dessus et au-dessous de la
   pochette : il va **à la pochette**.
 - L'en-tête passe de cinq éléments à trois ; vitesse, minuterie et boucle A-B
@@ -310,61 +315,95 @@ l'étiquette rétrécit d'un cran plutôt que d'être coupée.
 disparaissent ; la progression quitte le bord haut pour le pied (là où l'œil
 finit la lecture de la ligne) ; l'indicateur de navigation devient l'onde.
 
-### Accueil — à faire après validation
+### Accueil
 
 **Intention.** Dire tout de suite quoi écouter, même avec trois albums.
 
-**Composition.**
-1. **Un en-tête compact** : le salut (« Bonsoir. », la ligne éditoriale), les
-   réglages en icône à droite. Une ligne, pas un canevas.
-2. **Reprendre** : une mise en avant de la dernière écoute réelle (historique),
-   pochette à gauche sur sa nappe, titre, artiste, un disque de lecture. Sans
-   historique : une action utile (« Tout lire au hasard », « Parcourir les
-   albums »), jamais un historique inventé.
-3. **La suggestion du jour** (#104), dans la même grammaire, avec « Autre
-   suggestion ».
-4. **Ajouts récents** : un carrousel où deux pochettes et le bord d'une
-   troisième tiennent sur la largeur.
-5. **Accès rapides** : Playlists, Albums, Artistes, Titres — des pastilles,
-   pas des cartes de statistiques.
-6. **Écoutés récemment** (albums, d'après l'historique), si l'historique existe.
+**Composition**, chaque bloc seulement s'il a de vraies données :
+1. **Le salut** en Playfair italique (« Bonsoir. ») — la seule ligne
+   éditoriale de l'application —, et dessous, en troisième encre, ce que
+   contient l'appareil. Il change de lui-même au palier suivant.
+2. **Reprendre** : la dernière écoute réelle (l'historique de l'application),
+   sa pochette sur sa nappe, le titre, l'artiste et l'album, le disque de
+   lecture. Le disque relance ; le reste de la carte ouvre l'album. **Sans
+   historique**, sur la page et non sur une carte : « Votre musique est là. »
+   et une seule action, *Au hasard* — les catégories sont juste en dessous.
+3. **Les accès rapides** : Albums, Artistes, Titres, Playlists, en pastilles
+   qui ouvrent la catégorie de la bibliothèque. Pas de cartes de statistiques.
+4. **La suggestion du jour** (#104) : sa sorte et sa raison, le morceau, et
+   *Autre*.
+5. **Ajouts récents** : un carrousel où deux pochettes et le bord d'une
+   troisième tiennent sur la largeur (tuiles bornées de 132 à 200 dp), *Tout
+   voir*.
+6. **Écoutés récemment** : les albums de l'historique, chacun une fois, sans
+   celui de la reprise.
+
+Sur une tablette, l'accueil garde une colonne de 840 dp, centrée. À police
+agrandie, la pochette de la reprise passe de 104 à 72 dp : le titre se coupait
+au milieu d'un mot.
 
 **Ce qui change.** Les compteurs et le grand titre du bureau partent ; la
 musique arrive dans le premier écran ; une bibliothèque de trois albums remplit
-l'écran de ses trois pochettes, de sa reprise et de ses accès.
+l'écran de sa reprise, de ses accès, de sa suggestion et de ses pochettes.
 
-### Bibliothèque — à faire après validation
+**Ce qui n'y est pas.** L'icône des réglages proposée par le brief : le
+prototype n'a pas d'écran de réglages, et une icône qui n'ouvre rien serait un
+bouton mort. Elle reviendra à l'intégration, vers les réglages de
+l'application.
+
+### Bibliothèque
 
 **Intention.** Un vrai navigateur de musique, efficace sur des milliers de
 titres.
 
-**Composition.** Un titre d'écran, puis **un sélecteur de catégorie** :
-pastilles défilantes (Albums · Artistes · Titres · Playlists · Serveur), celle
-qui est ouverte remplie de `ink` (encre claire sur fond sombre, et l'inverse) —
-on sait toujours où l'on est. Les albums en grille de deux colonnes sur
-téléphone (trois à partir de 600 dp), la pochette sans conteneur ; les artistes
-en liste, disque de 56 dp, et **leurs initiales sur une teinte tirée du nom**
-quand la photo manque ; les titres en liste compacte (vignette 48 dp, titre,
-artiste, durée, menu), la ligne qui joue marquée par le sillage miniature et
-l'accent. Listes paresseuses à clés stables.
+**Composition.** Le titre d'écran et ce que contient l'appareil, puis **le
+sélecteur de catégorie** : Albums · Artistes · Titres · Playlists, des
+pastilles qui défilent jusqu'au bord de l'écran, l'ouverte pleine d'encre —
+encre claire sur le sombre, encre sombre sur le clair. Une seule surface qui
+défile, des clés stables :
+
+- **Albums** en grille : deux colonnes sur un téléphone, quatre sur une
+  tablette (tuiles de 150 dp au moins), la pochette sans conteneur ;
+- **Artistes** en lignes : le disque de 56 dp, le nom, « 2 albums · 9 titres » ;
+  sans pochette, ses initiales sur une teinte tirée de son nom (« ? » pour
+  l'artiste inconnu) ;
+- **Titres** en lignes compactes : vignette 48 dp, titre, artiste, durée, menu
+  (*Ajouter à une playlist*, *Voir l'album*, *Voir l'artiste*) ; celle qui
+  joue prend l'accent et l'onde à la place de sa durée ;
+- **Playlists** en lignes : la pochette du premier titre, le nom, le compte.
+
+Dès 680 dp, les lignes passent sur deux colonnes. Un artiste et une playlist
+s'ouvrent sur la page d'un album, dans la même grammaire.
 
 **Ce qui change.** La rangée d'onglets soulignés part ; les artistes gagnent un
-repli qui n'est pas une note de musique.
+visage qui n'est pas une note de musique.
 
-### Album — à faire après validation
+**Ce qui n'y est pas.** Le catalogue du serveur, sous-onglet de
+l'application : le prototype ne lit que l'appareil. Il reviendra à
+l'intégration comme cinquième pastille.
+
+### Album
 
 **Intention.** Une page d'album, pas une fiche.
 
-**Composition.** La pochette en grand, centrée, sur sa nappe (largeur moins
-deux gouttières, plafonnée à la moitié de la hauteur) ; le nom en titre d'écran,
-l'artiste, puis une ligne `année · N titres · durée` ; **Lire** (pilule
-d'accent) et **Aléatoire** (pilule tonale) ; les pistes en lignes sans pochette
-répétée — numéro (ou sillage pour celle qui joue), titre, durée, menu. En
-défilant, la pochette rétrécit avec le défilement et le nom passe dans la barre
-du haut, sans saut de mise en page.
+**Composition.** La pochette en grand sur sa nappe — la largeur moins les
+gouttières, bornée par la moitié de la hauteur et par 400 dp —, le nom en
+titre d'écran, l'artiste, « Album · 9 titres · 42 min », **Lire** (pilule
+d'accent) et **Aléatoire** (pilule tonale), puis les pistes sans pochette
+répétée : le titre, l'artiste seulement s'il n'est pas celui de l'album, la
+durée ou l'onde, le menu. En défilant, la pochette recule et pâlit avec le
+geste, vers son bord bas pour ne pas mordre sur le titre, et le nom passe dans
+la barre du haut ; la flèche de retour garde un disque de la page tant qu'elle
+passe sur la pochette. Sous « Supprimer les animations », seul le nom paraît,
+en fondu. À partir de 600 dp, la pochette et le texte sont côte à côte.
 
 **Ce qui change.** `DetailHeader` (commun à cinq pages) laisse la place à un
-en-tête propre à l'album ; la pochette passe de ~140 dp à toute la largeur.
+en-tête propre ; la pochette passe de ~140 dp à toute la largeur.
+
+**Ce qui n'y est pas.** L'année et le numéro de piste : l'application ne les
+lit pas dans le MediaStore, et les pistes sont dans l'ordre de la bibliothèque
+(par titre). Le prototype ne les invente pas ; les lire est un changement du
+dépôt MediaStore, hors de son périmètre.
 
 ## Le prototype
 
@@ -376,13 +415,15 @@ production vers le prototype dans l'autre sens ; une build `release` ne contient
 ni le code ni l'entrée de lanceur. Le retirer, c'est supprimer ces deux
 chemins.
 
-**Il lit les vraies données et pilote le vrai lecteur.** Le prototype prend le
-`PlayerViewModel` de la production (sa fabrique, donc son `MediaController`, sa
-minuterie, sa boucle A-B, ses paroles) et le `LibraryStore` d'`AppContainer`.
+**Il lit les vraies données et pilote le vrai lecteur.** Le prototype prend les
+ViewModels de la production — `PlayerViewModel` (sa fabrique, donc son
+`MediaController`, sa minuterie, sa boucle A-B, ses paroles), `HomeViewModel`
+(la reprise et la suggestion du jour), `PlaylistsViewModel` — et le
+`LibraryStore` d'`AppContainer`.
 Il ne réécrit rien de Media3, du MediaStore, du service ni d'Android Auto. Il
 réemploie les feuilles et volets existants qui portent une logique (`QueueScreen`,
-`LyricsPane`, `SleepTimerSheet`, `PlaybackSpeedSheet`) en les habillant de ses
-jetons.
+`LyricsPane`, `SleepTimerSheet`, `PlaybackSpeedSheet`, `AddToPlaylistSheet`)
+en les habillant de ses jetons.
 
 **Pour l'ouvrir** : installer l'APK debug, puis l'icône « WaveFlow Pocket », ou
 
@@ -392,30 +433,29 @@ adb shell am start -n app.waveflow/app.waveflow.prototype.PocketActivity
 
 Le thème suit celui du système (`adb shell cmd uimode night yes|no`).
 
-**Ce qu'il montre au point d'étape** : Now Playing et le mini-lecteur, sur un
-écran d'échafaudage — la liste des titres de la bibliothèque, pour lancer la
-lecture — qui n'est **pas** la bibliothèque proposée. Les tests de ses
-composants à logique sont dans `app/src/testDebug/`, pour que la variante
-`release` n'ait rien à compiler.
+**Ce qu'il montre** : les quatre écrans — l'accueil, la bibliothèque, la page
+d'un album (et d'un artiste, d'une playlist), Now Playing —, avec le
+mini-lecteur et la barre de navigation. L'onglet Recherche dit qu'il n'est
+pas l'un des quatre. Les tests de ses composants à logique sont dans
+`app/src/testDebug/`, pour que la variante `release` n'ait rien à compiler.
 
-## Décisions qui se rouvrent
+## Décisions arrêtées le 28/11
 
-À trancher par l'utilisateur ; le prototype applique la proposition.
+L'utilisateur a validé la direction de Now Playing et du mini-lecteur le
+28/11, et tranché les cinq points que ce document rouvrait. **Elles ne valent
+que dans le prototype** (variante `debug`) : l'application de production ne
+bouge pas tant que les quatre écrans n'ont pas été revus.
 
-1. **L'accent.** Aujourd'hui `#34D399` en sombre, `#059669` en clair (encre
-   blanche à 3,77:1). **Proposé** : `#20D39B` en sombre (9,8:1 sur la page, un
-   vert un peu plus froid, accordé aux neutres vert-bleu) et `#047857` en clair
-   (encre blanche à 5,5:1 : un libellé de bouton y tient).
-2. **L'accent tiré de la pochette.** Aujourd'hui il remplace l'émeraude dans le
-   lecteur (décision du 25/11). **Proposé** : l'accent reste vert partout, la
-   pochette ne donne que la lumière. C'est la condition pour qu'une capture du
-   lecteur dise « WaveFlow », et la cause directe des « contrôles violets ».
-3. **L'atmosphère de la pochette.** Aujourd'hui dans le lecteur seul.
-   **Proposé** : le lecteur, l'en-tête de la page d'album et la reprise de
-   l'accueil — une nappe chaque fois, jamais un écran entier teinté.
-4. **Le clair sans verre.** Aujourd'hui *Liquid Aurora Glass*. **Proposé** :
-   un clair à tons pleins (`#F5F6F2`, menthe `#E4EEE9`, blanc pour ce qui se
-   lève), comme le brief le demande.
-5. **La police.** DM Sans reste ; **proposé** : Playfair italique limitée à la
-   seule ligne du salut de l'accueil, dans les deux modes (aujourd'hui une ligne
-   par page en sombre, DM Sans légère en clair).
+1. **L'accent** : `#20D39B` en sombre (9,8:1 sur la page), `#047857` en clair
+   (encre blanche à 5,5:1 : un libellé de bouton y tient). Il remplace
+   `#34D399` et `#059669`.
+2. **L'accent tiré de la pochette est abandonné.** Le bouton de lecture reste
+   toujours vert ; la pochette ne donne que la lumière. Cela revient sur la
+   décision du 25/11, cause directe des « contrôles violets ».
+3. **L'atmosphère de la pochette** s'étend du lecteur à l'en-tête de la page
+   d'album et à la reprise de l'accueil — une seule nappe chaque fois, jamais
+   un écran entier teinté.
+4. **Le clair passe en tons pleins**, sans verre (`#F5F6F2`, menthe `#E4EEE9`,
+   blanc pour ce qui se lève), à la place de *Liquid Aurora Glass*.
+5. **La police** : DM Sans seule ; Playfair Display italique ne reste que pour
+   la ligne du salut de l'accueil, dans les deux apparences.

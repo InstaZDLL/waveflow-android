@@ -5,25 +5,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,37 +21,64 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.waveflow.model.Library
 import app.waveflow.model.Song
-import app.waveflow.ui.components.Artwork
-import app.waveflow.ui.formatDuration
+import app.waveflow.ui.home.HomeUiState
 import app.waveflow.ui.player.LyricsUiState
 import app.waveflow.ui.player.PlayerUiState
+import app.waveflow.ui.playlists.AddToPlaylistSheet
+import app.waveflow.ui.playlists.PlaylistsUiState
+
+/** Ce que la coquille relaie au lecteur et aux playlists de production. */
+data class PocketVerbs(
+    val onPlay: (queue: List<Song>, song: Song) -> Unit,
+    val onShuffle: (List<Song>) -> Unit,
+    val onAnotherSuggestion: () -> Unit,
+    val onAddToPlaylist: (playlistId: Long, song: Song) -> Unit,
+    val onCreatePlaylistWith: (name: String, song: Song) -> Unit,
+)
 
 /**
- * La coquille du prototype : la page ouverte, le mini-lecteur posé sur la
- * barre de navigation, et Now Playing qui monte par-dessus.
+ * La coquille du prototype : l'onglet ouvert et sa pile de pages, le
+ * mini-lecteur posé sur la barre de navigation, et Now Playing qui monte
+ * par-dessus.
  *
- * Au point d'étape, seul l'onglet Bibliothèque porte une page — un
- * **échafaudage** (la liste des titres, pour lancer la lecture), qui n'est pas
- * la bibliothèque proposée. Accueil et Recherche disent qu'ils viennent après
- * la validation de la direction.
+ * Toucher un onglet ramène à sa racine. La pile tient en chaînes
+ * (`album:12`, voir [Page]) pour survivre à la recréation de l'activité.
+ * La recherche n'est pas l'un des quatre écrans du prototype : son onglet le dit.
  */
 @Composable
 fun PocketApp(
     library: Library,
+    home: HomeUiState,
+    playlists: PlaylistsUiState,
     player: PlayerUiState,
     lyrics: LyricsUiState,
     actions: NowPlayingActions,
-    onPlay: (queue: List<Song>, song: Song) -> Unit,
+    verbs: PocketVerbs,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
 ) {
-    var onglet by rememberSaveable { mutableStateOf(PocketTab.Bibliotheque) }
+    var onglet by rememberSaveable { mutableStateOf(PocketTab.Accueil) }
+    var categorie by rememberSaveable { mutableStateOf(LibraryCategory.Albums) }
+    var pile by rememberSaveable { mutableStateOf(listOf<String>()) }
+    var aAjouter by rememberSaveable { mutableStateOf<Long?>(null) }
     val colors = Pocket.colors
+
+    fun ouvrir(page: Page) {
+        pile = pile + page.route
+    }
+    val menu: (Song) -> List<RowAction> = { song ->
+        listOf(
+            RowAction("Ajouter à une playlist") { aAjouter = song.id },
+            RowAction("Voir l'album") { ouvrir(Page.Album(song.albumId)) },
+            RowAction("Voir l'artiste") { ouvrir(Page.Artiste(song.artistId)) },
+        )
+    }
+
     BackHandler(enabled = expanded) { onExpandedChange(false) }
+    BackHandler(enabled = !expanded && pile.isNotEmpty()) { pile = pile.dropLast(1) }
 
     Box(
         modifier = Modifier
@@ -72,8 +87,42 @@ fun PocketApp(
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
-                when (onglet) {
-                    PocketTab.Bibliotheque -> Echafaudage(library, player, onPlay)
+                val page = pile.lastOrNull()?.let(Page::of)
+                when {
+                    page != null -> PageDeCollection(page, library, playlists, player, verbs, menu, onBack = {
+                        pile =
+                            pile.dropLast(1)
+                    })
+                    onglet == PocketTab.Accueil -> PocketHome(
+                        state = home,
+                        library = library,
+                        player = player,
+                        actions = HomeActions(
+                            onPlay = verbs.onPlay,
+                            onShuffle = verbs.onShuffle,
+                            onTogglePlayPause = actions.onTogglePlayPause,
+                            onOpenAlbum = { ouvrir(Page.Album(it)) },
+                            onOpenCategory = {
+                                categorie = it
+                                onglet = PocketTab.Bibliotheque
+                            },
+                            onAnotherSuggestion = verbs.onAnotherSuggestion,
+                        ),
+                    )
+                    onglet == PocketTab.Bibliotheque -> PocketLibrary(
+                        library = library,
+                        playlists = playlists,
+                        player = player,
+                        category = categorie,
+                        onCategory = { categorie = it },
+                        actions = LibraryActions(
+                            onPlay = verbs.onPlay,
+                            onOpenAlbum = { ouvrir(Page.Album(it)) },
+                            onOpenArtist = { ouvrir(Page.Artiste(it)) },
+                            onOpenPlaylist = { ouvrir(Page.Playlist(it)) },
+                            rowMenu = menu,
+                        ),
+                    )
                     else -> AVenir(onglet)
                 }
             }
@@ -85,7 +134,13 @@ fun PocketApp(
                 onSkipPrevious = actions.onSkipPrevious,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
-            PocketNavBar(selected = onglet, onSelect = { onglet = it })
+            PocketNavBar(
+                selected = onglet,
+                onSelect = {
+                    onglet = it
+                    pile = emptyList()
+                },
+            )
         }
 
         AnimatedVisibility(
@@ -95,68 +150,105 @@ fun PocketApp(
         ) {
             PocketNowPlaying(state = player, lyrics = lyrics, actions = actions)
         }
+
+        aAjouter?.let { library.songsById[it] }?.let { song ->
+            AddToPlaylistSheet(
+                song = song,
+                playlists = playlists.playlists,
+                songCountOf = { playlists.songs(it.id).size },
+                onAddTo = {
+                    verbs.onAddToPlaylist(it.id, song)
+                    aAjouter = null
+                },
+                onCreateAndAdd = { nom ->
+                    verbs.onCreatePlaylistWith(nom, song)
+                    aAjouter = null
+                },
+                onDismiss = { aAjouter = null },
+            )
+        }
     }
 }
 
-/** La liste des titres qui sert à lancer la lecture : un échafaudage, pas la bibliothèque proposée. */
-@Composable
-private fun Echafaudage(library: Library, player: PlayerUiState, onPlay: (List<Song>, Song) -> Unit) {
-    val colors = Pocket.colors
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = 16.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars),
-    ) {
-        item(key = "titre") {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 12.dp)) {
-                Text("Bibliothèque", style = MaterialTheme.typography.displaySmall, color = colors.ink)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Échafaudage du prototype : la bibliothèque proposée vient après la validation de Now Playing.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.ink3,
-                )
+/** Une page empilée au-dessus d'un onglet, codée en chaîne pour l'état sauvegardé. */
+sealed interface Page {
+    val route: String
+
+    data class Album(val id: Long) : Page {
+        override val route get() = "album:$id"
+    }
+
+    data class Artiste(val id: Long) : Page {
+        override val route get() = "artiste:$id"
+    }
+
+    data class Playlist(val id: Long) : Page {
+        override val route get() = "playlist:$id"
+    }
+
+    companion object {
+        /** La page de [route], ou `null` si la chaîne n'en décrit aucune. */
+        fun of(route: String): Page? {
+            val (sorte, valeur) = route.split(':', limit = 2).takeIf { it.size == 2 } ?: return null
+            val id = valeur.toLongOrNull() ?: return null
+            return when (sorte) {
+                "album" -> Album(id)
+                "artiste" -> Artiste(id)
+                "playlist" -> Playlist(id)
+                else -> null
             }
         }
-        when {
-            library.isLoading -> item(key = "attente") { Message("Lecture de la bibliothèque…") }
-            library.isEmpty -> item(key = "vide") { Message("Aucun morceau sur l'appareil.") }
-            else -> items(library.songs, key = { it.id }) { song ->
-                val joue = player.track?.localSongId == song.id
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 64.dp)
-                        .clickable { onPlay(library.songs, song) }
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                ) {
-                    Artwork(song.artworkUri, shape = PocketShapes.thumbnail, modifier = Modifier.size(48.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            song.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (joue) colors.accent else colors.ink,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            song.displayArtist,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.ink2,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Text(
-                        formatDuration(song.durationMs),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.ink3,
-                    )
-                }
-            }
+    }
+}
+
+@Composable
+private fun PageDeCollection(
+    page: Page,
+    library: Library,
+    playlists: PlaylistsUiState,
+    player: PlayerUiState,
+    verbs: PocketVerbs,
+    menu: (Song) -> List<RowAction>,
+    onBack: () -> Unit,
+) {
+    val actions = CollectionActions(onBack = onBack, onPlay = verbs.onPlay, onShuffle = verbs.onShuffle, rowMenu = menu)
+    when (page) {
+        is Page.Album -> {
+            val album = library.album(page.id)
+            PocketCollection(
+                kind = CollectionKind.Album,
+                title = album?.title ?: "Album introuvable",
+                subtitle = album?.displayArtist,
+                artworkUri = album?.artworkUri,
+                songs = if (album != null) library.songsOfAlbum(album.id) else emptyList(),
+                player = player,
+                actions = actions,
+            )
+        }
+        is Page.Artiste -> {
+            val artiste = library.artist(page.id)
+            PocketCollection(
+                kind = CollectionKind.Artiste,
+                title = artiste?.name ?: "Artiste introuvable",
+                subtitle = null,
+                artworkUri = artiste?.artworkUri,
+                songs = if (artiste != null) library.songsOfArtist(artiste.id) else emptyList(),
+                player = player,
+                actions = actions,
+            )
+        }
+        is Page.Playlist -> {
+            val playlist = playlists.playlist(page.id)
+            val titres = playlists.songs(page.id)
+            PocketCollection(
+                kind = CollectionKind.Playlist,
+                title = playlist?.name ?: "Playlist introuvable",
+                subtitle = null,
+                artworkUri = titres.firstOrNull()?.artworkUri,
+                songs = titres,
+                player = player,
+                actions = actions,
+            )
         }
     }
 }
@@ -173,19 +265,9 @@ private fun AVenir(onglet: PocketTab) {
         Text(onglet.label, style = MaterialTheme.typography.titleLarge, color = Pocket.colors.ink)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Cet écran sera prototypé une fois la direction de Now Playing validée.",
+            "La recherche n'est pas l'un des quatre écrans du prototype : elle reste celle de l'application.",
             style = MaterialTheme.typography.bodyMedium,
             color = Pocket.colors.ink2,
         )
     }
-}
-
-@Composable
-private fun Message(texte: String) {
-    Text(
-        texte,
-        style = MaterialTheme.typography.bodyMedium,
-        color = Pocket.colors.ink2,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
-    )
 }

@@ -16,9 +16,11 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.waveflow.WaveFlowApp
 import app.waveflow.model.ThemeChoice
+import app.waveflow.ui.home.HomeViewModel
 import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.permission.hasAudioPermission
 import app.waveflow.ui.player.PlayerViewModel
+import app.waveflow.ui.playlists.PlaylistsViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
 
 /**
@@ -26,16 +28,22 @@ import app.waveflow.ui.theme.WaveFlowTheme
  * sa propre icône de lanceur (`app/src/debug/AndroidManifest.xml`). Une build
  * `release` n'en contient rien.
  *
- * Il lit les vraies données et pilote le vrai lecteur : le `PlayerViewModel`
- * de production (sa fabrique, donc son `MediaController`, sa minuterie, sa
- * boucle A-B, ses paroles) et le `LibraryStore` d'`AppContainer`. Rien de
- * Media3, du MediaStore ni du service n'est réécrit.
+ * Il lit les vraies données et pilote le vrai lecteur : les ViewModels de
+ * production — le lecteur (sa fabrique, donc son `MediaController`, sa
+ * minuterie, sa boucle A-B, ses paroles), l'accueil (la reprise et la
+ * suggestion du jour) et les playlists — et le `LibraryStore`
+ * d'`AppContainer`. Rien de Media3, du MediaStore ni du service n'est réécrit.
  *
  * Le thème suit le système.
  */
 class PocketActivity : ComponentActivity() {
 
     private val playerViewModel: PlayerViewModel by viewModels { PlayerViewModel.Factory }
+
+    // Les ViewModels de production de l'accueil (reprise, suggestion du jour)
+    // et des playlists : le prototype n'a pas de données à lui.
+    private val homeViewModel: HomeViewModel by viewModels { HomeViewModel.Factory }
+    private val playlistsViewModel: PlaylistsViewModel by viewModels { PlaylistsViewModel.Factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,13 +89,23 @@ class PocketActivity : ComponentActivity() {
                         val library by libraryStore.library.collectAsStateWithLifecycle()
                         val player by vm.state.collectAsStateWithLifecycle()
                         val lyrics by vm.lyrics.collectAsStateWithLifecycle()
+                        val home by homeViewModel.state.collectAsStateWithLifecycle()
+                        val playlists by playlistsViewModel.state.collectAsStateWithLifecycle()
                         var expanded by rememberSaveable { mutableStateOf(false) }
                         PocketApp(
                             library = library,
+                            home = home,
+                            playlists = playlists,
                             player = player,
                             lyrics = lyrics,
                             actions = actions.copy(onCollapse = { expanded = false }),
-                            onPlay = vm::playFrom,
+                            verbs = PocketVerbs(
+                                onPlay = vm::playFrom,
+                                onShuffle = vm::playShuffled,
+                                onAnotherSuggestion = homeViewModel::anotherSuggestion,
+                                onAddToPlaylist = playlistsViewModel::addSong,
+                                onCreatePlaylistWith = playlistsViewModel::createWith,
+                            ),
                             expanded = expanded,
                             onExpandedChange = { expanded = it },
                         )

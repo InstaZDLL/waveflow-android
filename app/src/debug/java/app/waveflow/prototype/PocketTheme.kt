@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
@@ -245,6 +246,27 @@ internal val PocketTypography = Typography(
     labelLarge = sans(14.sp, 560, 20.sp),
     labelMedium = sans(13.sp, 500, 18.sp, features = "tnum"),
     labelSmall = sans(12.sp, 620, 16.sp, 0.06.em),
+)
+
+/**
+ * La ligne éditoriale : Playfair Display italique, **une seule ligne** de
+ * l'application — le salut de l'accueil —, dans les deux apparences
+ * (décision du 28/11). Jamais pour du texte courant.
+ */
+internal val PocketEditorial = TextStyle(
+    fontFamily = FontFamily(
+        Font(
+            resId = R.font.playfair_display_italic,
+            weight = FontWeight.Normal,
+            style = FontStyle.Italic,
+            variationSettings = FontVariation.Settings(FontVariation.weight(400)),
+        ),
+    ),
+    fontWeight = FontWeight.Normal,
+    fontStyle = FontStyle.Italic,
+    fontSize = 30.sp,
+    lineHeight = 38.sp,
+    letterSpacing = (-0.01).em,
 )
 
 private val LocalPocketColors = staticCompositionLocalOf { PocketDark }
