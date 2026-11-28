@@ -57,21 +57,6 @@ import app.waveflow.ui.player.PlayerUiState
 import app.waveflow.ui.theme.WaveFlowTheme
 import app.waveflow.ui.trackCountLabel
 
-/** Ce qu'est la page : elle se dessine un peu autrement pour chacun. */
-enum class CollectionKind(val label: String) {
-    Album("Album"),
-    Artiste("Artiste"),
-    Playlist("Playlist"),
-}
-
-/** Ce que la page d'une collection sait faire. */
-data class CollectionActions(
-    val onBack: () -> Unit,
-    val onPlay: (queue: List<Song>, song: Song) -> Unit,
-    val onShuffle: (List<Song>) -> Unit,
-    val rowMenu: (Song) -> List<RowAction>,
-)
-
 /**
  * La page d'un album — et, avec la même grammaire, celle d'un artiste ou
  * d'une playlist (`docs/design/sonic-editorial.md`, « Album »).

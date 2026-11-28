@@ -39,15 +39,6 @@ import app.waveflow.ui.player.PlayerUiState
 import app.waveflow.ui.playlists.PlaylistsUiState
 import app.waveflow.ui.trackCountLabel
 
-/** Ce que la bibliothèque sait faire. */
-data class LibraryActions(
-    val onPlay: (queue: List<Song>, song: Song) -> Unit,
-    val onOpenAlbum: (Long) -> Unit,
-    val onOpenArtist: (Long) -> Unit,
-    val onOpenPlaylist: (Long) -> Unit,
-    val rowMenu: (Song) -> List<RowAction>,
-)
-
 /**
  * La bibliothèque de Pocket : un vrai navigateur de musique
  * (`docs/design/sonic-editorial.md`).
@@ -122,27 +113,38 @@ fun PocketLibrary(
                     modifier = (if (tuiles) Modifier.bleed(gouttiere) else Modifier).padding(vertical = 12.dp),
                 )
             }
-            when {
+            if (category == LibraryCategory.Playlists) {
                 // Les playlists vivent dans la base de l'application, pas dans
                 // le MediaStore : elles se montrent même sans morceau local.
-                category == LibraryCategory.Playlists -> playlists(playlists, gouttiere, actions)
-                library.isLoading -> message(
-                    "Lecture de la bibliothèque…",
-                    "Un instant : l'appareil compte ses morceaux.",
-                )
-                library.errorMessage != null -> message("La bibliothèque n'a pas pu être lue.", library.errorMessage)
-                library.isEmpty -> message(
-                    "Aucun morceau sur l'appareil.",
-                    "Copiez de la musique dans le dossier Musique du téléphone : WaveFlow la trouvera.",
-                )
-                else -> when (category) {
-                    LibraryCategory.Albums -> albums(library, actions)
-                    LibraryCategory.Artistes -> artists(library, gouttiere, actions)
-                    LibraryCategory.Titres -> tracks(library, player, gouttiere, actions)
-                    LibraryCategory.Playlists -> Unit
-                }
+                playlists(playlists, gouttiere, actions)
+            } else {
+                // Les titres sont la seule catégorie qui lit le lecteur (la
+                // ligne qui joue) : ils arrivent tout faits.
+                category(category, library, gouttiere, actions) { tracks(library, player, gouttiere, actions) }
             }
         }
+    }
+}
+
+/** Une catégorie des morceaux locaux, ou ce qui l'empêche d'avoir du contenu. */
+private fun LazyGridScope.category(
+    category: LibraryCategory,
+    library: Library,
+    gouttiere: Dp,
+    actions: LibraryActions,
+    trackRows: LazyGridScope.() -> Unit,
+) {
+    val erreur = library.errorMessage
+    when {
+        library.isLoading -> message("Lecture de la bibliothèque…", "Un instant : l'appareil compte ses morceaux.")
+        erreur != null -> message("La bibliothèque n'a pas pu être lue.", erreur)
+        library.isEmpty -> message(
+            "Aucun morceau sur l'appareil.",
+            "Copiez de la musique dans le dossier Musique du téléphone : WaveFlow la trouvera.",
+        )
+        category == LibraryCategory.Albums -> albums(library, actions)
+        category == LibraryCategory.Artistes -> artists(library, gouttiere, actions)
+        else -> trackRows()
     }
 }
 

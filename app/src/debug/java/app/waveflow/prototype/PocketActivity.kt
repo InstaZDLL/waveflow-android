@@ -9,17 +9,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import app.waveflow.WaveFlowApp
+import app.waveflow.data.LibraryStore
 import app.waveflow.model.ThemeChoice
 import app.waveflow.ui.home.HomeViewModel
 import app.waveflow.ui.permission.AudioPermissionGate
@@ -62,81 +62,101 @@ class PocketActivity : ComponentActivity() {
         // les boutons y restent lisibles sur nos fonds, qui sont pleins.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
         val libraryStore = (application as WaveFlowApp).container.libraryStore
-        val vm = playerViewModel
-        val actions = NowPlayingActions(
-            onCollapse = {},
-            onTogglePlayPause = vm::togglePlayPause,
-            onSkipNext = vm::skipNext,
-            onSkipPrevious = vm::skipPrevious,
-            onSeek = vm::seekTo,
-            onToggleShuffle = vm::toggleShuffle,
-            onCycleRepeat = vm::cycleRepeatMode,
-            onPlayQueueItem = vm::playQueueItem,
-            onMoveQueueItem = vm::moveQueueItem,
-            onRemoveQueueItem = vm::removeQueueItem,
-            onStartSleepTimer = vm::startSleepTimer,
-            onCancelSleepTimer = vm::cancelSleepTimer,
-            onSleepTimerRemainingMs = vm::sleepTimerRemainingMs,
-            onSetPlaybackSpeed = vm::setPlaybackSpeed,
-            onMarkAbLoop = vm::markAbLoop,
-            onToggleLyrics = vm::toggleLyrics,
-            onRetryLyrics = vm::retryLyrics,
-            onLyricsOnScreen = vm::lyricsOnScreen,
-        )
-
         setContent {
             WaveFlowTheme(theme = ThemeChoice.System) {
                 PocketTheme {
-                    AudioPermissionGate {
-                        LaunchedEffect(Unit) {
-                            libraryStore.load()
-                            vm.connect()
-                        }
-                        val library by libraryStore.library.collectAsStateWithLifecycle()
-                        val player by vm.state.collectAsStateWithLifecycle()
-                        val lyrics by vm.lyrics.collectAsStateWithLifecycle()
-                        val home by homeViewModel.state.collectAsStateWithLifecycle()
-                        val playlists by playlistsViewModel.state.collectAsStateWithLifecycle()
-                        var expanded by rememberSaveable { mutableStateOf(false) }
-                        // Une panne de lecture, un repli de qualité, une playlist
-                        // qui n'a pas pu s'écrire : dits une fois, tant que
-                        // l'écran est visible.
-                        val messages = remember { SnackbarHostState() }
-                        val cycle = LocalLifecycleOwner.current.lifecycle
-                        LaunchedEffect(cycle) {
-                            // L'affichage lui-même s'arrête avec l'écran : un
-                            // second message en attente ne s'affiche pas en
-                            // arrière-plan pour y expirer.
-                            cycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                                merge(vm.errors, playlistsViewModel.errors).collect { messages.showSnackbar(it) }
-                            }
-                        }
-                        PocketApp(
-                            library = library,
-                            home = home,
-                            playlists = playlists,
-                            player = player,
-                            lyrics = lyrics,
-                            actions = actions.copy(onCollapse = { expanded = false }),
-                            verbs = PocketVerbs(
-                                onPlay = vm::playFrom,
-                                onShuffle = vm::playShuffled,
-                                onAnotherSuggestion = homeViewModel::anotherSuggestion,
-                                onAddToPlaylist = playlistsViewModel::addSong,
-                                onCreatePlaylistWith = playlistsViewModel::createWith,
-                            ),
-                            messages = messages,
-                            expanded = expanded,
-                            onExpandedChange = { expanded = it },
-                        )
-                    }
+                    AudioPermissionGate { PocketContent(libraryStore) }
                 }
             }
         }
+    }
+
+    /** Les commandes du lecteur, relayées au `PlayerViewModel` de production. */
+    private fun playerActions(vm: PlayerViewModel) = NowPlayingActions(
+        onCollapse = {},
+        onTogglePlayPause = vm::togglePlayPause,
+        onSkipNext = vm::skipNext,
+        onSkipPrevious = vm::skipPrevious,
+        onSeek = vm::seekTo,
+        onToggleShuffle = vm::toggleShuffle,
+        onCycleRepeat = vm::cycleRepeatMode,
+        onPlayQueueItem = vm::playQueueItem,
+        onMoveQueueItem = vm::moveQueueItem,
+        onRemoveQueueItem = vm::removeQueueItem,
+        onStartSleepTimer = vm::startSleepTimer,
+        onCancelSleepTimer = vm::cancelSleepTimer,
+        onSleepTimerRemainingMs = vm::sleepTimerRemainingMs,
+        onSetPlaybackSpeed = vm::setPlaybackSpeed,
+        onMarkAbLoop = vm::markAbLoop,
+        onToggleLyrics = vm::toggleLyrics,
+        onRetryLyrics = vm::retryLyrics,
+        onLyricsOnScreen = vm::lyricsOnScreen,
+    )
+
+    /** Le prototype une fois la permission audio accordée : les flux de production, puis la coquille. */
+    @Composable
+    private fun PocketContent(libraryStore: LibraryStore) {
+        val vm = playerViewModel
+        val actions = remember(vm) { playerActions(vm) }
+        LaunchedEffect(Unit) {
+            libraryStore.load()
+            vm.connect()
+        }
+        val library by libraryStore.library.collectAsStateWithLifecycle()
+        val player by vm.state.collectAsStateWithLifecycle()
+        val lyrics by vm.lyrics.collectAsStateWithLifecycle()
+        val home by homeViewModel.state.collectAsStateWithLifecycle()
+        val playlists by playlistsViewModel.state.collectAsStateWithLifecycle()
+        // Gardé par un ViewModel, et non par l'état sauvegardé :
+        // il survit à une rotation, pas à la mort du processus.
+        // Restauré « déployé » sans file (le service meurt avec
+        // le processus), le lecteur se serait redéployé seul au
+        // premier morceau lancé.
+        val coquille: PocketShellViewModel = viewModel()
+        val expanded by coquille.expanded.collectAsStateWithLifecycle()
+        // Une panne de lecture, un repli de qualité, une playlist
+        // qui n'a pas pu s'écrire : dits une fois, tant que
+        // l'écran est visible.
+        val messages = remember { SnackbarHostState() }
+        val cycle = LocalLifecycleOwner.current.lifecycle
+        LaunchedEffect(cycle) {
+            // L'affichage lui-même s'arrête avec l'écran : un
+            // second message en attente ne s'affiche pas en
+            // arrière-plan pour y expirer.
+            cycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                merge(vm.errors, playlistsViewModel.errors).collect { messages.showSnackbar(it) }
+            }
+        }
+        PocketApp(
+            library = library,
+            home = home,
+            playlists = playlists,
+            player = player,
+            lyrics = lyrics,
+            actions = actions.copy(onCollapse = { coquille.expanded.value = false }),
+            verbs = PocketVerbs(
+                onPlay = vm::playFrom,
+                onShuffle = vm::playShuffled,
+                onAnotherSuggestion = homeViewModel::anotherSuggestion,
+                onAddToPlaylist = playlistsViewModel::addSong,
+                onCreatePlaylistWith = playlistsViewModel::createWith,
+            ),
+            messages = messages,
+            expanded = expanded,
+            onExpandedChange = { coquille.expanded.value = it },
+        )
     }
 
     override fun onResume() {
         super.onResume()
         if (hasAudioPermission()) playerViewModel.connect()
     }
+}
+
+/**
+ * Ce que la coquille du prototype garde d'une rotation à l'autre, et pas
+ * au-delà de la vie du processus : le lecteur est-il déployé.
+ */
+class PocketShellViewModel : androidx.lifecycle.ViewModel() {
+    val expanded = kotlinx.coroutines.flow.MutableStateFlow(false)
 }

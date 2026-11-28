@@ -160,12 +160,12 @@ fun PocketPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
-    selected: Boolean = false,
+    selected: Boolean? = null,
     compact: Boolean = false,
     description: String? = null,
 ) {
     val colors = Pocket.colors
-    val encre = if (selected) colors.accent else colors.ink2
+    val encre = if (selected == true) colors.accent else colors.ink2
     // `Surface(onClick)` impose 48 dp à sa mise en page ; une pastille
     // compacte ne les réserve pas — Compose étend déjà le toucher d'un
     // élément cliquable plus petit jusqu'à la cible minimale.
@@ -179,7 +179,9 @@ fun PocketPill(
                 .semantics {
                     // Le `Surface(onClick)` de material3 ne pose pas le rôle.
                     role = Role.Button
-                    this.selected = selected
+                    // Seule une bascule (« Paroles ») a un état : posé à faux
+                    // sur un simple bouton, il ferait dire « non sélectionné ».
+                    selected?.let { this.selected = it }
                     description?.let { contentDescription = it }
                 },
         ) {

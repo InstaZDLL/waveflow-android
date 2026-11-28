@@ -36,13 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.waveflow.ui.components.WaveMark
 
-/** Les trois destinations, gardées de l'application actuelle. */
-enum class PocketTab(val label: String, val icon: ImageVector, val iconSelected: ImageVector) {
-    Accueil("Accueil", Icons.Outlined.Home, Icons.Rounded.Home),
-    Bibliotheque("Bibliothèque", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
-    Recherche("Recherche", Icons.Outlined.Search, Icons.Rounded.Search),
-}
-
 /**
  * La barre de navigation de Pocket.
  *

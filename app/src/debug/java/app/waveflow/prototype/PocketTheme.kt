@@ -57,6 +57,7 @@ import app.waveflow.R
  * @property dark l'apparence sombre est en vigueur.
  */
 @Immutable
+@Suppress("LongParameterList") // Un jeu de jetons : un paramètre par jeton nommé du document.
 class PocketColors(
     val canvas: Color,
     val raised: Color,

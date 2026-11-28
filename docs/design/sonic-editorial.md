@@ -205,7 +205,7 @@ derniers millimètres avant la tête ondulent — l'onde que laisse le son en
 passant. La tête est un point lumineux, entouré d'un halo de l'accent.
 
 - **Au repos** (pause), le sillage se pose : la ligne redevient droite.
-- **Sous le doigt**, la tête grossit et le halo s'élargit ; la ligne s'épaissit.
+- **Sous le doigt**, la tête grossit et le halo s'élargit.
 - **Dans le mini-lecteur**, le sillage se réduit à une ligne de 2 dp au pied de
   la surface, avec sa tête lumineuse.
 - **Sous l'onglet ouvert** de la barre de navigation, l'onde du bureau (le
@@ -442,6 +442,13 @@ d'un album (et d'un artiste, d'une playlist), Now Playing —, avec le
 mini-lecteur et la barre de navigation. L'onglet Recherche dit qu'il n'est
 pas l'un des quatre. Les tests de ses composants à logique sont dans
 `app/src/testDebug/`, pour que la variante `release` n'ait rien à compiler.
+
+**Detekt ne lit pas ces dossiers.** Sa configuration analyse `src/main` et
+`src/test` ; le prototype a été passé une fois à la main, ses dossiers
+ajoutés à la volée (sans rien commiter) : son code n'a plus aucune remarque.
+Celles qui restent viennent de ses tests — des noms en phrase, des nombres
+littéraux —, que la configuration accepte des tests de production, mais sous
+`test/` seulement. À l'intégration, le code rejoindra `src/main` et sera lu.
 
 ## Décisions arrêtées le 28/11
 

@@ -43,15 +43,6 @@ import app.waveflow.ui.player.PlayerUiState
 import app.waveflow.ui.playlists.AddToPlaylistSheet
 import app.waveflow.ui.playlists.PlaylistsUiState
 
-/** Ce que la coquille relaie au lecteur et aux playlists de production. */
-data class PocketVerbs(
-    val onPlay: (queue: List<Song>, song: Song) -> Unit,
-    val onShuffle: (List<Song>) -> Unit,
-    val onAnotherSuggestion: () -> Unit,
-    val onAddToPlaylist: (playlistId: Long, song: Song) -> Unit,
-    val onCreatePlaylistWith: (name: String, song: Song) -> Unit,
-)
-
 /**
  * La coquille du prototype : l'onglet ouvert et sa pile de pages, le
  * mini-lecteur posé sur la barre de navigation, et Now Playing qui monte
@@ -81,6 +72,13 @@ fun PocketApp(
     val colors = Pocket.colors
     val etats = rememberSaveableStateHolder()
 
+    // Une page qu'on quitte par Retour oublie son état (son défilement) :
+    // rouverte plus tard, elle repart en tête. Les onglets gardent le leur.
+    fun depiler(jusqua: Int) {
+        pile.drop(jusqua).forEach(etats::removeState)
+        pile = pile.take(jusqua)
+    }
+
     fun ouvrir(page: Page) {
         // Déjà ouverte (« Voir l'album » depuis cet album) : rien à empiler,
         // sinon Retour dépilerait une entrée invisible.
@@ -97,16 +95,9 @@ fun PocketApp(
     // Le lecteur déployé n'est visible qu'avec un morceau : Retour, la Snackbar
     // et l'animation suivent ce qui est à l'écran, pas l'intention.
     val lecteurVisible = expanded && player.track != null
-    var avaitUnMorceau by remember { mutableStateOf(player.track != null) }
-    LaunchedEffect(player.track != null) {
-        val aUnMorceau = player.track != null
-        // Une file qui se vide replie le lecteur ; un lecteur restauré qui
-        // attend encore sa piste reste déployé.
-        if (avaitUnMorceau && !aUnMorceau) onExpandedChange(false)
-        avaitUnMorceau = aUnMorceau
-    }
+    CollapseWhenQueueEmpties(hasTrack = player.track != null, onCollapse = { onExpandedChange(false) })
     BackHandler(enabled = lecteurVisible) { onExpandedChange(false) }
-    BackHandler(enabled = !lecteurVisible && pile.isNotEmpty()) { pile = pile.dropLast(1) }
+    BackHandler(enabled = !lecteurVisible && pile.isNotEmpty()) { depiler(pile.size - 1) }
 
     Box(
         modifier = Modifier
@@ -124,43 +115,25 @@ fun PocketApp(
                 // page passe par-dessus : revenir d'un album ne remonte pas
                 // l'accueil en tête.
                 etats.SaveableStateProvider(route ?: onglet.name) {
-                    when {
-                        page != null -> PageDeCollection(page, library, playlists, player, verbs, menu, onBack = {
-                            pile =
-                                pile.dropLast(1)
-                        })
-                        onglet == PocketTab.Accueil -> PocketHome(
-                            state = home,
-                            library = library,
-                            player = player,
-                            actions = HomeActions(
-                                onPlay = verbs.onPlay,
-                                onShuffle = verbs.onShuffle,
-                                onTogglePlayPause = actions.onTogglePlayPause,
-                                onOpenAlbum = { ouvrir(Page.Album(it)) },
-                                onOpenCategory = {
-                                    categorie = it
-                                    onglet = PocketTab.Bibliotheque
-                                },
-                                onAnotherSuggestion = verbs.onAnotherSuggestion,
-                            ),
-                        )
-                        onglet == PocketTab.Bibliotheque -> PocketLibrary(
-                            library = library,
-                            playlists = playlists,
-                            player = player,
-                            category = categorie,
-                            onCategory = { categorie = it },
-                            actions = LibraryActions(
-                                onPlay = verbs.onPlay,
-                                onOpenAlbum = { ouvrir(Page.Album(it)) },
-                                onOpenArtist = { ouvrir(Page.Artiste(it)) },
-                                onOpenPlaylist = { ouvrir(Page.Playlist(it)) },
-                                rowMenu = menu,
-                            ),
-                        )
-                        else -> AVenir(onglet)
-                    }
+                    Destination(
+                        page = page,
+                        onglet = onglet,
+                        categorie = categorie,
+                        library = library,
+                        home = home,
+                        playlists = playlists,
+                        player = player,
+                        verbs = verbs,
+                        onTogglePlayPause = actions.onTogglePlayPause,
+                        menu = menu,
+                        onOpen = ::ouvrir,
+                        onBack = { depiler(pile.size - 1) },
+                        onCategory = { categorie = it },
+                        onOpenCategory = {
+                            categorie = it
+                            onglet = PocketTab.Bibliotheque
+                        },
+                    )
                 }
                 if (!lecteurVisible) SnackbarHost(messages, Modifier.align(Alignment.BottomCenter))
             }
@@ -176,7 +149,7 @@ fun PocketApp(
                 selected = onglet,
                 onSelect = {
                     onglet = it
-                    pile = emptyList()
+                    depiler(0)
                 },
             )
         }
@@ -220,39 +193,81 @@ fun PocketApp(
     }
 }
 
-/** Une page empilée au-dessus d'un onglet, codée en chaîne pour l'état sauvegardé. */
-sealed interface Page {
-    val route: String
-
-    data class Album(val id: Long) : Page {
-        override val route get() = "album:$id"
-    }
-
-    data class Artiste(val id: Long) : Page {
-        override val route get() = "artiste:$id"
-    }
-
-    data class Playlist(val id: Long) : Page {
-        override val route get() = "playlist:$id"
-    }
-
-    companion object {
-        /** La page de [route], ou `null` si la chaîne n'en décrit aucune. */
-        fun of(route: String): Page? {
-            val (sorte, valeur) = route.split(':', limit = 2).takeIf { it.size == 2 } ?: return null
-            val id = valeur.toLongOrNull() ?: return null
-            return when (sorte) {
-                "album" -> Album(id)
-                "artiste" -> Artiste(id)
-                "playlist" -> Playlist(id)
-                else -> null
-            }
-        }
+/** La page ouverte : une collection empilée, ou la racine de l'onglet. */
+@Composable
+private fun Destination(
+    page: Page?,
+    onglet: PocketTab,
+    categorie: LibraryCategory,
+    library: Library,
+    home: HomeUiState,
+    playlists: PlaylistsUiState,
+    player: PlayerUiState,
+    verbs: PocketVerbs,
+    onTogglePlayPause: () -> Unit,
+    menu: (Song) -> List<RowAction>,
+    onOpen: (Page) -> Unit,
+    onBack: () -> Unit,
+    onCategory: (LibraryCategory) -> Unit,
+    onOpenCategory: (LibraryCategory) -> Unit,
+) {
+    when {
+        page != null -> PageDeCollection(page, library, playlists, player, verbs, menu, onBack = onBack)
+        onglet == PocketTab.Accueil -> PocketHome(
+            state = home,
+            library = library,
+            player = player,
+            actions = HomeActions(
+                onPlay = verbs.onPlay,
+                onShuffle = verbs.onShuffle,
+                onTogglePlayPause = onTogglePlayPause,
+                onOpenAlbum = { onOpen(Page.Album(it)) },
+                onOpenCategory = onOpenCategory,
+                onAnotherSuggestion = verbs.onAnotherSuggestion,
+            ),
+        )
+        onglet == PocketTab.Bibliotheque -> PocketLibrary(
+            library = library,
+            playlists = playlists,
+            player = player,
+            category = categorie,
+            onCategory = onCategory,
+            actions = LibraryActions(
+                onPlay = verbs.onPlay,
+                onOpenAlbum = { onOpen(Page.Album(it)) },
+                onOpenArtist = { onOpen(Page.Artiste(it)) },
+                onOpenPlaylist = { onOpen(Page.Playlist(it)) },
+                rowMenu = menu,
+            ),
+        )
+        else -> AVenir(onglet)
     }
 }
 
+/**
+ * Replie le lecteur quand la file se vide : sans quoi il se redéploierait de
+ * lui-même au morceau suivant. Un lecteur qui attend encore sa première piste
+ * n'est pas replié.
+ */
 @Composable
-private fun PageDeCollection(
+private fun CollapseWhenQueueEmpties(hasTrack: Boolean, onCollapse: () -> Unit) {
+    var avaitUnMorceau by remember { mutableStateOf(hasTrack) }
+    LaunchedEffect(hasTrack) {
+        if (avaitUnMorceau && !hasTrack) onCollapse()
+        avaitUnMorceau = hasTrack
+    }
+}
+
+/**
+ * Le titre d'une collection que la page ne trouve pas : « introuvable »
+ * seulement après une lecture réussie de sa source ; vide pendant qu'elle se
+ * lit, ou quand elle a échoué — la page dit alors l'échec dessous.
+ */
+internal fun collectionTitleFallback(missing: String, loading: Boolean, error: String?): String =
+    if (loading || error != null) "" else missing
+
+@Composable
+internal fun PageDeCollection(
     page: Page,
     library: Library,
     playlists: PlaylistsUiState,
@@ -278,7 +293,9 @@ private fun PageDeCollection(
                 kind = CollectionKind.Album,
                 loading = library.isLoading,
                 error = library.errorMessage,
-                title = album?.title ?: if (library.isLoading) "" else "Album introuvable",
+                title =
+                album?.title
+                    ?: collectionTitleFallback("Album introuvable", library.isLoading, library.errorMessage),
                 subtitle = album?.displayArtist,
                 artworkUri = album?.artworkUri,
                 songs = titres,
@@ -301,7 +318,9 @@ private fun PageDeCollection(
                 kind = CollectionKind.Artiste,
                 loading = library.isLoading,
                 error = library.errorMessage,
-                title = artiste?.name ?: if (library.isLoading) "" else "Artiste introuvable",
+                title =
+                artiste?.name
+                    ?: collectionTitleFallback("Artiste introuvable", library.isLoading, library.errorMessage),
                 subtitle = null,
                 artworkUri = artiste?.artworkUri,
                 songs = titres,
@@ -316,7 +335,11 @@ private fun PageDeCollection(
                 kind = CollectionKind.Playlist,
                 loading = playlists.isLoading || library.isLoading,
                 error = playlists.errorMessage ?: library.errorMessage,
-                title = playlist?.name ?: if (playlists.isLoading) "" else "Playlist introuvable",
+                title = playlist?.name ?: collectionTitleFallback(
+                    "Playlist introuvable",
+                    playlists.isLoading || library.isLoading,
+                    playlists.errorMessage ?: library.errorMessage,
+                ),
                 subtitle = null,
                 artworkUri = titres.firstOrNull()?.artworkUri,
                 songs = titres,

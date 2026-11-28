@@ -96,28 +96,6 @@ import app.waveflow.ui.player.loopOfTrack
 import app.waveflow.ui.theme.WaveFlowTheme
 import kotlinx.coroutines.launch
 
-/** Tout ce que le lecteur de Pocket sait faire : les commandes du `PlayerViewModel` de production. */
-data class NowPlayingActions(
-    val onCollapse: () -> Unit,
-    val onTogglePlayPause: () -> Unit,
-    val onSkipNext: () -> Unit,
-    val onSkipPrevious: () -> Unit,
-    val onSeek: (Long) -> Unit,
-    val onToggleShuffle: () -> Unit,
-    val onCycleRepeat: () -> Unit,
-    val onPlayQueueItem: (Int) -> Unit,
-    val onMoveQueueItem: (Int, Int) -> Unit,
-    val onRemoveQueueItem: (Int) -> Unit,
-    val onStartSleepTimer: (Long) -> Unit,
-    val onCancelSleepTimer: () -> Unit,
-    val onSleepTimerRemainingMs: () -> Long?,
-    val onSetPlaybackSpeed: (Float) -> Unit,
-    val onMarkAbLoop: () -> Unit,
-    val onToggleLyrics: () -> Unit,
-    val onRetryLyrics: () -> Unit,
-    val onLyricsOnScreen: (Boolean) -> Unit,
-)
-
 /** Les feuilles du lecteur : une à la fois. */
 private enum class Feuille { Plus, File, Vitesse, Minuterie }
 
@@ -199,6 +177,7 @@ fun PocketNowPlaying(
                 }
                 val cover: @Composable (Modifier) -> Unit = { m ->
                     CoverStage(
+                        trackKey = track.mediaId,
                         artworkUri = track.artworkUri,
                         playing = state.isPlaying,
                         glow = nappe,
@@ -414,6 +393,7 @@ private fun TopBar(track: PlayingTrack, onCollapse: () -> Unit, onMore: () -> Un
  */
 @Composable
 private fun CoverStage(
+    trackKey: String,
     artworkUri: Uri?,
     playing: Boolean,
     glow: Color,
@@ -423,7 +403,13 @@ private fun CoverStage(
     modifier: Modifier = Modifier,
 ) {
     val motion = WaveFlowTheme.motion
-    val echelle by animateFloatAsState(if (playing) 1f else PAUSED_SCALE, motion.shape(), label = "recul")
+    // Sous mouvement réduit, la pochette ne recule pas : un changement de taille
+    // sans transition serait un saut.
+    val echelle by animateFloatAsState(
+        if (playing || motion.reduced) 1f else PAUSED_SCALE,
+        motion.shape(),
+        label = "recul",
+    )
     val decalage = remember { Animatable(0f) }
     val portee = rememberCoroutineScope()
     val seuil = with(LocalDensity.current) { SWIPE_THRESHOLD.toPx() }
@@ -441,7 +427,9 @@ private fun CoverStage(
             }
             .shadow(elevation = 28.dp, shape = PocketShapes.cover, ambientColor = glow, spotColor = glow)
             .clip(PocketShapes.cover)
-            .pointerInput(Unit) {
+            // Relancé à chaque morceau : un balayage commencé sur la fin d'un
+            // morceau ne saute pas le suivant, arrivé sous le doigt.
+            .pointerInput(trackKey) {
                 // Le geste compte sa propre course : commencé pendant le retour
                 // du précédent, il ne reprend pas ce qui en restait.
                 var course = 0f

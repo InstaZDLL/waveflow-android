@@ -31,10 +31,9 @@ fun fitCover(
     details: Dp,
     gap: Dp,
     cap: Dp = COVER_CAP,
-    compactBelow: Dp = COMPACT_BELOW,
 ): CoverFit {
     val side = minOf(width, height - details - gap, cap)
-    return if (side < compactBelow) CoverFit.Compact else CoverFit.Full(side)
+    return if (side < COMPACT_BELOW) CoverFit.Compact else CoverFit.Full(side)
 }
 
 /**

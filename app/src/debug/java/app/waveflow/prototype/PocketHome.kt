@@ -64,16 +64,6 @@ import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.LocalDateTime
 
-/** Ce que l'accueil sait faire : tout passe par le lecteur et la bibliothèque réels. */
-data class HomeActions(
-    val onPlay: (queue: List<Song>, song: Song) -> Unit,
-    val onShuffle: (List<Song>) -> Unit,
-    val onTogglePlayPause: () -> Unit,
-    val onOpenAlbum: (Long) -> Unit,
-    val onOpenCategory: (LibraryCategory) -> Unit,
-    val onAnotherSuggestion: () -> Unit,
-)
-
 /**
  * L'accueil de Pocket : dire tout de suite quoi écouter, même avec trois
  * albums (`docs/design/sonic-editorial.md`).
@@ -410,14 +400,6 @@ private fun AlbumShelf(
             )
         }
     }
-}
-
-/** Les catégories de la bibliothèque, dans l'ordre du sélecteur. */
-enum class LibraryCategory(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Albums("Albums", Icons.Rounded.Album),
-    Artistes("Artistes", Icons.Rounded.Person),
-    Titres("Titres", Icons.Rounded.LibraryMusic),
-    Playlists("Playlists", Icons.AutoMirrored.Rounded.QueueMusic),
 }
 
 private val RESUME_COVER = 104.dp

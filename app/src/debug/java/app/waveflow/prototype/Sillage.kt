@@ -139,36 +139,12 @@ fun Sillage(
                     cible != null
                 }
                 .focusable(enabled = hasDuration, interactionSource = interactions)
-                .semantics {
-                    contentDescription = "Position dans le morceau"
-                    stateDescription = if (hasDuration) {
-                        "${formatDuration(affichee)} sur ${formatDuration(durationMs)}"
-                    } else {
-                        "Durée inconnue"
-                    }
-                    progressBarRangeInfo = ProgressBarRangeInfo(
-                        current = if (hasDuration) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f,
-                        range = 0f..1f,
-                    )
-                    if (hasDuration) {
-                        setProgress { valeur ->
-                            chercher((valeur.coerceIn(0f, 1f) * duree).toLong())
-                            true
-                        }
-                    } else {
-                        disabled()
-                    }
-                },
+                .sillageSemantics(positionMs, affichee, durationMs) { chercher(it) },
         ) {
             drawSillage(
-                progress = scrub ?: glisse,
-                amplitude = amplitude,
-                phase = phase.floatValue,
-                head = tete,
+                frame = SillageFrame(scrub ?: glisse, amplitude, phase.floatValue, tete),
+                look = SillageLook(colors.accent, colors.ink.copy(alpha = TRACK_ALPHA), compact = false),
                 loop = loop,
-                accent = colors.accent,
-                track = colors.ink.copy(alpha = TRACK_ALPHA),
-                compact = false,
             )
         }
         Row(
@@ -206,14 +182,9 @@ fun CompactSillage(progress: () -> Float, modifier: Modifier = Modifier) {
     val colors = Pocket.colors
     Canvas(modifier = modifier) {
         drawSillage(
-            progress = progress(),
-            amplitude = 0f,
-            phase = 0f,
-            head = 0f,
+            frame = SillageFrame(progress(), amplitude = 0f, phase = 0f, head = 0f),
+            look = SillageLook(colors.accent, colors.ink.copy(alpha = TRACK_ALPHA), compact = true),
             loop = null,
-            accent = colors.accent,
-            track = colors.ink.copy(alpha = TRACK_ALPHA),
-            compact = true,
         )
     }
 }
@@ -238,20 +209,18 @@ private fun rememberWakePhase(flowing: Boolean): androidx.compose.runtime.Mutabl
 /**
  * Dessine la ligne, la partie jouée, le sillage et la tête.
  *
+ * L'instant du dessin, dans [SillageFrame] :
+ *
  * @param amplitude de 0 (posé) à 1 (qui coule) : l'onde du sillage.
  * @param phase de 0 à 1, l'avancement de l'ondulation.
  * @param head de 0 (au repos) à 1 (sous le doigt) : la taille de la tête.
  */
-internal fun DrawScope.drawSillage(
-    progress: Float,
-    amplitude: Float,
-    phase: Float,
-    head: Float,
-    loop: LoopMarks?,
-    accent: Color,
-    track: Color,
-    compact: Boolean,
-) {
+internal fun DrawScope.drawSillage(frame: SillageFrame, look: SillageLook, loop: LoopMarks?) {
+    val progress = frame.progress
+    val amplitude = frame.amplitude
+    val phase = frame.phase
+    val head = frame.head
+    val (accent, track, compact) = look
     val y = size.height / 2f
     val trait = (if (compact) COMPACT_STROKE else STROKE).dp.toPx()
     val x = (progress.coerceIn(0f, 1f) * size.width)
@@ -302,6 +271,42 @@ internal fun DrawScope.drawSillage(
     drawCircle(accent.copy(alpha = HALO_ALPHA), radius = halo, center = Offset(x, y))
     drawCircle(accent, radius = rayon, center = Offset(x, y))
 }
+
+/** L'instant d'un dessin du sillage : où en est la musique, l'onde, la tête. */
+internal data class SillageFrame(val progress: Float, val amplitude: Float, val phase: Float, val head: Float)
+
+/** L'apparence du sillage : ses deux encres, et s'il est la tranche du mini-lecteur. */
+internal data class SillageLook(val accent: Color, val track: Color, val compact: Boolean)
+
+/**
+ * Ce que le lecteur d'écran lit et règle : la position sur la durée, et
+ * l'action qui la déplace. Sans durée, la ligne se dit désactivée.
+ *
+ * @param displayedMs la position affichée — celle du doigt pendant un
+ *   glissement.
+ */
+private fun Modifier.sillageSemantics(positionMs: Long, displayedMs: Long, durationMs: Long, onSeek: (Long) -> Unit) =
+    semantics {
+        val hasDuration = durationMs > 0L
+        contentDescription = "Position dans le morceau"
+        stateDescription = if (hasDuration) {
+            "${formatDuration(displayedMs)} sur ${formatDuration(durationMs)}"
+        } else {
+            "Durée inconnue"
+        }
+        progressBarRangeInfo = ProgressBarRangeInfo(
+            current = if (hasDuration) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f,
+            range = 0f..1f,
+        )
+        if (hasDuration) {
+            setProgress { valeur ->
+                onSeek((valeur.coerceIn(0f, 1f) * durationMs).toLong())
+                true
+            }
+        } else {
+            disabled()
+        }
+    }
 
 private fun part(x: Float, largeur: Int): Float = if (largeur > 0) (x / largeur).coerceIn(0f, 1f) else 0f
 

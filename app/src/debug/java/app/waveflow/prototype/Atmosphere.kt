@@ -143,7 +143,8 @@ private suspend fun sampleDominant(context: Context, artworkUri: Uri): Int? {
 }
 
 /**
- * Pochettes déjà lues, partagées entre le mini-lecteur et le plein écran. Lu
+ * Pochettes déjà lues, partagées entre Now Playing, l'en-tête d'une collection
+ * et la reprise de l'accueil. Lu
  * en composition et écrit depuis [LaunchedEffect], tous deux sur le fil
  * principal.
  */

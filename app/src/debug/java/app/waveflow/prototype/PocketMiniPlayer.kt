@@ -73,7 +73,8 @@ fun PocketMiniPlayer(
     ) {
         Column(
             modifier = Modifier
-                .pointerInput(Unit) {
+                // Relancé à chaque morceau, comme le balayage de la pochette.
+                .pointerInput(track.mediaId) {
                     var total = Offset.Zero
                     val seuil = MINI_SWIPE.toPx()
                     detectDragGestures(
