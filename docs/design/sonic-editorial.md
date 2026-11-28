@@ -434,7 +434,8 @@ en les habillant de ses jetons.
 adb shell am start -n app.waveflow/app.waveflow.prototype.PocketActivity
 ```
 
-Le thème suit celui du système (`adb shell cmd uimode night yes|no`).
+Le thème suit celui du système : `adb shell cmd uimode night yes` pour le
+sombre, `adb shell cmd uimode night no` pour le clair.
 
 **Ce qu'il montre** : les quatre écrans — l'accueil, la bibliothèque, la page
 d'un album (et d'un artiste, d'une playlist), Now Playing —, avec le

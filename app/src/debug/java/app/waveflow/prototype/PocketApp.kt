@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +69,7 @@ fun PocketApp(
     var pile by rememberSaveable { mutableStateOf(listOf<String>()) }
     var aAjouter by rememberSaveable { mutableStateOf<Long?>(null) }
     val colors = Pocket.colors
+    val etats = rememberSaveableStateHolder()
 
     fun ouvrir(page: Page) {
         pile = pile + page.route
@@ -90,47 +92,50 @@ fun PocketApp(
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
-                val page = pile.lastOrNull()?.let(Page::of)
-                when {
-                    page != null -> PageDeCollection(page, library, playlists, player, verbs, menu, onBack = {
-                        pile =
-                            pile.dropLast(1)
-                    })
-                    onglet == PocketTab.Accueil -> PocketHome(
-                        state = home,
-                        library = library,
-                        player = player,
-                        actions = HomeActions(
-                            onPlay = verbs.onPlay,
-                            onShuffle = verbs.onShuffle,
-                            onTogglePlayPause = actions.onTogglePlayPause,
-                            onOpenAlbum = { ouvrir(Page.Album(it)) },
-                            onOpenCategory = {
-                                categorie = it
-                                onglet = PocketTab.Bibliotheque
-                            },
-                            onAnotherSuggestion = verbs.onAnotherSuggestion,
-                        ),
-                    )
-                    onglet == PocketTab.Bibliotheque -> PocketLibrary(
-                        library = library,
-                        playlists = playlists,
-                        player = player,
-                        category = categorie,
-                        onCategory = { categorie = it },
-                        actions = LibraryActions(
-                            onPlay = verbs.onPlay,
-                            onOpenAlbum = { ouvrir(Page.Album(it)) },
-                            onOpenArtist = { ouvrir(Page.Artiste(it)) },
-                            onOpenPlaylist = { ouvrir(Page.Playlist(it)) },
-                            rowMenu = menu,
-                        ),
-                    )
-                    else -> AVenir(onglet)
+                val route = pile.lastOrNull()
+                val page = route?.let(Page::of)
+                // Chaque destination garde son état — son défilement — quand une
+                // page passe par-dessus : revenir d'un album ne remonte pas
+                // l'accueil en tête.
+                etats.SaveableStateProvider(route ?: onglet.name) {
+                    when {
+                        page != null -> PageDeCollection(page, library, playlists, player, verbs, menu, onBack = {
+                            pile =
+                                pile.dropLast(1)
+                        })
+                        onglet == PocketTab.Accueil -> PocketHome(
+                            state = home,
+                            library = library,
+                            player = player,
+                            actions = HomeActions(
+                                onPlay = verbs.onPlay,
+                                onShuffle = verbs.onShuffle,
+                                onTogglePlayPause = actions.onTogglePlayPause,
+                                onOpenAlbum = { ouvrir(Page.Album(it)) },
+                                onOpenCategory = {
+                                    categorie = it
+                                    onglet = PocketTab.Bibliotheque
+                                },
+                                onAnotherSuggestion = verbs.onAnotherSuggestion,
+                            ),
+                        )
+                        onglet == PocketTab.Bibliotheque -> PocketLibrary(
+                            library = library,
+                            playlists = playlists,
+                            player = player,
+                            category = categorie,
+                            onCategory = { categorie = it },
+                            actions = LibraryActions(
+                                onPlay = verbs.onPlay,
+                                onOpenAlbum = { ouvrir(Page.Album(it)) },
+                                onOpenArtist = { ouvrir(Page.Artiste(it)) },
+                                onOpenPlaylist = { ouvrir(Page.Playlist(it)) },
+                                rowMenu = menu,
+                            ),
+                        )
+                        else -> AVenir(onglet)
+                    }
                 }
-                // Les pannes de lecture et les écritures de playlist manquées,
-                // au-dessus du mini-lecteur.
-                SnackbarHost(messages, Modifier.align(Alignment.BottomCenter))
             }
             PocketMiniPlayer(
                 state = player,
@@ -157,6 +162,15 @@ fun PocketApp(
             PocketNowPlaying(state = player, lyrics = lyrics, actions = actions)
         }
 
+        // Au-dessus de tout, lecteur déployé compris, et au-dessus du
+        // mini-lecteur et de la barre quand il est replié.
+        SnackbarHost(
+            messages,
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (expanded) 24.dp else SNACKBAR_LIFT),
+        )
+
         aAjouter?.let { library.songsById[it] }?.let { song ->
             AddToPlaylistSheet(
                 song = song,
@@ -175,6 +189,9 @@ fun PocketApp(
         }
     }
 }
+
+/** La hauteur du mini-lecteur et de la barre de navigation, que la Snackbar enjambe. */
+private val SNACKBAR_LIFT = 152.dp
 
 /** Une page empilée au-dessus d'un onglet, codée en chaîne pour l'état sauvegardé. */
 sealed interface Page {

@@ -1,6 +1,12 @@
 package app.waveflow.prototype
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -114,5 +120,49 @@ class PocketRevueTest {
         // les détails laissaient — ici presque rien.
         val zone = compose.onNodeWithTag(LYRICS_TAG, useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertTrue("${zone.bottom - zone.top}", zone.bottom - zone.top >= LYRICS_MIN - 1.dp)
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi", fontScale = 2f)
+    fun `les paroles restent cherchees quand leur zone change de place`() {
+        val signaux = mutableListOf<Boolean>()
+        var hauteur by mutableStateOf(800.dp)
+        val piste = PlayingTrack(
+            mediaId = "local:1",
+            title = "Un titre assez long pour tenir sur deux lignes",
+            artist = "Artiste",
+            album = "Album",
+            artworkUri = null,
+            localSongId = 1L,
+            source = TrackSource.Local,
+        )
+        compose.setContent {
+            WaveFlowTheme {
+                PocketTheme(dark = true) {
+                    Box(Modifier.height(hauteur)) {
+                        PocketNowPlaying(
+                            state = PlayerUiState(
+                                track = piste,
+                                durationMs = 200_000L,
+                                queue = listOf(piste),
+                                queueIndex = 0,
+                            ),
+                            lyrics = LyricsUiState(shown = true, mediaId = null),
+                            actions = NowPlayingActions(
+                                {}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> }, {}, {}, {}, { null }, {}, {}, {}, {},
+                                { signaux += it },
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        // La place se réduit : les paroles passent dans la colonne qui défile.
+        hauteur = 380.dp
+        compose.waitForIdle()
+
+        assertTrue("$signaux", signaux.last())
     }
 }

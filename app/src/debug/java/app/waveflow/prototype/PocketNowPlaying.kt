@@ -151,6 +151,18 @@ fun PocketNowPlaying(
     val colors = Pocket.colors
     val nappe = rememberAtmosphere(track.artworkUri)
 
+    // Les paroles ne se cherchent que tant que leur zone est à l'écran (P6).
+    // Le signal vit ici, une fois, et non dans la zone : elle change
+    // d'emplacement selon la place, et l'ancien emplacement, effacé après le
+    // nouveau, aurait dit « hors de l'écran » en dernier.
+    if (lyrics.shown) {
+        val signaler by rememberUpdatedState(actions.onLyricsOnScreen)
+        DisposableEffect(Unit) {
+            signaler(true)
+            onDispose { signaler(false) }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -426,19 +438,23 @@ private fun CoverStage(
             .shadow(elevation = 28.dp, shape = PocketShapes.cover, ambientColor = glow, spotColor = glow)
             .clip(PocketShapes.cover)
             .pointerInput(Unit) {
+                // Le geste compte sa propre course : commencé pendant le retour
+                // du précédent, il ne reprend pas ce qui en restait.
+                var course = 0f
                 detectHorizontalDragGestures(
+                    onDragStart = { course = 0f },
                     onDragEnd = {
-                        val fait = decalage.value
                         when {
-                            fait <= -seuil -> suivant()
-                            fait >= seuil -> precedent()
+                            course <= -seuil -> suivant()
+                            course >= seuil -> precedent()
                         }
                         portee.launch { decalage.animateTo(0f, motion.shape()) }
                     },
                     onDragCancel = { portee.launch { decalage.animateTo(0f, motion.shape()) } },
                 ) { change, glisse ->
                     change.consume()
-                    portee.launch { decalage.snapTo(decalage.value + glisse) }
+                    course += glisse
+                    portee.launch { decalage.snapTo(course) }
                 }
             }
             .clickable(onClickLabel = "Afficher les paroles", role = Role.Button, onClick = onTap)
@@ -642,12 +658,6 @@ private fun Paroles(
     actions: NowPlayingActions,
     modifier: Modifier,
 ) {
-    // Les paroles ne se cherchent que tant que leur zone est à l'écran (P6).
-    val signaler by rememberUpdatedState(actions.onLyricsOnScreen)
-    DisposableEffect(Unit) {
-        signaler(true)
-        onDispose { signaler(false) }
-    }
     LyricsPane(
         state = lyrics,
         trackKey = track.mediaId,
