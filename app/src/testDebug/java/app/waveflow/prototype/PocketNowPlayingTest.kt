@@ -91,7 +91,7 @@ class PocketNowPlayingTest {
         compose.onAllNodesWithContentDescription("Minuterie de veille active").assertCountEquals(1)
     }
 
-    private companion object {
+    companion object {
         val PISTE = PlayingTrack(
             mediaId = "local:1",
             title = "Un titre assez long pour tenir sur deux lignes au moins",

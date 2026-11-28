@@ -38,6 +38,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -152,6 +153,14 @@ fun Sillage(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
+                // Remontée sous la ligne : la zone de toucher de 48 dp laisse un
+                // vide sous le trait, que les durées viennent occuper. Elles ne
+                // prennent pas de geste — le toucher les traverse.
+                .layout { mesurable, contraintes ->
+                    val place = mesurable.measure(contraintes)
+                    val remonte = TIMES_LIFT.roundToPx()
+                    layout(place.width, (place.height - remonte).coerceAtLeast(0)) { place.place(0, -remonte) }
+                }
                 .heightIn(min = TIMES_HEIGHT),
         ) {
             Text(
@@ -312,6 +321,9 @@ private fun part(x: Float, largeur: Int): Float = if (largeur > 0) (x / largeur)
 
 /** La rangée des durées : elle accueille une pastille sans grandir. */
 private val TIMES_HEIGHT = 32.dp
+
+/** Ce que les durées remontent sous la ligne. */
+private val TIMES_LIFT = 10.dp
 
 /** La hauteur touchable : 48 dp, la cible minimale. */
 private val TOUCH_HEIGHT = 48.dp

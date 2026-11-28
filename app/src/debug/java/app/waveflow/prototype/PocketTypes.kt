@@ -44,9 +44,16 @@ sealed interface Page {
         override val route get() = "playlist:$id"
     }
 
+    /** Les réglages de l'application. */
+    data object Reglages : Page {
+        override val route get() = "reglages"
+    }
+
     companion object {
         /** La page de [route], ou `null` si la chaîne n'en décrit aucune. */
-        fun of(route: String): Page? {
+        fun of(route: String): Page? = if (route == Reglages.route) Reglages else collectionOf(route)
+
+        private fun collectionOf(route: String): Page? {
             val (sorte, valeur) = route.split(':', limit = 2).takeIf { it.size == 2 } ?: return null
             val id = valeur.toLongOrNull() ?: return null
             return when (sorte) {
@@ -89,6 +96,8 @@ data class HomeActions(
     val onOpenAlbum: (Long) -> Unit,
     val onOpenCategory: (LibraryCategory) -> Unit,
     val onAnotherSuggestion: () -> Unit,
+    val onExpandPlayer: () -> Unit = {},
+    val onSettings: (() -> Unit)? = null,
 )
 
 /** Les catégories de la bibliothèque, dans l'ordre du sélecteur. */
@@ -97,6 +106,19 @@ enum class LibraryCategory(val label: String, val icon: ImageVector) {
     Artistes("Artistes", Icons.Rounded.Person),
     Titres("Titres", Icons.Rounded.LibraryMusic),
     Playlists("Playlists", Icons.AutoMirrored.Rounded.QueueMusic),
+}
+
+/**
+ * Un ordre de tri de la bibliothèque — seulement ceux que les données de
+ * l'appareil permettent : le titre, l'artiste, la date d'ajout, le nombre de
+ * titres d'un artiste.
+ */
+enum class SortOrder(val label: String) {
+    Titre("Titre"),
+    Artiste("Artiste"),
+    Ajout("Ajout récent"),
+    Nom("Nom"),
+    Pistes("Nombre de titres"),
 }
 
 /** Ce que la bibliothèque sait faire. */

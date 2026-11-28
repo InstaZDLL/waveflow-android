@@ -170,6 +170,12 @@ object PocketShapes {
     /** La grande pochette : le lecteur, l'en-tête d'album. */
     val cover: Shape = RoundedCornerShape(16.dp)
 
+    /** Le pont du lecteur, qui touche le bas de l'écran : arrondi en haut seulement. */
+    val deck: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+    /** Le pont qui flotte (colonne bornée, deux volets) : arrondi de tous côtés. */
+    val deckFloating: Shape = RoundedCornerShape(24.dp)
+
     /** Boutons, pastilles, disques d'action. */
     val action: Shape = CircleShape
 }

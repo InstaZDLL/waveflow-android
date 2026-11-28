@@ -95,12 +95,22 @@ class PocketPartsTest {
 
     @Test
     fun `la pochette d'un album laisse voir les premieres pistes`() {
-        // Pixel 8 : la largeur moins les gouttières.
-        assertEquals(364f, coverSideFor(412.dp, 900.dp, 24.dp, sideBySide = false).value, 0.01f)
-        // Paysage bas : la moitié de la hauteur.
-        assertEquals(200f, coverSideFor(412.dp, 400.dp, 24.dp, sideBySide = false).value, 0.01f)
-        // Tablette : plafonnée.
-        assertEquals(400f, coverSideFor(1280.dp, 1200.dp, 24.dp, sideBySide = true).value, 0.01f)
+        // Pixel 8 : 62 % de la largeur, et non plus toute la largeur.
+        assertEquals(412f * 0.62f, coverSideFor(412.dp, 900.dp, sideBySide = false).value, 0.01f)
+        // Une fenêtre basse : le tiers de la hauteur.
+        assertEquals(128f, coverSideFor(412.dp, 400.dp, sideBySide = false).value, 0.01f)
+        // Un grand téléphone : plafonnée à 260 dp.
+        assertEquals(260f, coverSideFor(480.dp, 1000.dp, sideBySide = false).value, 0.01f)
+        // Tablette : à côté du texte, plafonnée.
+        assertEquals(360f, coverSideFor(1280.dp, 1200.dp, sideBySide = true).value, 0.01f)
+    }
+
+    @Test
+    fun `le nom ne parait dans la barre que sur la fin du repli`() {
+        assertEquals(0f, barTitleAlpha(0.5f), 0f)
+        assertEquals(0f, barTitleAlpha(0.65f), 1e-4f)
+        assertEquals(1f, barTitleAlpha(1f), 0f)
+        assertTrue(barTitleAlpha(0.8f) in 0.1f..0.9f)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package app.waveflow.prototype
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -8,16 +9,21 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.waveflow.BuildConfig
+import app.waveflow.MainActivity
 import app.waveflow.WaveFlowApp
 import app.waveflow.data.LibraryStore
 import app.waveflow.model.ThemeChoice
@@ -26,6 +32,9 @@ import app.waveflow.ui.permission.AudioPermissionGate
 import app.waveflow.ui.permission.hasAudioPermission
 import app.waveflow.ui.player.PlayerViewModel
 import app.waveflow.ui.playlists.PlaylistsViewModel
+import app.waveflow.ui.server.ServerViewModel
+import app.waveflow.ui.settings.SettingsScreen
+import app.waveflow.ui.settings.SettingsViewModel
 import app.waveflow.ui.theme.WaveFlowTheme
 import kotlinx.coroutines.flow.merge
 
@@ -40,7 +49,7 @@ import kotlinx.coroutines.flow.merge
  * suggestion du jour) et les playlists — et le `LibraryStore`
  * d'`AppContainer`. Rien de Media3, du MediaStore ni du service n'est réécrit.
  *
- * Le thème suit le système.
+ * Le thème suit celui choisi dans les réglages de l'application.
  */
 class PocketActivity : ComponentActivity() {
 
@@ -50,6 +59,10 @@ class PocketActivity : ComponentActivity() {
     // et des playlists : le prototype n'a pas de données à lui.
     private val homeViewModel: HomeViewModel by viewModels { HomeViewModel.Factory }
     private val playlistsViewModel: PlaylistsViewModel by viewModels { PlaylistsViewModel.Factory }
+
+    // Les réglages de production : le thème, le son, le serveur.
+    private val settingsViewModel: SettingsViewModel by viewModels { SettingsViewModel.Factory }
+    private val serverViewModel: ServerViewModel by viewModels { ServerViewModel.Factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,8 +76,26 @@ class PocketActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
         val libraryStore = (application as WaveFlowApp).container.libraryStore
         setContent {
-            WaveFlowTheme(theme = ThemeChoice.System) {
-                PocketTheme {
+            // Le thème choisi dans les réglages, comme l'application : les
+            // réglages sont ceux de la production, et un choix qui ne
+            // changerait rien serait un réglage mort.
+            val preferences by settingsViewModel.preferences.collectAsStateWithLifecycle()
+            val sombre = when (preferences.theme) {
+                ThemeChoice.System -> isSystemInDarkTheme()
+                ThemeChoice.Light -> false
+                ThemeChoice.Dark -> true
+            }
+            // `enableEdgeToEdge` règle les icônes des barres du système sur le
+            // thème du système au lancement ; un thème choisi à l'inverse les
+            // laisserait illisibles sur la page.
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !sombre
+                    isAppearanceLightNavigationBars = !sombre
+                }
+            }
+            WaveFlowTheme(theme = preferences.theme) {
+                PocketTheme(dark = sombre) {
                     AudioPermissionGate { PocketContent(libraryStore) }
                 }
             }
@@ -144,6 +175,27 @@ class PocketActivity : ComponentActivity() {
             messages = messages,
             expanded = expanded,
             onExpandedChange = { coquille.expanded.value = it },
+            settingsPage = { Reglages() },
+        )
+    }
+
+    /**
+     * L'écran des réglages de production. La ligne du serveur ouvre
+     * l'application elle-même : la connexion et le compte n'ont pas d'écran
+     * dans le prototype.
+     */
+    @Composable
+    private fun Reglages() {
+        val preferences by settingsViewModel.preferences.collectAsStateWithLifecycle()
+        val serveur by serverViewModel.state.collectAsStateWithLifecycle()
+        SettingsScreen(
+            preferences = preferences,
+            isServerConnected = serveur.isConnected,
+            serverSummary = serveur.connected?.serverUrl,
+            appVersion = BuildConfig.VERSION_NAME,
+            onThemeChange = settingsViewModel::setTheme,
+            onSonChange = settingsViewModel::regler,
+            onOpenServer = { startActivity(Intent(this, MainActivity::class.java)) },
         )
     }
 

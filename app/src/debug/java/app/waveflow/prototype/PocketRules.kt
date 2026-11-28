@@ -5,6 +5,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.waveflow.model.Album
+import app.waveflow.model.Artist
+import app.waveflow.model.Song
 import app.waveflow.ui.theme.oklchToColor
 
 /*
@@ -91,3 +94,40 @@ fun formatTotal(durationMs: Long): String {
 
 private const val MS_PER_MINUTE = 60_000L
 private const val MINUTES_PER_HOUR = 60L
+
+/** Les ordres de [category], le premier par défaut ; aucun pour les playlists, rangées par l'utilisateur. */
+fun sortOrdersFor(category: LibraryCategory): List<SortOrder> = when (category) {
+    LibraryCategory.Albums -> listOf(SortOrder.Titre, SortOrder.Artiste, SortOrder.Ajout)
+    LibraryCategory.Artistes -> listOf(SortOrder.Nom, SortOrder.Pistes)
+    LibraryCategory.Titres -> listOf(SortOrder.Titre, SortOrder.Artiste, SortOrder.Ajout)
+    LibraryCategory.Playlists -> emptyList()
+}
+
+/** Les albums dans l'ordre [order] ; à défaut, celui de la bibliothèque (par titre). */
+fun List<Album>.sortedFor(order: SortOrder): List<Album> = when (order) {
+    SortOrder.Artiste -> sortedWith(compareBy({ it.displayArtist.lowercase() }, { it.title.lowercase() }))
+    SortOrder.Ajout -> sortedByDescending { it.addedAtMs }
+    else -> this
+}
+
+/** Les artistes dans l'ordre [order] ; à défaut, par nom. */
+@JvmName("sortedArtistsFor")
+fun List<Artist>.sortedFor(order: SortOrder): List<Artist> = when (order) {
+    SortOrder.Pistes -> sortedByDescending { it.trackCount }
+    else -> this
+}
+
+/** Les titres dans l'ordre [order] ; à défaut, celui de la bibliothèque (par titre). */
+@JvmName("sortedSongsFor")
+fun List<Song>.sortedFor(order: SortOrder): List<Song> = when (order) {
+    SortOrder.Artiste -> sortedWith(compareBy({ it.displayArtist.lowercase() }, { it.title.lowercase() }))
+    SortOrder.Ajout -> sortedByDescending { it.addedAtMs }
+    else -> this
+}
+
+/**
+ * La pile de pages avec [route] au sommet. Déjà ouverte (« Voir l'album »
+ * depuis cet album), rien n'est empilé : Retour dépilerait sinon une entrée
+ * invisible.
+ */
+fun List<String>.pushedOnce(route: String): List<String> = if (lastOrNull() == route) this else this + route

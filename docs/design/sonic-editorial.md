@@ -246,15 +246,16 @@ se tait.
 
 **Composition**, de haut en bas :
 
-1. **Une barre légère** : réduire (à gauche) ; au centre, l'étiquette
-   « EN LECTURE » et ce qui joue — l'album, ou la source ; « Plus » (à droite),
-   qui ouvre une feuille : vitesse, minuterie de veille, boucle A-B. Trois
-   éléments, contre cinq aujourd'hui.
+1. **Une barre légère** : réduire (à gauche) ; au centre, le symbole de
+   WaveFlow, l'étiquette « EN LECTURE » et **où l'on en est** — « Piste 2 sur
+   7 » quand la file en compte plusieurs, sinon l'album, ou la source ;
+   « Plus » (à droite), qui ouvre une feuille : vitesse, minuterie de veille,
+   boucle A-B. Trois éléments, contre cinq aujourd'hui.
 2. **La pochette**, qui prend toute la hauteur qui reste, plafonnée à la
    largeur. Un appui montre les paroles (comme aujourd'hui), un balayage change
    de morceau.
-3. **Le titre** en mise en avant (26 sp, deux lignes au plus), l'artiste et
-   l'album sur une ligne en `ink2`. Aligné à gauche, collé à la pochette.
+3. **Le titre** en titre d'écran (`displaySmall`, deux lignes au plus),
+   l'artiste et l'album sur une ligne en `ink2`. Aligné à gauche.
 4. **Le sillage**, le temps écoulé à gauche, le temps **restant** à droite, et
    entre les deux **des pastilles d'état**, *seulement* quand un réglage
    s'écarte de l'ordinaire : « ×1,5 », la lune de la minuterie, « A–B ». Une
@@ -263,9 +264,22 @@ se tait.
    (posée d'abord sous le titre, elle faisait remonter la pochette).
 5. **Les commandes** : aléatoire · précédent · **lecture (72 dp, l'accent)** ·
    suivant · répétition.
-6. **Le dock** au pouce : « Paroles » et « File · 12 », deux actions à
-   étiquette. La file s'ouvre en **feuille** (geste natif, glisser pour fermer),
-   au lieu de remplacer la pochette.
+6. **Le dock** au pouce : « Paroles » et « Ensuite · *le titre suivant* » (ou
+   « File » en fin de file, et en aléatoire ou en répétition, où l'ordre de la
+   file n'est pas celui de la lecture), deux actions à étiquette. La file s'ouvre en
+   **feuille** (geste natif, glisser pour fermer), au lieu de remplacer la
+   pochette.
+
+**Le pont** (seconde version). Le sillage, les commandes et le dock sont
+portés par une seule surface levée (`raised`), arrondie en haut (28 dp), dont
+le bord haut prend la lumière de la pochette et l'éteint avant les commandes —
+la barre du lecteur du bureau, « une surface, un dégradé venu de la lumière en
+haut ». Sur un téléphone, il touche le bas de l'écran et s'écarte lui-même de
+la barre du système ; la pochette se centre dans ce qu'il laisse. Dans une
+colonne bornée (tablette en portrait) ou en deux volets, il **flotte** :
+arrondi de tous côtés (24 dp), à 16 dp au-dessus de la barre du système, et
+en portrait la pochette, le titre et le pont se centrent ensemble — sans le
+grand vide qui séparait la pochette de son titre.
 
 **Adaptation à la hauteur.** La pochette n'a pas de taille : elle reçoit ce que
 le reste lui laisse, plafonné à la largeur (et à 520 dp sur une tablette). Sous
@@ -299,21 +313,28 @@ de qualité de flux par piste. Le prototype ne les montre pas.
 **Intention.** Le lecteur ne disparaît pas quand on le réduit : il se range, au
 même endroit, avec les mêmes signes — la pochette, le vert, le sillage.
 
-**Composition.** Une surface de contenu (`surface`) de 64 dp, rayon 14 dp, à 8 dp des bords,
-posée **sur** la barre de navigation (pas flottante au-dessus du contenu) :
-vignette 44 dp, titre et artiste, le disque de lecture (40 dp, l'accent), le
-morceau suivant. Le sillage court au pied de la surface. Un appui l'ouvre ; un
-balayage vers le haut aussi ; un balayage horizontal change de morceau.
+**Composition (seconde version).** **Le dock** : le mini-lecteur et la barre
+de navigation d'un seul tenant, sur un même fond levé (`raised`), sans
+marge ni carte — la plaque à 8 dp des bords de la première version doublait
+les marges et posait une carte sur une barre. Le mini-lecteur fait 70 dp :
+le sillage court en fil de 6 dp sur son bord haut, puis une rangée de 64 dp —
+la vignette 44 dp, le
+titre et l'artiste, le disque de lecture (40 dp, l'accent), le morceau
+suivant. Un appui l'ouvre ; un balayage vers le haut aussi ; un balayage
+horizontal change de morceau. La page s'arrête au-dessus du dock : rien ne
+passe dessous, tout reste atteignable en défilant.
 
 La barre de navigation garde ses trois destinations — Accueil, Bibliothèque,
-Recherche —, à 64 dp plus l'encart du système. L'onglet ouvert : son icône
+Recherche —, à 56 dp plus l'encart du système : le dock entier tient en
+126 dp. L'onglet ouvert : son icône
 pleine en `ink`, son étiquette, et l'onde de 20 dp dessous, dans l'accent. Les
 autres : icône au trait en `ink3`. Pas de pastille. À police agrandie,
 l'étiquette rétrécit d'un cran plutôt que d'être coupée.
 
 **Ce qui change.** La plaque à liseré de verre et sa lueur en dégradé
-disparaissent ; la progression quitte le bord haut pour le pied (là où l'œil
-finit la lecture de la ligne) ; l'indicateur de navigation devient l'onde.
+disparaissent ; l'indicateur de navigation devient l'onde. La progression,
+passée au pied de la plaque dans la première version, revient au bord haut du
+dock : c'est la ligne qui sépare la page de la lecture.
 
 ### Accueil
 
@@ -321,17 +342,27 @@ finit la lecture de la ligne) ; l'indicateur de navigation devient l'onde.
 
 **Composition**, chaque bloc seulement s'il a de vraies données :
 1. **Le salut** en Playfair italique (« Bonsoir. ») — la seule ligne
-   éditoriale de l'application —, et dessous, en troisième encre, ce que
-   contient l'appareil. Il change de lui-même au palier suivant.
-2. **Reprendre** : la dernière écoute réelle (l'historique de l'application),
-   sa pochette sur sa nappe, le titre, l'artiste et l'album, le disque de
-   lecture. Le disque relance ; le reste de la carte ouvre l'album. **Sans
-   historique**, sur la page et non sur une carte : « Votre musique est là. »
-   et une seule action, *Au hasard* — les catégories sont juste en dessous.
-3. **Les accès rapides** : Albums, Artistes, Titres, Playlists, en pastilles
-   qui ouvrent la catégorie de la bibliothèque. Pas de cartes de statistiques.
-4. **La suggestion du jour** (#104) : sa sorte et sa raison, le morceau, et
-   *Autre*.
+   éditoriale de l'application —, **souligné de l'onde**, et dessous, en
+   troisième encre, ce que contient l'appareil. Il change de lui-même au palier
+   suivant. À sa droite, **les réglages** (sur un téléphone ; ailleurs, le rail
+   les porte).
+2. **Le module de lecture**, qui ne confond jamais deux choses :
+   - **En écoute** — le morceau que le lecteur tient, en lecture ou en pause,
+     sa progression au pied de la carte ; le disque joue ou met en pause, le
+     reste de la carte ouvre le lecteur ;
+   - **Reprendre** — rien n'étant chargé, la dernière écoute réelle
+     (l'historique de l'application), relancée dans son album ; le reste de la
+     carte ouvre l'album ;
+   - **sans historique**, sur la page et non sur une carte : « Votre musique
+     est là. », une phrase, et une seule action, *Au hasard*.
+3. **Les étagères** : Albums, Artistes, Titres, Playlists, chacune montrée par
+   ce qu'elle contient — trois pochettes en éventail, les disques de trois
+   artistes — et comptée (« 9 albums »). Pas de pastilles génériques, pas de
+   cartes de statistiques.
+4. **La suggestion du jour** (#104), sans grande carte : « SUGGESTION DU
+   JOUR », la pochette (88 dp), une raison courte — « Jamais écouté · ajouté
+   le 28 nov. » plutôt que la phrase longue du bureau —, le titre, l'artiste,
+   le disque, et *Autre suggestion* en icône.
 5. **Ajouts récents** : un carrousel où deux pochettes et le bord d'une
    troisième tiennent sur la largeur (tuiles bornées de 132 à 200 dp), *Tout
    voir*.
@@ -346,28 +377,33 @@ au milieu d'un mot.
 musique arrive dans le premier écran ; une bibliothèque de trois albums remplit
 l'écran de sa reprise, de ses accès, de sa suggestion et de ses pochettes.
 
-**Ce qui n'y est pas.** L'icône des réglages proposée par le brief : le
-prototype n'a pas d'écran de réglages, et une icône qui n'ouvre rien serait un
-bouton mort. Elle reviendra à l'intégration, vers les réglages de
-l'application.
+**Les réglages** (seconde version) ouvrent une page empilée qui porte
+`SettingsScreen`, l'écran de production : le thème, le son, le serveur. Le
+prototype suit désormais le thème qu'on y choisit, comme l'application ; la
+ligne du serveur ouvre l'application elle-même, la connexion n'ayant pas
+d'écran dans le prototype.
 
 ### Bibliothèque
 
 **Intention.** Un vrai navigateur de musique, efficace sur des milliers de
 titres.
 
-**Composition.** Le titre d'écran et ce que contient l'appareil, puis **le
-sélecteur de catégorie** : Albums · Artistes · Titres · Playlists, des
-pastilles qui défilent jusqu'au bord de l'écran, l'ouverte pleine d'encre —
-encre claire sur le sombre, encre sombre sur le clair. Une seule surface qui
-défile, des clés stables :
+**Composition.** Le titre d'écran, puis **le sélecteur de catégorie** :
+Albums · Artistes · Titres · Playlists, des pastilles plus petites que dans la
+première version (le texte en dessine la taille, la cible de 48 dp reste
+entière), l'ouverte pleine d'encre — encre claire sur le sombre, encre sombre
+sur le clair. Sous elles, **le compte et le tri** sur une ligne : « 9 albums »
+à gauche, l'ordre à droite, qui ouvre un menu. Seuls les tris que les données
+permettent : titre, artiste, ajout récent pour les albums et les titres ;
+nom, nombre de titres pour les artistes ; aucun pour les playlists. Le choix
+est gardé par catégorie. Une seule surface qui défile, des clés stables :
 
 - **Albums** en grille : deux colonnes sur un téléphone, quatre sur une
   tablette (tuiles de 150 dp au moins), la pochette sans conteneur ;
-- **Artistes** en lignes : le disque de 56 dp, le nom, « 2 albums · 9 titres » ;
-  sans pochette, ses initiales sur une teinte tirée de son nom (« ? » pour
-  l'artiste inconnu) ;
-- **Titres** en lignes compactes : vignette 48 dp, titre, artiste, durée, menu
+- **Artistes** en lignes de 56 dp : le disque de 44 dp, le nom, « 2 albums ·
+  9 titres » ; sans pochette, ses initiales sur une teinte tirée de son nom
+  (« ? » pour l'artiste inconnu) ;
+- **Titres** en lignes de 56 dp : vignette 44 dp, titre, artiste, durée, menu
   (*Ajouter à une playlist*, *Voir l'album*, *Voir l'artiste*) ; celle qui
   joue prend l'accent et l'onde à la place de sa durée ;
 - **Playlists** en lignes : la pochette du premier titre, le nom, le compte.
@@ -376,7 +412,8 @@ Dès 680 dp, les lignes passent sur deux colonnes. Un artiste et une playlist
 s'ouvrent sur la page d'un album, dans la même grammaire.
 
 **Ce qui change.** La rangée d'onglets soulignés part ; les artistes gagnent un
-visage qui n'est pas une note de musique.
+visage qui n'est pas une note de musique ; les listes sont plus denses (56 dp
+la ligne) ; un appui sur un titre lit la liste dans l'ordre affiché.
 
 **Ce qui n'y est pas.** Le catalogue du serveur, sous-onglet de
 l'application : le prototype ne lit que l'appareil. Il reviendra à
@@ -386,19 +423,28 @@ l'intégration comme cinquième pastille.
 
 **Intention.** Une page d'album, pas une fiche.
 
-**Composition.** La pochette en grand sur sa nappe — la largeur moins les
-gouttières, bornée par la moitié de la hauteur et par 400 dp —, le nom en
-titre d'écran, l'artiste, « Album · 9 titres · 42 min », **Lire** (pilule
-d'accent) et **Aléatoire** (pilule tonale), puis les pistes sans pochette
-répétée : le titre, l'artiste seulement s'il n'est pas celui de l'album, la
-durée ou l'onde, le menu. En défilant, la pochette recule et pâlit avec le
-geste, vers son bord bas pour ne pas mordre sur le titre, et le nom passe dans
-la barre du haut ; la flèche de retour garde un disque de la page tant qu'elle
-passe sur la pochette. Sous « Supprimer les animations », seul le nom paraît,
-en fondu. À partir de 600 dp, la pochette et le texte sont côte à côte.
+**Composition.** La pochette sur sa nappe — 62 % de la largeur, bornée par le
+tiers de la hauteur et par 260 dp —, le nom en titre d'écran, l'artiste,
+« Album · 9 titres · 42 min », **Lire** (pilule d'accent) et **Aléatoire**
+(pilule tonale), puis les pistes sans pochette répétée : le titre, l'artiste
+seulement s'il n'est pas celui de l'album, la durée ou l'onde, le menu. Les
+écarts sont resserrés : sur un Pixel 8, cinq pistes se voient à l'ouverture,
+contre une dans la première version.
+
+En défilant, la pochette recule et pâlit avec le geste, vers son bord bas pour
+ne pas mordre sur le titre. La barre du haut (48 dp) **suit le geste** au lieu
+de basculer : son fond devient opaque sur la première moitié du repli, et le
+nom n'y paraît que sur la fin (à partir de 65 %). Les deux seuils sont des
+parts du repli, pas des positions mesurées : sur la fin, le nom de la barre
+et celui de l'en-tête se voient un instant ensemble. En colonne, la flèche de
+retour n'a plus de disque : la pochette, plus étroite que l'écran, ne passe
+pas dessous. À partir de 600 dp, la pochette (36 % de la largeur, 360 dp au
+plus) et le texte sont côte à côte ; la pochette part alors du bord, et la
+flèche garde son disque.
 
 **Ce qui change.** `DetailHeader` (commun à cinq pages) laisse la place à un
-en-tête propre ; la pochette passe de ~140 dp à toute la largeur.
+en-tête propre ; la pochette passe de ~140 dp à une vraie pochette, sans
+pousser les pistes hors de l'écran.
 
 **Ce qui n'y est pas.** L'année et le numéro de piste : l'application ne les
 lit pas dans le MediaStore, et les pistes sont dans l'ordre de la bibliothèque
@@ -434,18 +480,20 @@ en les habillant de ses jetons.
 adb shell am start -n app.waveflow/app.waveflow.prototype.PocketActivity
 ```
 
-Le thème suit celui du système : `adb shell cmd uimode night yes` pour le
-sombre, `adb shell cmd uimode night no` pour le clair.
+Le thème suit celui des réglages de l'application ; laissé sur « Système », il
+suit le système : `adb shell cmd uimode night yes` pour le sombre,
+`adb shell cmd uimode night no` pour le clair.
 
 **Ce qu'il montre** : les quatre écrans — l'accueil, la bibliothèque, la page
-d'un album (et d'un artiste, d'une playlist), Now Playing —, avec le
-mini-lecteur et la barre de navigation. L'onglet Recherche dit qu'il n'est
+d'un album (et d'un artiste, d'une playlist), Now Playing —, avec le dock ou
+le rail selon la fenêtre, et la page des réglages. L'onglet Recherche dit qu'il n'est
 pas l'un des quatre. Les tests de ses composants à logique sont dans
 `app/src/testDebug/`, pour que la variante `release` n'ait rien à compiler.
 
 **Detekt ne lit pas ces dossiers.** Sa configuration analyse `src/main` et
-`src/test` ; le prototype a été passé une fois à la main, ses dossiers
-ajoutés à la volée (sans rien commiter) : son code n'a plus aucune remarque.
+`src/test` ; le prototype a été passé à la main, ses dossiers ajoutés à la
+volée (sans rien commiter), à la première version puis à la seconde : son
+code n'a plus aucune remarque.
 Celles qui restent viennent de ses tests — des noms en phrase, des nombres
 littéraux —, que la configuration accepte des tests de production, mais sous
 `test/` seulement. À l'intégration, le code rejoindra `src/main` et sera lu.
@@ -470,3 +518,72 @@ bouge pas tant que les quatre écrans n'ont pas été revus.
    blanc pour ce qui se lève), à la place de *Liquid Aurora Glass*.
 5. **La police** : DM Sans seule ; Playfair Display italique ne reste que pour
    la ligne du salut de l'accueil, dans les deux apparences.
+
+## Seconde version (28/11)
+
+L'utilisateur a essayé le prototype : la direction artistique est validée, pas
+encore le design. La seconde version ne touche ni aux couleurs ni à la
+typographie ; elle reprend la **composition**, les **proportions**, la
+**densité** et l'**adaptation** à la fenêtre. Sa règle : *ne pas tout faire
+plus grand ou plus décoratif — tout faire plus intentionnel*. Les écrans
+ci-dessus décrivent son état ; ce qui suit dit ce qui les relie.
+
+### Trois compositions, choisies par la largeur de la fenêtre
+
+La largeur de la **fenêtre** (pas l'appareil, pas l'orientation) choisit la
+composition, aux seuils de Material : moins de 600 dp, **compacte** ; jusqu'à
+840 dp, **moyenne** ; au-delà, **étendue**.
+
+- **Compacte** (téléphone) — le dock au pied : mini-lecteur et barre de
+  navigation d'un seul tenant. Les réglages sont sur l'accueil.
+- **Moyenne** (tablette en portrait, pliable ouvert) — le **rail** à gauche
+  (88 dp : les trois destinations, l'onde sous l'ouverte, les réglages en
+  bas) ; le mini-lecteur seul au pied de la page.
+- **Étendue** (tablette en paysage, bureau) — le rail, la page, et à droite le
+  **panneau de lecture** (360 dp) : « EN LECTURE » et la place dans la file,
+  la pochette (un appui ouvre Now Playing), le titre, le sillage, les
+  commandes, puis **« À suivre »**, la suite de la file, qu'un appui lance —
+  en aléatoire ou en répétition, **« La file »** entière, le morceau courant
+  marqué, puisque la suite de la liste n'est pas celle de la lecture. Le
+  panneau défile d'un bloc, et sa pochette rétrécit dans une fenêtre basse
+  plutôt que de pousser les commandes dehors.
+  L'accueil y laisse tomber sa carte « En écoute », qui répéterait le
+  panneau. Une fenêtre étendue trop basse (moins de 560 dp : un téléphone en
+  paysage) garde le dock — le panneau n'y tiendrait pas sa pochette.
+
+Now Playing, ouvert, couvre toujours la fenêtre : une colonne bornée à 560 dp
+et centrée en portrait, deux volets en paysage large. Le rail défile dans une
+fenêtre trop basse pour garder les réglages à portée.
+
+**Le thème des réglages.** Le prototype suit le thème choisi dans les réglages
+de l'application, et règle les icônes des barres du système sur ce thème —
+pas sur celui du système au lancement, que `enableEdgeToEdge` retient.
+Aucun code de l'application de production ne règle ces icônes après le
+lancement : un thème choisi à l'inverse du système devrait y laisser les
+icônes de la barre d'état peu lisibles (lu dans le code, pas vu à l'écran).
+
+**Sans nouvelle dépendance.** La classe de fenêtre se calcule sur la taille
+du conteneur (`LocalWindowInfo.containerSize`) avec les seuils de Material.
+`material3-adaptive` n'est pas dans les dépendances, et `window-core` n'est
+sur le chemin de classes qu'à l'exécution (tiré par `material3`) : s'en servir
+demanderait de les déclarer. Trois seuils ne le justifiaient pas dans un
+prototype ; à l'intégration, `material3-adaptive` (le `NavigationSuiteScaffold`
+et les volets) se pèsera avec le reste.
+
+### Les albums en double
+
+Deux tuiles « Doughnut » (TWICE) et deux « Blissful Dreams » (l'une « Lenny
+Loops, 96 Zeus », l'autre « cxlt. ») paraissent dans la grille. Ce n'est pas
+le prototype : le MediaStore range un album par **nom et dossier**
+(`album_id`), et l'émulateur a les mêmes fichiers à deux endroits (la racine
+de `Music/`, venue de l'image de l'AVD, et un dossier par album), plus des
+pistes en double FLAC et MP3. Deux `album_id`, donc deux albums.
+
+L'artiste affiché diffère pour une autre raison, qui est un défaut de
+production : `toAlbums` prend l'artiste du **premier morceau par titre**, et
+`MediaStoreMusicRepository` ne lit pas `ALBUM_ARTIST`. Une compilation
+prend ainsi l'artiste d'une piste au hasard de l'alphabet. Le prototype
+n'en fusionne rien : il montre ce que la production montrerait. La correction
+— lire `ALBUM_ARTIST`, et dire « Artistes variés » quand un album en a
+plusieurs sans artiste d'album — est un changement du dépôt MediaStore, hors
+de son périmètre.

@@ -3,6 +3,7 @@ package app.waveflow.prototype
 import android.net.Uri
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -10,15 +11,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -57,7 +62,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -85,6 +92,7 @@ import app.waveflow.ui.components.Artwork
 import app.waveflow.ui.components.SheetHeader
 import app.waveflow.ui.components.SheetOption
 import app.waveflow.ui.components.WaveFlowSheet
+import app.waveflow.ui.components.WaveFlowSymbol
 import app.waveflow.ui.player.LyricsPane
 import app.waveflow.ui.player.LyricsUiState
 import app.waveflow.ui.player.PlaybackSpeedSheet
@@ -103,11 +111,13 @@ private enum class Feuille { Plus, File, Vitesse, Minuterie }
  * Now Playing — l'écran qui définit WaveFlow sur un téléphone
  * (`docs/design/sonic-editorial.md`).
  *
- * De haut en bas : une barre légère (réduire, ce qui joue, « Plus ») ; la
- * pochette, qui prend toute la hauteur qui reste ; le titre collé à elle et ses
- * pastilles d'état ; le sillage ; les commandes ; le dock au pouce (paroles,
- * file). Derrière, la nappe de la pochette — sa lumière, jamais l'accent : le
- * disque de lecture reste vert, quelle que soit la pochette.
+ * Deux étages. En haut, sur la nappe de la pochette : une barre légère
+ * (réduire, le contexte de lecture, « Plus »), la pochette, qui prend toute la
+ * hauteur qui reste, et le titre en grand. En bas, **le pont** : une surface
+ * dont le bord haut prend la lumière de la pochette — l'écho, au pouce, de la
+ * barre du lecteur de Fluid Editorial —, qui porte le sillage, les commandes,
+ * et la rangée des paroles et de la suite. La lumière n'est jamais l'accent :
+ * le disque de lecture reste vert, quelle que soit la pochette.
  *
  * La pochette n'a pas de taille fixe ([fitCover]) : sur un petit écran ou à
  * police agrandie, l'écran passe en disposition compacte ; en paysage large,
@@ -152,9 +162,13 @@ fun PocketNowPlaying(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars),
+                // Le bas n'est pas réservé ici : le pont descend sous la barre
+                // du système et s'en écarte lui-même.
+                .windowInsetsPadding(
+                    WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                ),
         ) {
-            TopBar(track = track, onCollapse = actions.onCollapse, onMore = { feuille = Feuille.Plus })
+            TopBar(state = state, track = track, onCollapse = actions.onCollapse, onMore = { feuille = Feuille.Plus })
             BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
@@ -162,8 +176,14 @@ fun PocketNowPlaying(
             ) {
                 val gouttiere = if (maxWidth < NARROW_WIDTH) 20.dp else 24.dp
                 val corps = Modifier.padding(horizontal = gouttiere)
-                val details: @Composable (Boolean, @Composable () -> Unit) -> Unit = { mesure, header ->
+                val details: @Composable (
+                    Boolean,
+                    Boolean,
+                    @Composable () -> Unit,
+                ) -> Unit = { mesure, flottant, header ->
                     Details(
+                        gouttiere = gouttiere,
+                        flottant = flottant,
                         // La copie qui ne sert qu'à mesurer ne joue pas : son
                         // sillage ne coule pas, et la hauteur ne dépend pas de
                         // la lecture.
@@ -196,11 +216,13 @@ fun PocketNowPlaying(
                 val fenetre = LocalConfiguration.current
                 if (usesTwoPanes(fenetre.screenWidthDp.dp, fenetre.screenHeightDp.dp)) {
                     TwoPanes(maxHeight, lyrics.shown, corps, cover, paroles) {
-                        details(false) { TitleBlock(track) }
+                        details(false, true) { TitleBlock(track) }
                     }
                 } else {
                     OnePane(lyrics.shown, gouttiere, cover, paroles) { compact, mesure ->
-                        details(mesure) {
+                        // Sur une tablette, la colonne est bornée : le pont y
+                        // flotte, arrondi de tous côtés, au lieu de toucher le bas.
+                        details(mesure, maxWidth > DETAILS_MAX + gouttiere * 2) {
                             if (compact) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     cover(Modifier.size(COMPACT_COVER))
@@ -239,6 +261,8 @@ private fun OnePane(
         val w = contraintes.maxWidth
         val h = contraintes.maxHeight
         val ecart = COVER_GAP.roundToPx()
+        // Le haut de la pochette respire aussi : elle ne colle pas à la barre.
+        val marge = COVER_TOP.roundToPx()
         // Sur une tablette, le titre et les commandes ne s'étirent pas sur
         // toute la largeur : leur colonne est bornée, et centrée.
         val largeur = minOf(w, (DETAILS_MAX + gouttiere * 2).roundToPx())
@@ -247,10 +271,10 @@ private fun OnePane(
         // Une copie sans sémantique, pour mesurer seulement : la disposition
         // compacte ne doit pas laisser au lecteur d'écran une seconde rangée de
         // commandes, jamais placée.
-        val hauteurBloc = subcompose("mesure") { Box(corps.clearAndSetSemantics {}) { content(false, true) } }
+        val hauteurBloc = subcompose("mesure") { Box(Modifier.clearAndSetSemantics {}) { content(false, true) } }
             .map { it.measure(libre) }
             .maxOfOrNull { it.height } ?: 0
-        val details = { subcompose("details") { Box(corps) { content(false, false) } }.map { it.measure(libre) } }
+        val details = { subcompose("details") { content(false, false) }.map { it.measure(libre) } }
 
         val zoneParoles = h - hauteurBloc - ecart
         if (lyricsShown && zoneParoles < LYRICS_MIN.roundToPx()) {
@@ -261,7 +285,7 @@ private fun OnePane(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         paroles(corps.fillMaxWidth().height(LYRICS_MIN))
-                        Box(corps) { content(false, false) }
+                        content(false, false)
                     }
                 }
             }.map { it.measure(Constraints.fixed(largeur, h)) }
@@ -281,7 +305,7 @@ private fun OnePane(
         val ajustement = with(density) {
             fitCover(
                 width = largeur.toDp() - gouttiere * 2,
-                height = h.toDp(),
+                height = h.toDp() - COVER_TOP,
                 details = hauteurBloc.toDp(),
                 gap = COVER_GAP,
             )
@@ -293,11 +317,17 @@ private fun OnePane(
                     cover(Modifier)
                 }.map { it.measure(Constraints.fixed(cote, cote)) }
                 val bloc = details()
-                val total = cote + ecart + hauteurBloc
-                val haut = ((h - total) / 2).coerceAtLeast(0)
+                val (haut, basBloc) = coverAndDetailsTop(
+                    height = h,
+                    cover = cote,
+                    gap = ecart,
+                    details = hauteurBloc,
+                    margin = marge,
+                    floating = largeur < w,
+                )
                 layout(w, h) {
                     pochette.forEach { it.place((w - cote) / 2, haut) }
-                    bloc.forEach { it.place(x0, haut + cote + ecart) }
+                    bloc.forEach { it.place(x0, basBloc) }
                 }
             }
             CoverFit.Compact -> {
@@ -305,7 +335,7 @@ private fun OnePane(
                     // Aligné au pied, à portée du pouce ; s'il déborde
                     // encore (police doublée sur un petit écran), il défile.
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-                        Box(corps.verticalScroll(rememberScrollState())) { content(true, false) }
+                        Box(Modifier.verticalScroll(rememberScrollState())) { content(true, false) }
                     }
                 }.map { it.measure(Constraints.fixed(largeur, h)) }
                 layout(w, h) { compacte.forEach { it.place(x0, 0) } }
@@ -313,6 +343,36 @@ private fun OnePane(
         }
     }
 }
+
+/**
+ * Le haut de la pochette et celui du bloc des détails, en pixels. Sur un
+ * téléphone, le pont reste au pied de l'écran et la pochette se centre dans ce
+ * qu'il laisse. Dans une colonne bornée (tablette en portrait), le pont flotte :
+ * la pochette, le titre et le pont se centrent ensemble, sans grand vide entre
+ * la pochette et son titre. Jamais collés à la barre du haut ([margin]).
+ */
+@Suppress("LongParameterList")
+internal fun coverAndDetailsTop(
+    height: Int,
+    cover: Int,
+    gap: Int,
+    details: Int,
+    margin: Int,
+    floating: Boolean,
+): Pair<Int, Int> {
+    val haut = ((height - cover - gap - details) / 2).coerceAtLeast(margin)
+    if (floating) return haut to haut + cover + gap
+    return haut to height - details
+}
+
+/**
+ * La file dit-elle ce qui jouera ensuite ? `PlayerUiState.queue` est dans
+ * l'ordre de la file, pas dans celui de la lecture : en aléatoire, le morceau
+ * d'après n'est pas le suivant de la liste ; en répétition, il peut être le
+ * même, ou le premier.
+ */
+internal fun followsQueueOrder(state: PlayerUiState): Boolean =
+    !state.shuffleEnabled && state.repeatMode == RepeatMode.Off
 
 /** En paysage large : la pochette à gauche, le reste à droite, centrés. */
 @Composable
@@ -326,7 +386,7 @@ private fun TwoPanes(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = corps.fillMaxSize(),
+        modifier = corps.fillMaxSize().navigationBarsPadding(),
     ) {
         val cote = minOf(hauteur - 32.dp, COVER_CAP)
         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
@@ -346,7 +406,7 @@ private fun TwoPanes(
 }
 
 @Composable
-private fun TopBar(track: PlayingTrack, onCollapse: () -> Unit, onMore: () -> Unit) {
+private fun TopBar(state: PlayerUiState, track: PlayingTrack, onCollapse: () -> Unit, onMore: () -> Unit) {
     val colors = Pocket.colors
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -362,14 +422,20 @@ private fun TopBar(track: PlayingTrack, onCollapse: () -> Unit, onMore: () -> Un
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.weight(1f),
         ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Le W de la marque, qui respire pendant la lecture et retombe en
+                // pause : le symbole du produit, à sa seule place dans l'écran.
+                WaveFlowSymbol(playing = state.isPlaying, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "EN LECTURE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.ink3,
+                    maxLines = 1,
+                )
+            }
             Text(
-                text = "EN LECTURE",
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.ink3,
-                maxLines = 1,
-            )
-            Text(
-                text = track.album ?: track.source.label,
+                text = playbackContext(state, track),
                 style = MaterialTheme.typography.titleSmall,
                 color = colors.ink,
                 maxLines = 1,
@@ -470,15 +536,15 @@ private fun TitleBlock(
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = track.title,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.displaySmall,
             color = colors.ink,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = listOfNotNull(track.artist.orUnknownArtist(), track.album).joinToString(" · "),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = colors.ink2,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -532,9 +598,17 @@ private fun StatusPills(state: PlayerUiState, trackKey: String, onOpen: (Feuille
     }
 }
 
-/** Le titre, la progression, les commandes et le dock. */
+/**
+ * Le titre, dans la gouttière, puis le pont.
+ *
+ * @param flottant le pont ne touche pas le bas de l'écran (une colonne bornée,
+ *   deux volets) : il s'arrondit de tous côtés et laisse la barre du système
+ *   en dehors.
+ */
 @Composable
 private fun Details(
+    gouttiere: Dp,
+    flottant: Boolean,
     state: PlayerUiState,
     track: PlayingTrack,
     lyricsShown: Boolean,
@@ -542,30 +616,64 @@ private fun Details(
     header: @Composable () -> Unit,
     onOpen: (Feuille) -> Unit,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        header()
-        Spacer(Modifier.height(8.dp))
-        Sillage(
-            positionMs = state.positionMs,
-            durationMs = state.durationMs,
-            trackKey = track.mediaId,
-            playing = state.isPlaying,
-            onSeek = actions.onSeek,
-            loop = loopMarks(state.abLoop, track.mediaId, state.durationMs),
-            center = { StatusPills(state = state, trackKey = track.mediaId, onOpen = onOpen) },
-        )
-        Spacer(Modifier.height(4.dp))
-        Transport(state, actions)
-        Spacer(Modifier.height(12.dp))
-        Dock(state = state, lyricsShown = lyricsShown, onToggleLyrics = actions.onToggleLyrics, onOpenQueue = {
-            onOpen(Feuille.File)
-        })
-        Spacer(Modifier.height(12.dp))
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(Modifier.padding(horizontal = gouttiere)) { header() }
+        Spacer(Modifier.height(DECK_GAP))
+        Deck(gouttiere = gouttiere, flottant = flottant, glowFrom = rememberAtmosphere(track.artworkUri)) {
+            Sillage(
+                positionMs = state.positionMs,
+                durationMs = state.durationMs,
+                trackKey = track.mediaId,
+                playing = state.isPlaying,
+                onSeek = actions.onSeek,
+                loop = loopMarks(state.abLoop, track.mediaId, state.durationMs),
+                center = { StatusPills(state = state, trackKey = track.mediaId, onOpen = onOpen) },
+            )
+            Transport(state, actions)
+            Spacer(Modifier.height(8.dp))
+            Dock(state = state, lyricsShown = lyricsShown, onToggleLyrics = actions.onToggleLyrics, onOpenQueue = {
+                onOpen(Feuille.File)
+            })
+        }
     }
 }
 
+/**
+ * Le pont : la surface qui porte les commandes. Son bord haut prend la lumière
+ * de la pochette et s'éteint avant les commandes — la barre du lecteur du
+ * bureau, « une surface, un dégradé venu de la lumière en haut ». Il descend
+ * sous la barre du système, et s'en écarte lui-même ; flottant, il s'arrondit
+ * de tous côtés.
+ */
 @Composable
-private fun Transport(state: PlayerUiState, actions: NowPlayingActions) {
+private fun Deck(gouttiere: Dp, flottant: Boolean, glowFrom: Color, content: @Composable ColumnScope.() -> Unit) {
+    val colors = Pocket.colors
+    val forme = if (flottant) PocketShapes.deckFloating else PocketShapes.deck
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            // Flottant, il se tient au-dessus de la barre du système, avec une
+            // marge ; la barre ne mord pas sur la file et les paroles.
+            .then(if (flottant) Modifier.navigationBarsPadding().padding(bottom = DECK_FLOAT_MARGIN) else Modifier)
+            .fillMaxWidth()
+            .clip(forme)
+            .background(colors.raised)
+            .drawBehind {
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to glowFrom.copy(alpha = DECK_GLOW_ALPHA),
+                        DECK_GLOW_END to Color.Transparent,
+                    ),
+                )
+            }
+            .then(if (flottant) Modifier else Modifier.navigationBarsPadding())
+            .padding(start = gouttiere, end = gouttiere, top = 12.dp, bottom = 12.dp),
+        content = content,
+    )
+}
+
+@Composable
+internal fun Transport(state: PlayerUiState, actions: NowPlayingActions) {
     val colors = Pocket.colors
     Row(
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -617,11 +725,18 @@ private fun Transport(state: PlayerUiState, actions: NowPlayingActions) {
     }
 }
 
-/** Le dock au pouce : les deux actions secondaires qu'on cherche en écoutant. */
+/**
+ * La rangée au pouce : les paroles, et la suite. La suite nomme le prochain
+ * morceau — « Ensuite · Wonderful Day » — plutôt que de compter la file : c'est
+ * ce qu'on se demande en écoutant. En aléatoire ou en répétition, la file ne
+ * dit pas ce qui jouera ensuite ([followsQueueOrder]) : elle s'appelle alors
+ * « File », sans nommer de titre. Elle ouvre la file.
+ */
 @Composable
 private fun Dock(state: PlayerUiState, lyricsShown: Boolean, onToggleLyrics: () -> Unit, onOpenQueue: () -> Unit) {
     Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
     ) {
         PocketPill(
@@ -632,11 +747,14 @@ private fun Dock(state: PlayerUiState, lyricsShown: Boolean, onToggleLyrics: () 
             description = if (lyricsShown) "Masquer les paroles" else "Afficher les paroles",
         )
         val suite = state.upNextCount
+        val prochain = state.queue.getOrNull(state.queueIndex + 1)?.takeIf { followsQueueOrder(state) }
         PocketPill(
-            text = if (suite > 0) "File · $suite" else "File",
+            text = prochain?.let { "Ensuite · ${it.title}" } ?: "File",
             icon = Icons.AutoMirrored.Rounded.QueueMusic,
             onClick = onOpenQueue,
-            description = "Voir la file — $suite ${if (suite > 1) "morceaux" else "morceau"} ensuite",
+            description = "Voir la file — $suite ${if (suite > 1) "morceaux" else "morceau"} ensuite" +
+                (prochain?.let { " ; ensuite : ${it.title}" } ?: ""),
+            modifier = Modifier.weight(1f, fill = false),
         )
     }
 }
@@ -747,6 +865,19 @@ private fun Feuilles(
     }
 }
 
+/**
+ * Le contexte de lecture, sous « EN LECTURE » : la place du morceau dans la
+ * file — « Piste 3 sur 12 » — quand la file en a plusieurs ; sinon l'album, ou
+ * la source quand l'album est inconnu. En aléatoire, la place dans la file
+ * n'est pas celle de la lecture : l'album, là aussi.
+ */
+internal fun playbackContext(state: PlayerUiState, track: PlayingTrack): String =
+    if (!state.shuffleEnabled && state.queue.size > 1 && state.queueIndex >= 0) {
+        "Piste ${state.queueIndex + 1} sur ${state.queue.size}"
+    } else {
+        track.album ?: track.source.label
+    }
+
 /** La pochette en pause : elle recule, sans disparaître. */
 private const val PAUSED_SCALE = 0.92f
 
@@ -757,6 +888,19 @@ private val SWIPE_THRESHOLD = 96.dp
 private const val SWIPE_FOLLOW = 0.35f
 
 private val COVER_GAP = 24.dp
+
+/** L'air au-dessus de la pochette, sous la barre du haut. */
+private val COVER_TOP = 8.dp
+
+/** Entre le titre et le pont. */
+private val DECK_GAP = 20.dp
+
+/** Sous le pont flottant, au-dessus de la barre du système. */
+private val DECK_FLOAT_MARGIN = 16.dp
+
+/** La lumière de la pochette au bord haut du pont, et où elle s'éteint. */
+internal const val DECK_GLOW_ALPHA = 0.55f
+private const val DECK_GLOW_END = 0.6f
 
 /** L'étiquette de test de la zone des paroles. */
 internal const val LYRICS_TAG = "paroles"

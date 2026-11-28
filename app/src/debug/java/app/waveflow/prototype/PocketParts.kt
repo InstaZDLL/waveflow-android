@@ -143,6 +143,13 @@ fun <T> TileCarousel(
     }
 }
 
+/**
+ * Une ligne de liste : 56 dp, la vignette à 44 — assez pour une cible et une
+ * pochette lisible, serré pour qu'une grande collection se parcoure.
+ */
+val ROW_HEIGHT = 56.dp
+private val ROW_THUMB = 44.dp
+
 /** L'écart entre deux tuiles. */
 val TILE_SPACING = 12.dp
 
@@ -170,22 +177,23 @@ fun TrackRow(
     showArtwork: Boolean = true,
     menu: List<RowAction> = emptyList(),
     horizontalPadding: Dp = 20.dp,
+    showDuration: Boolean = true,
 ) {
     val colors = Pocket.colors
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .heightIn(min = ROW_HEIGHT)
             .clickable(onClick = onClick)
             .semantics { if (current) stateDescription = "Morceau courant" }
             .padding(start = horizontalPadding, end = if (menu.isEmpty()) horizontalPadding else 4.dp),
     ) {
         if (showArtwork) {
-            Artwork(artworkUri = artworkUri, shape = PocketShapes.thumbnail, modifier = Modifier.size(48.dp))
-            Spacer(Modifier.width(14.dp))
+            Artwork(artworkUri = artworkUri, shape = PocketShapes.thumbnail, modifier = Modifier.size(ROW_THUMB))
+            Spacer(Modifier.width(12.dp))
         }
-        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
@@ -206,7 +214,7 @@ fun TrackRow(
         Spacer(Modifier.width(12.dp))
         if (current) {
             WaveMark(modifier = Modifier.size(24.dp, 6.dp), color = colors.accent)
-        } else {
+        } else if (showDuration) {
             Text(formatDuration(durationMs), style = MaterialTheme.typography.labelMedium, color = colors.ink3)
         }
         if (menu.isNotEmpty()) RowMenu(title = title, actions = menu)
@@ -299,30 +307,29 @@ fun <T> CategorySelector(
     val colors = Pocket.colors
     LazyRow(
         contentPadding = PaddingValues(horizontal = gutter),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier.selectableGroup(),
     ) {
         items(entries, key = { label(it) }) { entree ->
             val ouverte = entree == selected
-            Surface(
-                shape = PocketShapes.action,
-                color = if (ouverte) colors.ink else colors.surface,
+            // La cible fait 48 dp de haut ; la pastille qu'on voit, 34 — le
+            // sélecteur ne pèse plus plus que ce qu'il désigne.
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .heightIn(min = 48.dp)
-                    .padding(vertical = 4.dp)
                     .selectable(selected = ouverte, role = Role.Tab, onClick = { onSelect(entree) }),
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                ) {
-                    Text(
-                        text = label(entree),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (ouverte) colors.canvas else colors.ink2,
-                        maxLines = 1,
-                    )
-                }
+                Text(
+                    text = label(entree),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (ouverte) colors.canvas else colors.ink2,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(PocketShapes.action)
+                        .background(if (ouverte) colors.ink else colors.surface)
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                )
             }
         }
     }

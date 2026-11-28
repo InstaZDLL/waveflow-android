@@ -61,13 +61,16 @@ import app.waveflow.ui.trackCountLabel
  * La page d'un album — et, avec la même grammaire, celle d'un artiste ou
  * d'une playlist (`docs/design/sonic-editorial.md`, « Album »).
  *
- * La pochette en grand sur sa nappe, le nom en titre d'écran, une ligne
- * « Album · 9 titres · 42 min », **Lire** (l'accent) et **Aléatoire** (un ton),
- * puis les pistes — sans pochette répétée sur la page d'un album. En
- * défilant, la pochette recule et pâlit avec le geste (vers son bord bas, sans
- * mordre sur le titre), et le nom passe dans
- * la barre du haut : rien ne saute, tout suit le doigt. Sous « Supprimer les
- * animations », la pochette défile simplement, et seul le nom paraît en fondu.
+ * La pochette sur sa nappe, le nom en titre d'écran, une ligne « Album ·
+ * 9 titres · 42 min », **Lire** (l'accent) et **Aléatoire** (un ton), puis les
+ * pistes — sans pochette répétée sur la page d'un album. La pochette est
+ * mesurée pour que, sur un téléphone, plusieurs pistes se voient dès
+ * l'ouverture ([coverSideFor]).
+ *
+ * En défilant, la pochette recule et pâlit avec le geste (vers son bord bas,
+ * sans mordre sur le titre) ; la barre du haut prend son fond, puis le nom,
+ * **au fil du geste** — rien ne bascule d'un coup, tout suit le doigt. Sous
+ * « Supprimer les animations », la pochette défile simplement.
  *
  * Pas de numéro de piste ni d'année : l'application ne les lit pas dans le
  * MediaStore, et le prototype ne les invente pas. Les pistes sont dans l'ordre
@@ -101,25 +104,16 @@ fun PocketCollection(
     BoxWithConstraints(modifier.fillMaxSize().background(colors.canvas)) {
         val gouttiere = if (maxWidth < NARROW_WIDTH) 20.dp else 24.dp
         val large = maxWidth >= SIDE_BY_SIDE
-        val cote = coverSideFor(maxWidth, maxHeight, gouttiere, large)
+        val cote = coverSideFor(maxWidth, maxHeight, large)
         val repli = with(density) { cote.toPx() }
-        // Le nom passe dans la barre une fois l'en-tête presque sorti.
         // Relu à chaque nouvelle mesure : après un redimensionnement, le titre et
         // la pochette se replient au même seuil.
         val barre by remember(liste, repli) {
             derivedStateOf { collapseProgress(liste.firstVisibleItemIndex, liste.firstVisibleItemScrollOffset, repli) }
         }
-        val titreVisible by animateFloatAsState(
-            if (barre >=
-                1f
-            ) {
-                1f
-            } else {
-                0f
-            },
-            WaveFlowTheme.motion.tone(),
-            label = "titreBarre",
-        )
+        // Le fond de la barre suit le repli ; le nom n'y paraît que sur sa fin.
+        val fondBarre = barBackgroundAlpha(barre)
+        val titreVisible = barTitleAlpha(barre)
 
         LazyColumn(
             state = liste,
@@ -169,10 +163,10 @@ fun PocketCollection(
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Cover(kind, title, artworkUri, nappe, cote, pochette)
                         }
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(14.dp))
                         HeaderText(kind, title, subtitle, songs, actions)
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(8.dp))
                 }
             }
             if (error != null && songs.isEmpty()) {
@@ -218,19 +212,21 @@ fun PocketCollection(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(colors.canvas.copy(alpha = titreVisible))
+                .background(colors.canvas.copy(alpha = fondBarre))
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .heightIn(min = BAR_HEIGHT)
                 .padding(horizontal = 4.dp),
         ) {
-            // Tant que l'en-tête est déployé, la flèche passe sur la pochette :
-            // un disque de la page la garde lisible sur une pochette claire.
+            // En colonne, la pochette, plus étroite que l'écran, ne passe pas
+            // sous la flèche. Côte à côte, elle part du bord : un disque de la
+            // page garde la flèche lisible tant que la barre est transparente.
             IconButton(
                 onClick = actions.onBack,
-                modifier = Modifier.background(
-                    colors.canvas.copy(alpha = BACK_SCRIM * (1f - titreVisible)),
-                    CircleShape,
-                ),
+                modifier = if (large) {
+                    Modifier.background(colors.canvas.copy(alpha = BACK_SCRIM * (1f - fondBarre)), CircleShape)
+                } else {
+                    Modifier
+                },
             ) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Retour", tint = colors.ink)
             }
@@ -247,14 +243,27 @@ fun PocketCollection(
 }
 
 /**
- * Le côté de la pochette de l'en-tête : la largeur moins les gouttières,
- * bornée par la moitié de la hauteur (les premières pistes restent en vue) et
- * par 400 dp ; à côté du texte sur un écran large.
+ * Le côté de la pochette de l'en-tête. Sur un téléphone, 62 % de la largeur,
+ * bornée par le tiers de la hauteur et par 260 dp : sur un Pixel 8, l'en-tête
+ * laisse voir plusieurs pistes avant le dock, là où la pochette pleine largeur
+ * n'en laissait qu'une. À côté du texte sur un écran large, plus de place.
  */
-fun coverSideFor(width: Dp, height: Dp, gutter: Dp, sideBySide: Boolean): Dp {
-    val largeur = if (sideBySide) width * SIDE_COVER_SHARE else width - gutter * 2
-    return minOf(largeur, height * HEADER_HEIGHT_SHARE, HEADER_COVER_MAX)
-}
+fun coverSideFor(width: Dp, height: Dp, sideBySide: Boolean): Dp =
+    if (sideBySide) {
+        minOf(width * SIDE_COVER_SHARE, height * SIDE_HEIGHT_SHARE, SIDE_COVER_MAX)
+    } else {
+        minOf(width * COVER_WIDTH_SHARE, height * COVER_HEIGHT_SHARE, COVER_MAX)
+    }
+
+/**
+ * L'opacité du fond de la barre : pleine dès la moitié du repli. Une barre à
+ * demi transparente laissait voir la pochette passer dessous, et son nom en
+ * double avec celui de l'en-tête.
+ */
+fun barBackgroundAlpha(progress: Float): Float = (progress / BACKGROUND_UNTIL).coerceIn(0f, 1f)
+
+/** L'opacité du nom dans la barre : nulle jusqu'à 65 % du repli, pleine au bout. */
+fun barTitleAlpha(progress: Float): Float = ((progress - TITLE_FROM) / (1f - TITLE_FROM)).coerceIn(0f, 1f)
 
 /**
  * Où en est le repli de l'en-tête, de 0 à 1, pour une liste dont le premier
@@ -301,7 +310,7 @@ private fun HeaderText(
             modifier = Modifier.semantics { heading() },
         )
         subtitle?.let {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
                 it,
                 style = MaterialTheme.typography.titleMedium,
@@ -310,7 +319,7 @@ private fun HeaderText(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             listOf(
                 kind.label,
@@ -325,7 +334,7 @@ private fun HeaderText(
             color = colors.ink3,
         )
         if (songs.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryPill(text = "Lire", icon = Icons.Rounded.PlayArrow, onClick = {
                     actions.onPlay(songs, songs.first())
@@ -336,12 +345,17 @@ private fun HeaderText(
     }
 }
 
-private val BAR_HEIGHT = 56.dp
+private val BAR_HEIGHT = 48.dp
 private const val BACK_SCRIM = 0.7f
 private val SIDE_BY_SIDE = 600.dp
-private const val SIDE_COVER_SHARE = 0.4f
-private const val HEADER_HEIGHT_SHARE = 0.5f
-private val HEADER_COVER_MAX = 400.dp
+private const val SIDE_COVER_SHARE = 0.36f
+private const val SIDE_HEIGHT_SHARE = 0.5f
+private val SIDE_COVER_MAX = 360.dp
+private const val COVER_WIDTH_SHARE = 0.62f
+private const val COVER_HEIGHT_SHARE = 0.32f
+private val COVER_MAX = 260.dp
+private const val TITLE_FROM = 0.65f
+private const val BACKGROUND_UNTIL = 0.5f
 private const val HEADER_POOL_Y = 0.35f
 private const val HEADER_POOL_RADIUS = 0.9f
 private const val COLLAPSE_SCALE = 0.12f
