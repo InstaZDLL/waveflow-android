@@ -47,6 +47,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.waveflow.model.Album
 import app.waveflow.model.Library
 import app.waveflow.model.Song
@@ -251,6 +254,12 @@ private const val RECENT_ALBUMS = 10
 @Composable
 private fun Greeting(songCount: Int, albumCount: Int, modifier: Modifier = Modifier) {
     var maintenant by remember { mutableStateOf(LocalDateTime.now()) }
+    // Relu au retour au premier plan : l'heure a pu changer — un fuseau, un
+    // réglage — pendant que l'écran dormait.
+    val cycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(cycle) {
+        cycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { maintenant = LocalDateTime.now() }
+    }
     LaunchedEffect(maintenant) {
         delay(Duration.between(maintenant, nextGreetingChange(maintenant)).toMillis().coerceAtLeast(1L))
         maintenant = LocalDateTime.now()

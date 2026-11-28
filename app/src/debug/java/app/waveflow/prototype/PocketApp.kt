@@ -9,16 +9,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -87,6 +97,14 @@ fun PocketApp(
     // Le lecteur déployé n'est visible qu'avec un morceau : Retour, la Snackbar
     // et l'animation suivent ce qui est à l'écran, pas l'intention.
     val lecteurVisible = expanded && player.track != null
+    var avaitUnMorceau by remember { mutableStateOf(player.track != null) }
+    LaunchedEffect(player.track != null) {
+        val aUnMorceau = player.track != null
+        // Une file qui se vide replie le lecteur ; un lecteur restauré qui
+        // attend encore sa piste reste déployé.
+        if (avaitUnMorceau && !aUnMorceau) onExpandedChange(false)
+        avaitUnMorceau = aUnMorceau
+    }
     BackHandler(enabled = lecteurVisible) { onExpandedChange(false) }
     BackHandler(enabled = !lecteurVisible && pile.isNotEmpty()) { pile = pile.dropLast(1) }
 
@@ -96,7 +114,10 @@ fun PocketApp(
             .background(colors.canvas),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f)) {
+            val cotes = Modifier.windowInsetsPadding(
+                WindowInsets.navigationBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal),
+            )
+            Box(Modifier.weight(1f).then(cotes)) {
                 val route = pile.lastOrNull()
                 val page = route?.let(Page::of)
                 // Chaque destination garde son état — son défilement — quand une
@@ -141,6 +162,7 @@ fun PocketApp(
                         else -> AVenir(onglet)
                     }
                 }
+                if (!lecteurVisible) SnackbarHost(messages, Modifier.align(Alignment.BottomCenter))
             }
             PocketMiniPlayer(
                 state = player,
@@ -148,7 +170,7 @@ fun PocketApp(
                 onTogglePlayPause = actions.onTogglePlayPause,
                 onSkipNext = actions.onSkipNext,
                 onSkipPrevious = actions.onSkipPrevious,
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = cotes.padding(bottom = 8.dp),
             )
             PocketNavBar(
                 selected = onglet,
@@ -167,14 +189,17 @@ fun PocketApp(
             PocketNowPlaying(state = player, lyrics = lyrics, actions = actions)
         }
 
-        // Au-dessus de tout, lecteur déployé compris, et au-dessus du
-        // mini-lecteur et de la barre quand il est replié.
-        SnackbarHost(
-            messages,
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = if (lecteurVisible) 24.dp else SNACKBAR_LIFT),
-        )
+        // Le lecteur déployé recouvre la page : la Snackbar passe au-dessus de
+        // lui, au-dessus des barres du système.
+        if (lecteurVisible) {
+            SnackbarHost(
+                messages,
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp),
+            )
+        }
 
         aAjouter?.let { library.songsById[it] }?.let { song ->
             AddToPlaylistSheet(
@@ -194,9 +219,6 @@ fun PocketApp(
         }
     }
 }
-
-/** La hauteur du mini-lecteur et de la barre de navigation, que la Snackbar enjambe. */
-private val SNACKBAR_LIFT = 152.dp
 
 /** Une page empilée au-dessus d'un onglet, codée en chaîne pour l'état sauvegardé. */
 sealed interface Page {
@@ -243,26 +265,46 @@ private fun PageDeCollection(
     when (page) {
         is Page.Album -> {
             val album = library.album(page.id)
+            val titres = remember(library, page.id) {
+                if (album !=
+                    null
+                ) {
+                    library.songsOfAlbum(album.id)
+                } else {
+                    emptyList()
+                }
+            }
             PocketCollection(
                 kind = CollectionKind.Album,
                 loading = library.isLoading,
+                error = library.errorMessage,
                 title = album?.title ?: if (library.isLoading) "" else "Album introuvable",
                 subtitle = album?.displayArtist,
                 artworkUri = album?.artworkUri,
-                songs = if (album != null) library.songsOfAlbum(album.id) else emptyList(),
+                songs = titres,
                 player = player,
                 actions = actions,
             )
         }
         is Page.Artiste -> {
             val artiste = library.artist(page.id)
+            val titres = remember(library, page.id) {
+                if (artiste !=
+                    null
+                ) {
+                    library.songsOfArtist(artiste.id)
+                } else {
+                    emptyList()
+                }
+            }
             PocketCollection(
                 kind = CollectionKind.Artiste,
                 loading = library.isLoading,
+                error = library.errorMessage,
                 title = artiste?.name ?: if (library.isLoading) "" else "Artiste introuvable",
                 subtitle = null,
                 artworkUri = artiste?.artworkUri,
-                songs = if (artiste != null) library.songsOfArtist(artiste.id) else emptyList(),
+                songs = titres,
                 player = player,
                 actions = actions,
             )
@@ -273,6 +315,7 @@ private fun PageDeCollection(
             PocketCollection(
                 kind = CollectionKind.Playlist,
                 loading = playlists.isLoading || library.isLoading,
+                error = playlists.errorMessage ?: library.errorMessage,
                 title = playlist?.name ?: if (playlists.isLoading) "" else "Playlist introuvable",
                 subtitle = null,
                 artworkUri = titres.firstOrNull()?.artworkUri,

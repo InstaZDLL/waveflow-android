@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -185,7 +186,7 @@ fun PocketPill(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(if (compact) 28.dp else 40.dp)
+                    .heightIn(min = if (compact) 28.dp else 40.dp)
                     .widthIn(min = if (compact) 28.dp else 40.dp)
                     .padding(horizontal = if (compact) 10.dp else 16.dp),
             ) {

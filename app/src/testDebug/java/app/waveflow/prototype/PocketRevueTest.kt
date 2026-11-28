@@ -226,4 +226,28 @@ class PocketRevueTest {
 
         assertEquals(listOf(1L, 2L), file?.map { it.id })
     }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-xhdpi")
+    fun `une page dont la source n'a pas pu etre lue le dit au lieu de se dire introuvable`() {
+        compose.setContent {
+            WaveFlowTheme {
+                PocketTheme(dark = true) {
+                    PocketCollection(
+                        kind = CollectionKind.Playlist,
+                        title = "",
+                        subtitle = null,
+                        artworkUri = null,
+                        songs = emptyList(),
+                        player = PlayerUiState(),
+                        actions = CollectionActions({}, { _, _ -> }, {}, { emptyList() }),
+                        error = "Base illisible.",
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("Cette page n'a pas pu être lue.").assertExists()
+        compose.onNodeWithText("Rien à écouter ici.").assertDoesNotExist()
+    }
 }
